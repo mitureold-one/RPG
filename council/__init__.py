@@ -1,0 +1,69 @@
+"""council: Pacote de Especialistas Cooperativos do RPG Narrative Engine.
+
+Exporta as funções principais de cada domínio:
+- helpers: Localização de campanhas e manipulação de tempo
+- ssot: Leitura e escrita de ficha.md e diario.md (relógios, arcos e vitais)
+- gm: Resolução de dados dos 3 Portões e cálculo de custos
+- narrator: Catálogo de NPCs, psicologia, agência e barreira epistêmica
+- reviewer: Auditoria de SSOT, paradoxos temporais e estagnação narrativa
+- writer: Integração com ai-memory e mandatos de estilo literário
+"""
+
+from council.helpers import (
+    CAMPAIGN_DIRS,
+    TEMPLATES_DIR,
+    AIMEMORY_BIN,
+    MONTHS_PT,
+    MONTHS_MAP,
+    find_campaign,
+    init_campaign_from_templates,
+    parse_time_increment,
+    advance_time_str,
+)
+
+from council.ssot import (
+    normalize_vital_key,
+    parse_ficha_md,
+    render_progress_bar,
+    upsert_ficha_feature,
+    parse_clocks_from_diario,
+    parse_arc_from_diario,
+    update_arc_in_diario,
+    upsert_clock_in_diario,
+    parse_plot_from_diario,
+    upsert_planned_scene_in_diario,
+    parse_diario_md,
+    extract_turns_from_diario,
+)
+
+from council.gm import (
+    roll_3_gates,
+    parse_cost_string,
+    extract_npc_contest_modifier,
+    roll_contest,
+)
+
+from council.narrator import (
+    extract_md_field,
+    parse_npcs_md,
+    upsert_npc_to_md,
+    split_npc_updates,
+    apply_npc_updates_to_md,
+    derive_npc_initiative,
+    extract_npc_bonds,
+    find_scene_relational_tensions,
+    extract_epistemic_forbidden_terms,
+    derive_situational_scene_structures,
+)
+
+from council.reviewer import (
+    PT_MONTHS,
+    parse_pt_date,
+    detect_temporal_paradoxes,
+    cmd_review,
+)
+
+from council.writer import (
+    query_aimemory,
+    MODE_PROSE_MANDATES,
+)
