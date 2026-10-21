@@ -66,4 +66,5 @@ from council.reviewer import (
 from council.writer import (
     query_aimemory,
     MODE_PROSE_MANDATES,
+    STRUCTURAL_SCENE_MANDATES,
 )

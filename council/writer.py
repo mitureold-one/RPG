@@ -103,3 +103,67 @@ MODE_PROSE_MANDATES = {
         ],
     },
 }
+
+
+STRUCTURAL_SCENE_MANDATES = {
+    "dossier": {
+        "scene_type": "dossier",
+        "why_this_structure": "Cena epistolar documental diegética. O mundo reage institucionalmente através de relatórios, cartas interceptadas ou registros oficiais sem presença direta do protagonista.",
+        "structure_and_tone": "Carimbo Institucional / Selo de Sigilo -> Metadados do Alvo / Local -> Relatório Narrativo de Campo -> Avaliação de Risco e Próximos Passos com vieses e limitações da fonte.",
+        "dialogue_and_style": "Tom solene, burocrático ou militar. Sem travessões de romance comum. Conclua com o carimbo de envio ou despacho oficial.",
+    },
+    "timeskip": {
+        "scene_type": "timeskip",
+        "why_this_structure": "Montagem literária acelerada. O ciclo de atrito imediato foi concluído; é proibido narrar caminhadas e rotinas vazias em tempo real. Avance horas, dias ou semanas de forma orgânica.",
+        "structure_and_tone": "Montagem Sensorial de Passagem de Tempo (mudança de clima, cicatrização de ferimentos, evolução de treino/recursos) -> Ponto de Aterrissagem no Novo Tempo.",
+        "dialogue_and_style": "Ritmo veloz e evocativo nos primeiros parágrafos, desacelerando a câmera para tempo real no novo local/data. Conclua com um gancho acionável no novo cenário.",
+    },
+    "flashback": {
+        "scene_type": "flashback",
+        "why_this_structure": "Quebra temporal para o passado. Revela o momento fundador, trauma ou segredo antigo que recontextualiza as motivações da cena presente.",
+        "structure_and_tone": "Ancoragem Temporal Clara ('[Passado / Anos atrás]') -> Cena de revelação emocional ou marcial -> Retorno ao presente com o protagonista processando a verdade revelada.",
+        "dialogue_and_style": "Diálogos com travessão e alta densidade emocional. Conclua trazendo o peso da memória diretamente para o dilema imediato.",
+    },
+    "interlude": {
+        "scene_type": "interlude",
+        "why_this_structure": "Corte para terceira pessoa cinematográfica externa (protagonista AUSENTE). Foco na agência autônoma de antagonistas, generais ou conselhos conspirando e reagindo nos bastidores.",
+        "structure_and_tone": "Estabelecimento do Local/Atmosfera dos Antagonistas -> Diálogo e colisão entre os NPCs (debatendo planos, atritos internos e medo/ambição) -> Revelação de uma manobra ou ordem que impactará o mundo.",
+        "dialogue_and_style": "Diálogos com travessão entre os próprios NPCs. ZERO presença do protagonista. Conclua no clímax da decisão dos vilões/antagonistas, sem perguntas ao jogador.",
+    },
+    "parallel": {
+        "scene_type": "parallel",
+        "why_this_structure": "Cena simultânea ocorrendo em outro ponto do mundo no mesmo minuto em que a cena principal se desenrola.",
+        "structure_and_tone": "Estabelecimento do Local Simultâneo -> Ações e reações da outra facção -> Revelação que cria tensão de antecipação (o público vê o que o protagonista ainda não sabe).",
+        "dialogue_and_style": "Diálogos com travessão entre os personagens locais. Conclua no clímax da revelação sem perguntas ao jogador.",
+    },
+    "fade_to_black": {
+        "scene_type": "fade_to_black",
+        "why_this_structure": "Clímax íntimo e sensorial no limiar físico. Conduz a tensão psicológica e o toque tátil até o limiar e corta elegantemente para preto, preservando a imersão sem ferir guardrails.",
+        "structure_and_tone": "Tensão Sensorial no Limiar (olhares, respiração, toques, hesitação e vulnerabilidade) -> Corte Poético para Preto em elipse -> Aterrissagem no Despertar com avanço de tempo e novas dinâmicas emocionais/políticas.",
+        "dialogue_and_style": "Subtexto carregado, sussurros e respiração. O corte deve ser poético e aterrissar nas consequências no despertar.",
+    },
+    "prologue": {
+        "scene_type": "prologue",
+        "why_this_structure": "Abertura solene de um novo arco ou era. Enquadra o mito fundador, os tabus arcaicos ou a movimentação silenciosa de forças cósmicas/políticas antes da entrada em cena do protagonista.",
+        "structure_and_tone": "Enquadramento Histórico/Cosmológico -> Revelação de um Augúrio ou Conspiração Germinal -> Gancho de Transição para o Ponto de Entrada da Crônica.",
+        "dialogue_and_style": "Tom de crônica épica ou romance histórico. Prosa densa e atmosférica. Conclua ancorando o prenúncio da tempestade que colidirá com o protagonista.",
+    },
+    "epilogue": {
+        "scene_type": "epilogue",
+        "why_this_structure": "Conclusão e rescaldo após o clímax de um arco. Mostra a poeira baixando, as feridas cicatrizando e o novo equilíbrio de forças no mundo.",
+        "structure_and_tone": "Silêncio após a Tempestade -> Consequências Pessoais e Políticas a Médio Prazo -> Vislumbre do Destino e do Próximo Ciclo.",
+        "dialogue_and_style": "Tom contemplativo, melancólico ou de solene alívio. Diálogos íntimos com travessão entre sobreviventes. Conclua com um sentimento de encerramento de ciclo sem perguntas ao jogador.",
+    },
+    "post_credits": {
+        "scene_type": "post_credits",
+        "why_this_structure": "Cena rápida e pungente estilo ferrão pós-créditos. Revela uma ameaça nas sombras, a sobrevivência inesperada de um rival ou uma traição silenciosa que muda o sentido da vitória anterior.",
+        "structure_and_tone": "Corte Abrupto para Local Oculto -> Revelação de 1 Detalhe Inquietante -> Gancho Cinematográfico Instantâneo.",
+        "dialogue_and_style": "Ritmo veloz, estritamente em terceira pessoa externa. Zero didatismo. Conclua no choque da revelação.",
+    },
+    "standard": {
+        "scene_type": "standard",
+        "why_this_structure": "Cena em tempo real focada na agência direta, física e nas decisões imediatas do protagonista.",
+        "structure_and_tone": "4 Batidas Dramáticas: Atmosfera Sensorial -> Psicologia & Diálogos com travessão -> Choque Cinético & Consequência Mecânica -> Gancho Dramático Acionável com Mudança de Estado.",
+        "dialogue_and_style": "Discurso direto com travessão (—). Cada fala em parágrafo isolado integrada à ação. ZERO formato de script teatral '[Nome]: Fala'. ZERO didatismo ('O que você faz?').",
+    },
+}

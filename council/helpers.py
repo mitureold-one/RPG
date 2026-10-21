@@ -5,8 +5,10 @@ import os
 import re
 from pathlib import Path
 
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 CAMPAIGN_DIRS = [
-    Path(r"c:\Users\Konor\Documents\RPGPRO\campaigns"),
+    Path(os.environ.get("RPGPRO_CAMPAIGNS_DIR", str(BASE_DIR / "campaigns"))),
 ]
 
 AIMEMORY_BIN = os.path.expandvars(r"%LOCALAPPDATA%\ai-memory\ai-memory.exe")
@@ -33,7 +35,7 @@ MONTHS_MAP = {
 }
 
 
-TEMPLATES_DIR = Path(r"c:\Users\Konor\Documents\RPGPRO\templates")
+TEMPLATES_DIR = Path(os.environ.get("RPGPRO_TEMPLATES_DIR", str(BASE_DIR / "templates")))
 
 
 def find_campaign(campaign_id: str):

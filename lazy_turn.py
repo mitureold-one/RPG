@@ -51,6 +51,7 @@ from council import (
     upsert_planned_scene_in_diario,
     update_arc_in_diario,
     MODE_PROSE_MANDATES,
+    STRUCTURAL_SCENE_MANDATES,
 )
 
 
@@ -383,50 +384,7 @@ def cmd_prepare(
     if scene_type != "standard":
         commit_hint += f' --scene-type {scene_type}'
 
-    mandates_by_type = {
-        "dossier": {
-            "scene_type": "dossier",
-            "why_this_structure": "Cena epistolar documental diegética. O mundo reage institucionalmente através de relatórios, cartas interceptadas ou registros oficiais sem presença direta do protagonista.",
-            "structure_and_tone": "Carimbo Institucional / Selo de Sigilo -> Metadados do Alvo / Local -> Relatório Narrativo de Campo -> Avaliação de Risco e Próximos Passos com vieses e limitações da fonte.",
-            "dialogue_and_style": "Tom solene, burocrático ou militar. Sem travessões de romance comum. Conclua com o carimbo de envio ou despacho oficial.",
-        },
-        "timeskip": {
-            "scene_type": "timeskip",
-            "why_this_structure": "Montagem literária acelerada. O ciclo de atrito imediato foi concluído; é proibido narrar caminhadas e rotinas vazias em tempo real. Avance horas, dias ou semanas de forma orgânica.",
-            "structure_and_tone": "Montagem Sensorial de Passagem de Tempo (mudança de clima, cicatrização de ferimentos, evolução de treino/recursos) -> Ponto de Aterrissagem no Novo Tempo.",
-            "dialogue_and_style": "Ritmo veloz e evocativo nos primeiros parágrafos, desacelerando a câmera para tempo real no novo local/data. Conclua com um gancho acionável no novo cenário.",
-        },
-        "flashback": {
-            "scene_type": "flashback",
-            "why_this_structure": "Quebra temporal para o passado. Revela o momento fundador, trauma ou segredo antigo que recontextualiza as motivações da cena presente.",
-            "structure_and_tone": "Ancoragem Temporal Clara ('[Passado / Anos atrás]') -> Cena de revelação emocional ou marcial -> Retorno ao presente com o protagonista processando a verdade revelada.",
-            "dialogue_and_style": "Diálogos com travessão e alta densidade emocional. Conclua trazendo o peso da memória diretamente para o dilema imediato.",
-        },
-        "interlude": {
-            "scene_type": "interlude",
-            "why_this_structure": "Corte para terceira pessoa cinematográfica externa (protagonista AUSENTE). Foco na agência autônoma de antagonistas, generais ou conselhos conspirando e reagindo nos bastidores.",
-            "structure_and_tone": "Estabelecimento do Local/Atmosfera dos Antagonistas -> Diálogo e colisão entre os NPCs (debatendo planos, atritos internos e medo/ambição) -> Revelação de uma manobra ou ordem que impactará o mundo.",
-            "dialogue_and_style": "Diálogos com travessão entre os próprios NPCs. ZERO presença do protagonista. Conclua no clímax da decisão dos vilões/antagonistas, sem perguntas ao jogador.",
-        },
-        "parallel": {
-            "scene_type": "parallel",
-            "why_this_structure": "Cena simultânea ocorrendo em outro ponto do mundo no mesmo minuto em que a cena principal se desenrola.",
-            "structure_and_tone": "Estabelecimento do Local Simultâneo -> Ações e reações da outra facção -> Revelação que cria tensão de antecipação (o público vê o que o protagonista ainda não sabe).",
-            "dialogue_and_style": "Diálogos com travessão entre os personagens locais. Conclua no clímax da revelação sem perguntas ao jogador.",
-        },
-        "fade_to_black": {
-            "scene_type": "fade_to_black",
-            "why_this_structure": "Clímax íntimo e sensorial no limiar físico. Conduz a tensão psicológica e o toque tátil até o limiar e corta elegantemente para preto, preservando a imersão sem ferir guardrails.",
-            "structure_and_tone": "Tensão Sensorial no Limiar (olhares, respiração, toques, hesitação e vulnerabilidade) -> Corte Poético para Preto em elipse -> Aterrissagem no Despertar com avanço de tempo e novas dinâmicas emocionais/políticas.",
-            "dialogue_and_style": "Subtexto carregado, sussurros e respiração. O corte deve ser poético e aterrissar nas consequências no despertar.",
-        },
-        "standard": {
-            "scene_type": "standard",
-            "why_this_structure": "Cena em tempo real focada na agência direta, física e nas decisões imediatas do protagonista.",
-            "structure_and_tone": "4 Batidas Dramáticas: Atmosfera Sensorial -> Psicologia & Diálogos com travessão -> Choque Cinético & Consequência Mecânica -> Gancho Dramático Acionável com Mudança de Estado.",
-            "dialogue_and_style": "Discurso direto com travessão (—). Cada fala em parágrafo isolado integrada à ação. ZERO formato de script teatral '[Nome]: Fala'. ZERO didatismo ('O que você faz?').",
-        },
-    }
+    mandates_by_type = STRUCTURAL_SCENE_MANDATES
 
     payload = {
         "campaign": campaign_id,
@@ -827,7 +785,7 @@ def cmd_commit(
     }
 
 
-def main():
+def build_cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Orquestrador Determinístico Agnóstico de Turno e Modos RPG (Markdown SSOT)")
     sub = parser.add_subparsers(dest="cmd")
 
@@ -859,8 +817,8 @@ def main():
     p_com.add_argument("--cost", default="", help="Qualquer recurso da ficha (ex: 'HP -3, Stamina -2, time +5m' ou '+1 HP, Sanidade -4')")
     p_com.add_argument("--time", default="", help="Nova data/hora exata ou incremento relativo (ex: '+15m', '+2h', '+14d', '+2m', '+1y')")
     p_com.add_argument("--location", default="", help="Novo local caso a cena mude de espaço")
-    p_com.add_argument("--present_npcs", default="", help="Nova lista de personagens presentes")
-    p_com.add_argument("--npc_updates", default="", help="Ex: 'NPC A: Nova atitude | NPC B: Nova atitude'")
+    p_com.add_argument("--present-npcs", "--present_npcs", dest="present_npcs", default="", help="Nova lista de personagens presentes")
+    p_com.add_argument("--npc-updates", "--npc_updates", dest="npc_updates", default="", help="Ex: 'NPC A: Nova atitude | NPC B: Nova atitude'")
     p_com.add_argument("--state-shift", "--state_shift", dest="state_shift", default="", help="Mudança concreta de estado no mundo, alianças ou recursos gerada pelo turno")
     p_com.add_argument("--clock-advance", "--clock_advance", dest="clock_advance", default="", help="Avança um ou mais relógios (ex: 'Plano Kenjaku:1' ou 'Ataque:2')")
     p_com.add_argument("--scene-type", "--scene_type", dest="scene_type", default="standard", choices=["standard", "interlude", "parallel", "timeskip", "dossier", "flashback", "prologue", "epilogue", "post_credits", "fade_to_black"], help="Tipo estrutural do turno para etiquetagem no diário")
@@ -926,6 +884,11 @@ def main():
     p_init.add_argument("--date", default="01 de Outubro de 2026, 12:00", help="Data/Hora inicial no diário")
     p_init.add_argument("--location", default="Local Inicial", help="Local inicial da cena")
 
+    return parser
+
+
+def main():
+    parser = build_cli()
     args = parser.parse_args()
     if args.cmd == "prepare":
         res = cmd_prepare(
