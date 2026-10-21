@@ -1,12 +1,21 @@
 # Regras de Arbitragem & Sistema de Poder: Crônicas de Valíria: O Filho de Krypton
 
-## 1. Escala de Classes de Dificuldade (DC)
-O motor determinístico de 3 Portões (`lazy_turn.py prepare`) adota os seguintes padrões de desafio para este cenário:
+## 1. Calibração Diegética de Dificuldade & Overrides (Grau 2)
+A escala mecânica de resolução adota o padrão universal do framework (Grau 1: DC 10 Fácil, DC 15 Média, DC 20 Difícil, DC 25 Extrema). Neste cenário específico, as faixas de desafio ancoram-se nas seguintes realidades diegéticas:
 
-* **DC 10 (Ação Básica sob Pressão):** Manobras de esgrima simples, salto sobre terrenos acidentados ou intimidação de adversários sem experiência militar.
-* **DC 15 (Conflito Severo & Tensão):** Romper armaduras encantadas por mana, resistir ao impacto de feitiços de impacto médio ou convencer matriarcas desconfiadas.
-* **DC 20 (Confronto de Alto Nível / Elite):** Duelo direto contra Comandantes de Esquadrão das Lâminas de Éter, matriarcas alfa bestiais ou demônios de alto escalão.
-* **DC 25 (Feito Lendário / Calamidade):** Proezas sobre-humanas cósmicas, erguer estruturas de dezenas de toneladas, resistir a bombardeios de cerco ou suplantar a vontade de divindades arcanas.
+* **Pressão Leve (Faixa 10):** Manobras de esgrima simples, salto sobre terrenos acidentados ou intimidação de adversários sem experiência militar.
+* **Conflito Severo (Faixa 15):** Romper armaduras encantadas por mana, resistir ao impacto de feitiços de impacto médio ou convencer matriarcas desconfiadas.
+* **Elite do Cenário (Faixa 20):** Duelo direto contra Comandantes de Esquadrão das Lâminas de Éter, matriarcas alfa bestiais ou demônios de alto escalão.
+* **Calamidade / Feito Lendário (Faixa 25):** Proezas sobre-humanas cósmicas, erguer estruturas de dezenas de toneladas, resistir a bombardeios de cerco ou suplantar a vontade de divindades arcanas.
+
+```yaml:mechanics
+ruleset: d20_3gates
+overrides:
+  - id: mana_sensor_immunity
+    effect: "Artefatos de medição mágica leem Kon-El como valor zero (ausência de mana)."
+  - id: torquasm_vo_defense
+    effect: "Imunidade inata a encantos de submissão e feromônios de domínio via disciplina mental kryptoniana."
+```
 
 ---
 

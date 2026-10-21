@@ -116,7 +116,7 @@ Quando o jogador iniciar uma campanha baseada em **obra existente** (anime, mang
 
 ---
 
-## 4. O Motor Tri-Scale & Relógios Narrativos (`lazy_turn.py clock`)
+## 4. O Motor Tri-Scale & Schema de Relógios Narrativos em `diario.md`
 
 Para impedir que a narrativa ande em círculos, a campanha opera em três escalas dinâmicas:
 
@@ -124,20 +124,16 @@ Para impedir que a narrativa ande em círculos, a campanha opera em três escala
 2. **Escala de Arco:** A pergunta dramática central da saga (`Preparação` $\to$ `Confrontação` $\to$ `Clímax`).
 3. **Escala de Mundo (Relógios de Facção):** O avanço dos planos de vilões e aliados fora da visão do protagonista.
 
-### Comandos de Relógio (`lazy_turn.py clock`):
-```powershell
-# Listar relógios da campanha:
-python lazy_turn.py clock --campaign <id> --list
-
-# Cadastrar novo relógio com gatilho claro:
-python lazy_turn.py clock --campaign <id> --add "Ritual do Culto" --max 4 --trigger "Invocação da entidade no templo"
-
-# Avançar segmentos:
-python lazy_turn.py clock --campaign <id> --advance "Ritual do Culto" --steps 1
-
-# Marcar como resolvido ou desarmado:
-python lazy_turn.py clock --campaign <id> --resolve "Ritual do Culto"
+### Schema Markdown dos Relógios em `diario.md`:
+```markdown
+### Relógios de Ameaça & Prazos
+* **[Nome do Relógio]:** 2/4 (Gatilho: Consequência tangível de ruptura) [ACTIVE]
+* **[Conspiração Externa]:** 4/4 (Gatilho: Ataque surpresa aos portões) [RESOLVED]
 ```
+
+> [!NOTE]
+> **Governança Operacional do Showrunner:**
+> A criação, avanço estratégico e resolução de relógios de facção via CLI (`lazy_turn.py clock`) são de responsabilidade exclusiva da skill [rpg-showrunner](../../rpg-showrunner/SKILL.md). O Módulo 3 define estritamente o schema de persistência SSOT em Markdown.
 
 ---
 
@@ -157,22 +153,21 @@ python lazy_turn.py clock --campaign <id> --resolve "Ritual do Culto"
 
 ---
 
-## 6. Planejamento de Trama & Modo Diretor (`lazy_turn.py plan`)
+## 6. Schema da Fila de Cenas & Marcos do Arco em `diario.md`
 
-Para combater a condução passiva e reativa do Mestre, o motor conta com um gerenciador de fila de cenas integrado ao `diario.md`:
+Para combater a condução passiva do Mestre e prevenir a estagnação narrativa, o `diario.md` mantém a fila viva de cenas agendadas e marcos futuros do arco:
 
-```powershell
-# Listar plano de trama, marcos futuros e status de ritmo:
-python lazy_turn.py plan --campaign <id> --list
-
-# Agendar uma nova cena na fila (interlúdio, dossiê, timeskip, etc.):
-python lazy_turn.py plan --campaign <id> --add "Conspiração de rivais nos bastidores" --scene-type interlude --actors "Antagonista A, Antagonista B"
-
-# Adicionar um novo marco futuro ao arco:
-python lazy_turn.py plan --campaign <id> --milestone "Confronto na torre do relógio antes do solstício"
-
-# Marcar uma cena da fila como concluída:
-python lazy_turn.py plan --campaign <id> --complete 0
+### Schema Markdown da Fila de Cenas em `diario.md`:
+```markdown
+### Planejamento de Trama & Fila de Cenas
+* **Fila de Cenas Agendadas:**
+  * [ ] **[interlude]** (Atores: Antagonistas): Conspiração de bastidores ou avanço de planos sem a presença do protagonista.
+* **Marcos Futuros do Arco:**
+  * Ruptura das defesas no porto e revelação da conspiração.
 ```
 
-Quando houver uma cena agendada pendente, o `lazy_turn.py prepare` notificará o Mestre no payload com a recomendação da próxima quebra de perspectiva. Caso ocorram 4 ou mais turnos padrão consecutivos em tempo real, o motor acionará o alerta de `FADIGA DE RITMO LINEAR`, exigindo proatividade do Mestre.
+Quando houver uma cena agendada pendente, o `lazy_turn.py prepare` notificará o Mestre no payload com a recomendação da próxima quebra de perspectiva. Caso ocorram 4 ou mais turnos padrão consecutivos em tempo real, o motor acionará o alerta de `FADIGA DE RITMO LINEAR`.
+
+> [!NOTE]
+> **Governança Operacional do Showrunner:**
+> O agendamento de cenas, marcação de conclusões (`lazy_turn.py plan`) e transições estruturais de atos (`lazy_turn.py arc`) são governados com exclusividade pela skill [rpg-showrunner](../../rpg-showrunner/SKILL.md).

@@ -17,6 +17,14 @@ class TestCLIContracts(unittest.TestCase):
         self.parser = lazy_turn.build_cli()
         self.root_dir = Path(__file__).resolve().parent.parent
 
+    def get_skill_roots(self):
+        """Retorna as raízes de skills a auditar (raiz local do workspace e raiz global da máquina)."""
+        roots = [self.root_dir / ".agents" / "skills"]
+        global_skills = Path.home() / ".gemini" / "config" / "skills"
+        if global_skills.exists():
+            roots.append(global_skills)
+        return roots
+
     def test_structural_scene_mandates_coverage(self):
         """Verifica se os 10 tipos de cena suportados possuem mandato estrutural correspondente."""
         expected_types = {
@@ -77,46 +85,42 @@ class TestCLIContracts(unittest.TestCase):
             self.fail(f"Falha ao parsear o commit_template gerado pelo engine: {commit_template}")
 
     def test_showrunner_documented_commands_parse(self):
-        """Verifica se os comandos documentados no SKILL.md do showrunner executam parse seco com sucesso."""
-        showrunner_skill = self.root_dir / ".agents" / "skills" / "rpg-showrunner" / "SKILL.md"
-        self.assertTrue(showrunner_skill.exists(), "rpg-showrunner/SKILL.md não encontrado")
+        """Verifica se os comandos documentados no SKILL.md do showrunner executam parse seco com sucesso em todas as raízes."""
+        for s_root in self.get_skill_roots():
+            showrunner_skill = s_root / "rpg-showrunner" / "SKILL.md"
+            if not showrunner_skill.exists():
+                continue
 
-        content = showrunner_skill.read_text(encoding="utf-8")
-        # Extrair blocos ```bash ... ```
-        bash_blocks = re.findall(r"```bash(.*?)```", content, re.DOTALL)
-        self.assertGreater(len(bash_blocks), 0, "Nenhum bloco bash encontrado no SKILL.md")
+            content = showrunner_skill.read_text(encoding="utf-8")
+            bash_blocks = re.findall(r"```bash(.*?)```", content, re.DOTALL)
+            self.assertGreater(len(bash_blocks), 0, f"Nenhum bloco bash encontrado em {showrunner_skill}")
 
-        commands = []
-        for block in bash_blocks:
-            # Unir linhas continuadas com contra-barra
-            normalized_block = re.sub(r"\\\s*\n\s*", " ", block)
-            for line in normalized_block.splitlines():
-                line = line.strip()
-                if line.startswith("python lazy_turn.py"):
-                    cmd = line.replace("python lazy_turn.py", "").strip()
-                    commands.append(cmd)
+            commands = []
+            for block in bash_blocks:
+                normalized_block = re.sub(r"\\\s*\n\s*", " ", block)
+                for line in normalized_block.splitlines():
+                    line = line.strip()
+                    if line.startswith("python lazy_turn.py"):
+                        cmd = line.replace("python lazy_turn.py", "").strip()
+                        commands.append(cmd)
 
-        self.assertGreater(len(commands), 0, "Nenhum comando 'python lazy_turn.py' encontrado")
+            self.assertGreater(len(commands), 0, f"Nenhum comando 'python lazy_turn.py' em {showrunner_skill}")
 
-        for cmd in commands:
-            # Substituir placeholders <...> por valores fictícios para teste de parse
-            clean_cmd = re.sub(r"<[^>]+>", "dummy_val", cmd)
-            clean_cmd = clean_cmd.replace("dummy_val|dummy_val", "dummy_val")
-            tokens = shlex.split(clean_cmd)
+            for cmd in commands:
+                clean_cmd = re.sub(r"<[^>]+>", "dummy_val", cmd)
+                clean_cmd = clean_cmd.replace("dummy_val|dummy_val", "dummy_val")
+                tokens = shlex.split(clean_cmd)
 
-            # Validar que o comando faz parse sem erro
-            try:
-                parsed = self.parser.parse_args(tokens)
-                self.assertIn(parsed.cmd, ["plan", "clock", "arc", "review", "commit", "prepare"])
-            except SystemExit:
-                self.fail(f"Comando documentado em SKILL.md falhou no parse: {cmd}")
+                try:
+                    parsed = self.parser.parse_args(tokens)
+                    self.assertIn(parsed.cmd, ["plan", "clock", "arc", "review", "commit", "prepare"])
+                except SystemExit:
+                    self.fail(f"Comando documentado em {showrunner_skill} falhou no parse: {cmd}")
 
     def test_no_hardcoded_machine_paths(self):
-        """Garante que não existem caminhos absolutos locais nas skills ou em council."""
-        search_dirs = [
-            self.root_dir / ".agents" / "skills",
-            self.root_dir / "council",
-        ]
+        """Garante que não existem caminhos absolutos locais nas skills ou em council em todas as raízes."""
+        search_dirs = list(self.get_skill_roots())
+        search_dirs.append(self.root_dir / "council")
         forbidden_patterns = [r"file:///C:", r"c:\\Users\\Konor", r"C:/Users/Konor"]
 
         for s_dir in search_dirs:
@@ -131,10 +135,106 @@ class TestCLIContracts(unittest.TestCase):
                     )
 
     def test_no_auto_activation_in_showrunner(self):
-        """Garante que o showrunner não se auto-ativa em todo turno."""
-        showrunner_skill = self.root_dir / ".agents" / "skills" / "rpg-showrunner" / "SKILL.md"
-        text = showrunner_skill.read_text(encoding="utf-8")
-        self.assertNotIn("Ativa-se automaticamente", text)
+        """Garante que o showrunner não se auto-ativa em todo turno em todas as raízes."""
+        for s_root in self.get_skill_roots():
+            showrunner_skill = s_root / "rpg-showrunner" / "SKILL.md"
+            if showrunner_skill.exists():
+                text = showrunner_skill.read_text(encoding="utf-8")
+                self.assertNotIn(
+                    "Ativa-se automaticamente",
+                    text,
+                    f"Auto-ativação indevida encontrada em {showrunner_skill}",
+                )
+
+    def test_p1_agents_md_router_contract(self):
+        """P1: Garante que AGENTS.md opera como roteador enxuto (<= 15 linhas) sem regras de prosa."""
+        agents_file = self.root_dir / "AGENTS.md"
+        self.assertTrue(agents_file.exists(), "AGENTS.md não encontrado na raiz")
+        lines = agents_file.read_text(encoding="utf-8").splitlines()
+        self.assertLessEqual(
+            len(lines),
+            15,
+            f"AGENTS.md possui {len(lines)} linhas; deve ter no máximo 15 linhas como roteador minimalista.",
+        )
+
+        content = "\n".join(lines)
+        forbidden_prose_keywords = ["travessão", "script teatral", "Linha 1 Obrigatória", "4 Batidas"]
+        for kw in forbidden_prose_keywords:
+            self.assertNotIn(
+                kw,
+                content,
+                f"Regra de prosa redundante '{kw}' encontrada em AGENTS.md (deve pertencer apenas ao writer payload).",
+            )
+
+        # Checar se os elementos canônicos do roteador estão presentes
+        self.assertIn("RPGPRO Sovereign Router", content)
+        self.assertIn("Grau 1", content)
+        self.assertIn("Grau 2", content)
+        self.assertIn("Grau 3", content)
+        self.assertIn("rpg-narrative-engine", content)
+        self.assertIn("rpg-showrunner", content)
+        self.assertIn("step_3_writer_mandate", content)
+
+    def test_p1_module_3_no_cli_execution_blocks(self):
+        """P1: Garante que o Módulo 3 não replica comandos CLI de relógio/plano em todas as raízes."""
+        for s_root in self.get_skill_roots():
+            mod3_file = s_root / "rpg-narrative-engine" / "references" / "3_campaign_crud_and_state.md"
+            if not mod3_file.exists():
+                continue
+            content = mod3_file.read_text(encoding="utf-8")
+
+            self.assertNotIn(
+                "python lazy_turn.py clock",
+                content,
+                f"Comando executável 'python lazy_turn.py clock' duplicado em {mod3_file}",
+            )
+            self.assertNotIn(
+                "python lazy_turn.py plan",
+                content,
+                f"Comando executável 'python lazy_turn.py plan' duplicado em {mod3_file}",
+            )
+
+    def test_p1_narrative_skill_table_sovereignty(self):
+        """P1: Garante que no SKILL.md a linha do Módulo 3 não reivindica autoridade de execução sobre relógios/fila."""
+        for s_root in self.get_skill_roots():
+            skill_file = s_root / "rpg-narrative-engine" / "SKILL.md"
+            if not skill_file.exists():
+                continue
+            content = skill_file.read_text(encoding="utf-8")
+            for line in content.splitlines():
+                if "3_campaign_crud_and_state.md" in line:
+                    self.assertNotIn("via lazy_turn.py clock", line, f"Soberania dupla de relógios em {skill_file}")
+                    self.assertNotIn("lazy_turn.py plan", line, f"Soberania dupla de plano em {skill_file}")
+                    self.assertIn("rpg-showrunner", line, f"Falta ponteiro para rpg-showrunner em {skill_file}")
+
+    def test_p1_campaigns_no_generic_dc_ladder(self):
+        """P1: Garante que nenhuma campanha ativa ou template repete a escada genérica universal de DC e contém yaml:mechanics."""
+        regras_files = list((self.root_dir / "campaigns").glob("*/regras.md"))
+        regras_files.append(self.root_dir / "templates" / "regras.template.md")
+
+        self.assertGreater(len(regras_files), 1, "Nenhum arquivo de regras de campanha encontrado")
+        forbidden_dc_needle = "DC 10 (Ação Básica sob Pressão)"
+        ladder_pattern = re.compile(
+            r"\*\*DC\s*10\b[\s\S]{0,300}\*\*DC\s*15\b[\s\S]{0,300}\*\*DC\s*20\b[\s\S]{0,300}\*\*DC\s*25\b",
+            re.IGNORECASE,
+        )
+
+        for r_file in regras_files:
+            content = r_file.read_text(encoding="utf-8")
+            self.assertNotIn(
+                forbidden_dc_needle,
+                content,
+                f"Escada genérica de DC duplicada encontrada em {r_file.relative_to(self.root_dir)}",
+            )
+            self.assertFalse(
+                ladder_pattern.search(content),
+                f"Padrão estrutural de escada mecânica de DC duplicado em {r_file.relative_to(self.root_dir)}",
+            )
+            self.assertIn(
+                "```yaml:mechanics",
+                content,
+                f"Bloco estruturado ```yaml:mechanics ausente em {r_file.relative_to(self.root_dir)}",
+            )
 
 
 if __name__ == "__main__":

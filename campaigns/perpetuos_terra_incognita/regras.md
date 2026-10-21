@@ -1,12 +1,21 @@
 # Regras de Arbitragem & Sistema de Poder: Os Perpetuos: Terra Incognita
 
-## 1. Escala de Classes de Dificuldade (DC)
-O motor determinístico de 3 Portões (`lazy_turn.py prepare`) adota os seguintes padrões de desafio para a escala cósmica e existencial de The Sandman:
+## 1. Calibração Diegética de Dificuldade & Overrides (Grau 2)
+A escala mecânica de resolução adota o padrão universal do framework (Grau 1: DC 10 Fácil, DC 15 Média, DC 20 Difícil, DC 25 Extrema). Neste cenário específico, as faixas de desafio ancoram-se nas seguintes realidades diegéticas:
 
-* **DC 10 (Ação Básica sob Pressão):** Dobrar a percepção de um mortal desprevenido, desvanecer em sombras comuns ou perscrutar a aura superficial de um sonho fraco.
-* **DC 15 (Conflito Severo & Tensão):** Ocultar a presença contra a vigilância de arcontes do Sonhar, impor vertigem a magos veteranos ou atravessar fronteiras planares turbulentas.
-* **DC 20 (Confronto de Alto Nível / Entidades Antigas):** Impor o peso do Desconhecido sobre demônios maiores do Inferno, deuses pagãos enfraquecidos ou pesadelos rebeldes como o Coríntio.
-* **DC 25 (Feito Primordial / Choque Cósmico):** Desafiar a vontade explícita de outro Perpétuo (Morpheus, Desejo, Destino) ou reescrever uma lei fundamental em solo neutro da Criação.
+* **Pressão Leve (Faixa 10):** Dobrar a percepção de um mortal desprevenido, desvanecer em sombras comuns ou perscrutar a aura superficial de um sonho fraco.
+* **Conflito Severo (Faixa 15):** Ocultar a presença contra a vigilância de arcontes do Sonhar, impor vertigem a magos veteranos ou atravessar fronteiras planares turbulentas.
+* **Elite do Cenário (Faixa 20):** Impor o peso do Desconhecido sobre demônios maiores do Inferno, deuses pagãos enfraquecidos ou pesadelos rebeldes como o Coríntio.
+* **Calamidade / Feito Lendário (Faixa 25):** Desafiar a vontade explícita de outro Perpétuo (Morpheus, Desejo, Destino) ou reescrever uma lei fundamental em solo neutro da Criação.
+
+```yaml:mechanics
+ruleset: d20_3gates
+overrides:
+  - id: observer_decay
+    effect: "Quanto mais um alvo compreende o Desconhecido, maior o custo de autoridade para dobrá-lo."
+  - id: sovereign_realm_authority
+    effect: "Dentro de Terra Incognita a autoridade do Desconhecido é absoluta; fora dela leis do hospedeiro aplicam-se."
+```
 
 ---
 

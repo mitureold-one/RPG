@@ -56,25 +56,11 @@ RPGPRO/
 
 ## O Loop do Turno
 
-A cada ação do jogador, o assistente executa o fluxo invariável:
+A cada turno de ação, o assistente orquestra o ciclo invariável via CLI e obedece aos mandatos dinâmicos de escrita:
 
-1. **Pré-Turno (`prepare`):**
-   ```powershell
-   python lazy_turn.py prepare --campaign <id> --action "<ação>" [--stat <ATTR>] [--dc <10|15|20|25>]
-   ```
-   Rola os 3 Portões, calcula custos de vitais, injeta matriz relacional e iniciativas ativas de NPCs.
-
-2. **Redação Literária:**
-   * Linha 1: Cabeçalho canônico `[Data, Hora] | [Local] | [Presentes]`.
-   * Prosa clássica com travessão (`—`), sem formato teatral.
-   * Iniciativa de NPCs e triangulação horizontal.
-   * Fechamento em gancho dramático acionável (zero didatismo de rodapé).
-
-3. **Pós-Turno (`commit`):**
-   ```powershell
-   python lazy_turn.py commit --campaign <id> --summary "<resumo>" --state-shift "<mudança>" [--cost "<recursos>"] [--npc-updates "<NPC: Atitude:...>"]
-   ```
-   Persiste atomicamente em `ficha.md`, `npcs.md` e `diario.md` e audita a integridade da crônica.
+1. **Pré-Turno (`prepare`):** Resolve a mecânica de dados e vitais, emitindo o payload determinístico `step_3_writer_mandate`.
+2. **Redação Literária:** Redige a narrativa obedecendo estritamente ao `step_3_writer_mandate` injetado pelo engine para o modo e `--scene-type` ativo.
+3. **Pós-Turno (`commit`):** Persiste o estado factual atomicamente em `ficha.md`, `npcs.md` e `diario.md`, executando a auditoria automática de integridade.
 
 ---
 

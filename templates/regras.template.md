@@ -1,12 +1,17 @@
 # Regras de Arbitragem & Sistema de Poder: {{TITULO_CAMPANHA}}
 
-## 1. Escala de Classes de Dificuldade (DC)
-O motor determinístico de 3 Portões (`lazy_turn.py prepare`) adota os seguintes padrões de desafio para este cenário:
+## 1. Calibração Diegética de Dificuldade & Overrides (Grau 2)
+A escala mecânica de resolução adota o padrão universal do framework (Grau 1: DC 10 Fácil, DC 15 Média, DC 20 Difícil, DC 25 Extrema). Neste cenário específico, as faixas de desafio ancoram-se nas seguintes realidades diegéticas:
 
-* **DC 10 (Ação Básica sob Pressão):** {{EXEMPLO_DC_10}}.
-* **DC 15 (Conflito Severo & Tensão):** {{EXEMPLO_DC_15}}.
-* **DC 20 (Confronto de Alto Nível / Elite):** {{EXEMPLO_DC_20}}.
-* **DC 25 (Feito Lendário / Calamidade):** {{EXEMPLO_DC_25}}.
+* **Pressão Leve (Faixa 10):** {{CALIBRACAO_FAIXA_10}}
+* **Conflito Severo (Faixa 15):** {{CALIBRACAO_FAIXA_15}}
+* **Elite do Cenário (Faixa 20):** {{CALIBRACAO_FAIXA_20}}
+* **Calamidade / Feito Lendário (Faixa 25):** {{CALIBRACAO_FAIXA_25}}
+
+```yaml:mechanics
+ruleset: d20_3gates
+overrides: []
+```
 
 ---
 
