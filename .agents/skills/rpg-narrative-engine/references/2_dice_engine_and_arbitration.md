@@ -1,6 +1,6 @@
 # Módulo 2: Mecânica de Dados & Arbitragem (Modelo de 3 Portões)
 
-Este documento é a **autoridade única e soberana** sobre testes, probabilidades, cálculo de dificuldades (DC), variantes e regras de arbitragem mecânica imparcial.
+Este documento é a **referência do ruleset padrão `d20_3gates` (Grau 1b)** para testes, probabilidades, cálculo de dificuldades (DC), variantes e regras de arbitragem mecânica imparcial. Consulte sempre o campo `system:` no manifesto da campanha ativa antes de aplicar.
 
 ---
 

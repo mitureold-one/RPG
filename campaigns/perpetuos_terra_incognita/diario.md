@@ -1,3 +1,6 @@
+---
+schema_version: 1
+---
 # Diário da Crônica: Os Perpetuos: Terra Incognita
 
 ## Cena 1: O Ecos da Jaula Rompida

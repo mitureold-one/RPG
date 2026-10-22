@@ -56,7 +56,10 @@ def detect_temporal_paradoxes(current_dt_str: str, texts_to_scan: list) -> list:
 
 def cmd_review(campaign_id: str) -> dict:
     """Modo Revisor: Audita integridade referencial, temporal, profundidade psicológica de NPCs e cânone (100% agnóstico)."""
-    info = find_campaign(campaign_id)
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e), "ssot_status": "CORRUPTED", "issues": [str(e)]}
     if not info:
         return {"error": f"Campanha '{campaign_id}' não encontrada em {CAMPAIGN_DIRS}."}
 

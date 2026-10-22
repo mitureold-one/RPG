@@ -38,21 +38,89 @@ MONTHS_MAP = {
 TEMPLATES_DIR = Path(os.environ.get("RPGPRO_TEMPLATES_DIR", str(BASE_DIR / "templates")))
 
 
+CURRENT_SCHEMA_VERSION = 1
+DEFAULT_RULESET = "d20_3gates"
+
+
+def get_available_rulesets() -> list[str]:
+    """Lista todos os rulesets disponíveis no diretório rulesets/."""
+    rulesets_dir = BASE_DIR / "rulesets"
+    if not rulesets_dir.is_dir():
+        return [DEFAULT_RULESET]
+    return sorted(p.stem for p in rulesets_dir.glob("*.py") if p.stem != "__init__")
+
+
+def load_ruleset(system_name: str = DEFAULT_RULESET):
+    """Carrega dinamicamente o módulo de regras do sistema indicado. Falha alto se não existir."""
+    clean_name = (system_name or DEFAULT_RULESET).strip().lower()
+    if clean_name == "default":
+        clean_name = DEFAULT_RULESET
+    try:
+        import importlib
+        return importlib.import_module(f"rulesets.{clean_name}")
+    except ModuleNotFoundError:
+        available = get_available_rulesets()
+        raise ValueError(
+            f"Ruleset '{clean_name}' não encontrado. Disponíveis: {', '.join(available)}"
+        )
+
+
+def get_campaign_system(campaign_id: str) -> str:
+    """Extrai o identificador de sistema de resolução declarado em regras.md."""
+    for base in CAMPAIGN_DIRS:
+        if not base.exists():
+            continue
+        regras_path = base / campaign_id / "regras.md"
+        if regras_path.is_file():
+            text = regras_path.read_text(encoding="utf-8")
+            m = re.search(r"system:\s*([a-zA-Z0-9_\-]+)", text)
+            if m:
+                return m.group(1).strip()
+    return DEFAULT_RULESET
+
+
 def find_campaign(campaign_id: str):
-    """Localiza a pasta da campanha em Markdown (SSOT)."""
+    """Localiza e valida a pasta da campanha em Markdown (SSOT).
+    
+    Falha alto (raise FileNotFoundError / ValueError) se a campanha existir mas for inválida,
+    ausente de diario.md, sem schema_version declarado ou com ruleset desconhecido.
+    Retorna None se o diretório da campanha não existir.
+    """
     for base in CAMPAIGN_DIRS:
         if not base.exists():
             continue
         camp_dir = base / campaign_id
         if camp_dir.is_dir():
+            diario_path = camp_dir / "diario.md"
+            if not diario_path.is_file():
+                raise FileNotFoundError(
+                    f"Campanha '{campaign_id}' corrompida: 'diario.md' não encontrado em {camp_dir}."
+                )
+            diario_text = diario_path.read_text(encoding="utf-8")
+            m_schema = re.search(r"schema_version:\s*(\d+)", diario_text)
+            if not m_schema:
+                m_schema = re.search(r"<!--\s*schema_version:\s*(\d+)\s*-->", diario_text)
+            if not m_schema:
+                raise ValueError(
+                    f"Campanha '{campaign_id}' inválida: 'diario.md' não declara 'schema_version' (ex: 'schema_version: 1')."
+                )
+            version = int(m_schema.group(1))
+            if version > CURRENT_SCHEMA_VERSION:
+                raise ValueError(
+                    f"Campanha '{campaign_id}' incompatível: schema_version {version} é superior à versão suportada pelo motor ({CURRENT_SCHEMA_VERSION})."
+                )
+            system_name = get_campaign_system(campaign_id)
+            load_ruleset(system_name)
             return {
                 "type": "markdown",
                 "dir": camp_dir,
                 "ficha": camp_dir / "ficha.md",
-                "diario": camp_dir / "diario.md",
+                "diario": diario_path,
                 "npcs": camp_dir / "npcs.md",
                 "mundo": camp_dir / "mundo.md",
                 "regras": camp_dir / "regras.md",
+                "schema_version": version,
+                "system": system_name,
             }
     return None
 

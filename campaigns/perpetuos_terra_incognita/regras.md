@@ -8,8 +8,8 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 * **Elite do Cenário (Faixa 20):** Impor o peso do Desconhecido sobre demônios maiores do Inferno, deuses pagãos enfraquecidos ou pesadelos rebeldes como o Coríntio.
 * **Calamidade / Feito Lendário (Faixa 25):** Desafiar a vontade explícita de outro Perpétuo (Morpheus, Desejo, Destino) ou reescrever uma lei fundamental em solo neutro da Criação.
 
-```yaml:mechanics
-ruleset: d20_3gates
+```yaml
+system: d20_3gates
 overrides:
   - id: observer_decay
     effect: "Quanto mais um alvo compreende o Desconhecido, maior o custo de autoridade para dobrá-lo."

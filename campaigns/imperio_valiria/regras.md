@@ -8,8 +8,8 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 * **Elite do Cenário (Faixa 20):** Duelo direto contra Comandantes de Esquadrão das Lâminas de Éter, matriarcas alfa bestiais ou demônios de alto escalão.
 * **Calamidade / Feito Lendário (Faixa 25):** Proezas sobre-humanas cósmicas, erguer estruturas de dezenas de toneladas, resistir a bombardeios de cerco ou suplantar a vontade de divindades arcanas.
 
-```yaml:mechanics
-ruleset: d20_3gates
+```yaml
+system: d20_3gates
 overrides:
   - id: mana_sensor_immunity
     effect: "Artefatos de medição mágica leem Kon-El como valor zero (ausência de mana)."

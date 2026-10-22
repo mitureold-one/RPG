@@ -24,6 +24,10 @@ if sys.stdout.encoding != "utf-8":
 from council import (
     CAMPAIGN_DIRS,
     TEMPLATES_DIR,
+    CURRENT_SCHEMA_VERSION,
+    DEFAULT_RULESET,
+    load_ruleset,
+    get_campaign_system,
     find_campaign,
     init_campaign_from_templates,
     parse_ficha_md,
@@ -88,9 +92,15 @@ def cmd_prepare(
     if mode == "director":
         return cmd_plan(campaign_id, list_plan=True)
 
-    info = find_campaign(campaign_id)
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
     if not info:
         return {"error": f"Campanha '{campaign_id}' não encontrada em {CAMPAIGN_DIRS}."}
+
+    system_name = info.get("system", DEFAULT_RULESET)
+    ruleset = load_ruleset(system_name)
 
     ficha = parse_ficha_md(info["ficha"])
     diario = parse_diario_md(info["diario"])
@@ -241,10 +251,10 @@ def cmd_prepare(
                 if not any(n["name"] == m["name"] for n in focal_npcs):
                     focal_npcs.append(m)
 
-            n1_stat_name, n1_stat_mod = extract_npc_contest_modifier(m_npc1, npc_stat)
-            n2_stat_name, n2_stat_mod = extract_npc_contest_modifier(m_npc2, vs_stat)
+            n1_stat_name, n1_stat_mod = ruleset.extract_npc_contest_modifier(m_npc1, npc_stat)
+            n2_stat_name, n2_stat_mod = ruleset.extract_npc_contest_modifier(m_npc2, vs_stat)
 
-            contest_data = roll_contest(
+            contest_data = ruleset.roll_contest(
                 pc_name=m_npc1["name"],
                 pc_stat_name=n1_stat_name,
                 pc_stat_val=n1_stat_mod,
@@ -265,8 +275,8 @@ def cmd_prepare(
             if not any(n["name"] == matched_npc["name"] for n in focal_npcs):
                 focal_npcs.append(matched_npc)
 
-            n_stat_name, n_stat_mod = extract_npc_contest_modifier(matched_npc, npc_stat)
-            contest_data = roll_contest(
+            n_stat_name, n_stat_mod = ruleset.extract_npc_contest_modifier(matched_npc, npc_stat)
+            contest_data = ruleset.roll_contest(
                 pc_name=ficha.get("name", "Protagonista"),
                 pc_stat_name=chosen_stat,
                 pc_stat_val=stat_val,
@@ -279,7 +289,7 @@ def cmd_prepare(
             )
             roll_data = None
     else:
-        roll_data = roll_3_gates(action[:35], variant, dc, chosen_stat, stat_val) if needs_roll else None
+        roll_data = ruleset.roll_3_gates(action[:35], variant, dc, chosen_stat, stat_val) if needs_roll else None
 
     header = f"[{diario['date_time']}] | [{diario['location']}] | [{scene_present}]"
     memories = query_aimemory(campaign_id, action[:60])
@@ -388,6 +398,7 @@ def cmd_prepare(
 
     payload = {
         "campaign": campaign_id,
+        "system": system_name,
         "operation_mode": mode,
         "next_turn_number": next_turn_num,
         "canonical_header": header,
@@ -402,6 +413,8 @@ def cmd_prepare(
             "stats": ficha["stats"],
         },
         "step_1_gm_arbitration": {
+            "ruleset": system_name,
+            "dc_ladder": getattr(ruleset, "DC_LADDER", {}),
             "dice_resolution": contest_data["summary"] if contest_data else (roll_data["summary"] if roll_data else "Sem rolagem de dados (Ação sem oposição mecânica direta)"),
             "cost_directive": cost_guide,
             **({"contest_resolution": contest_data, "npc_reaction_mandate": contest_data["npc_reaction_mandate"], "outcome_narrative_guidance": contest_data["outcome"]} if contest_data else {}),
@@ -451,7 +464,10 @@ def cmd_clock(
         max_steps = add_max
     if add_trigger:
         trigger = add_trigger
-    info = find_campaign(campaign_id)
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
     if not info:
         return {"error": f"Campanha '{campaign_id}' não encontrada."}
 
@@ -484,9 +500,15 @@ def cmd_plan(
     add_milestone: str = "",
 ) -> dict:
     """Gerencia a Fila de Cenas Agendadas, Marcos Futuros e Ritmo em diario.md (Modo Diretor/Showrunner)."""
-    info = find_campaign(campaign_id)
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
     if not info:
         return {"error": f"Campanha '{campaign_id}' não encontrada em {CAMPAIGN_DIRS}."}
+
+    system_name = info.get("system", DEFAULT_RULESET)
+    ruleset = load_ruleset(system_name)
 
     action_res = None
     if add_beat or complete_idx is not None or add_milestone:
@@ -538,9 +560,15 @@ def cmd_arc(
     """Atualiza e faz a transição de Arco, cena ativa e marcos em diario.md."""
     if not date_time and date:
         date_time = date
-    info = find_campaign(campaign_id)
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
     if not info:
         return {"error": f"Campanha '{campaign_id}' não encontrada em {CAMPAIGN_DIRS}."}
+
+    system_name = info.get("system", DEFAULT_RULESET)
+    ruleset = load_ruleset(system_name)
 
     res = update_arc_in_diario(
         info["diario"],
@@ -583,7 +611,10 @@ def cmd_commit(
     """Atualiza ficha.md, diario.md e npcs.md atomicamente no fim do turno e roda a auditoria automática do Modo Revisor."""
     if not time_str and time:
         time_str = time
-    info = find_campaign(campaign_id)
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
     if not info:
         return {"error": f"Campanha Markdown '{campaign_id}' não encontrada."}
 
@@ -803,7 +834,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_prep.add_argument("--no-roll", action="store_true", help="Desativa rolagem de dados para ações sem oposição mecânica")
     p_prep.add_argument("--scene-type", "--scene_type", dest="scene_type", default="standard", choices=["standard", "interlude", "parallel", "timeskip", "dossier", "flashback", "prologue", "epilogue", "post_credits", "fade_to_black"], help="Tipo de estrutura de cena")
     p_prep.add_argument("--actors", default="", help="Personagens específicos em cena (substitui presentes padrão em interlúdios)")
-    p_prep.add_argument("--focus", "--npc-focus", dest="focus", default="", help="NPC(s) em foco dramático imediato nesta ação (ex: 'Fleur' ou 'Cedric, Krum')")
+    p_prep.add_argument("--focus", "--npc-focus", dest="focus", default="", help="NPC(s) em foco dramático imediato nesta ação (ex: 'Vanguarda' ou 'Capitão, Batedor')")
     p_prep.add_argument("--contest-npc", "--contest_npc", dest="contest_npc", default="", help="Nome do primeiro NPC para disputa (ou 'NPC1 vs NPC2')")
     p_prep.add_argument("--vs-npc", "--vs_npc", "--vs", dest="vs_npc", default="", help="Segundo NPC para disputa oposta NPC vs NPC")
     p_prep.add_argument("--npc-stat", "--npc_stat", dest="npc_stat", default="", help="Atributo ou eixo psicológico do primeiro NPC na disputa (ex: Composure, Boldness)")
@@ -820,7 +851,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_com.add_argument("--present-npcs", "--present_npcs", dest="present_npcs", default="", help="Nova lista de personagens presentes")
     p_com.add_argument("--npc-updates", "--npc_updates", dest="npc_updates", default="", help="Ex: 'NPC A: Nova atitude | NPC B: Nova atitude'")
     p_com.add_argument("--state-shift", "--state_shift", dest="state_shift", default="", help="Mudança concreta de estado no mundo, alianças ou recursos gerada pelo turno")
-    p_com.add_argument("--clock-advance", "--clock_advance", dest="clock_advance", default="", help="Avança um ou mais relógios (ex: 'Plano Kenjaku:1' ou 'Ataque:2')")
+    p_com.add_argument("--clock-advance", "--clock_advance", dest="clock_advance", default="", help="Avança um ou mais relógios (ex: 'Invasão:1' ou 'Conspiração:2')")
     p_com.add_argument("--scene-type", "--scene_type", dest="scene_type", default="standard", choices=["standard", "interlude", "parallel", "timeskip", "dossier", "flashback", "prologue", "epilogue", "post_credits", "fade_to_black"], help="Tipo estrutural do turno para etiquetagem no diário")
     p_com.add_argument("--add-ability", default="", help="Adiciona uma nova Habilidade & Técnica em ficha.md")
     p_com.add_argument("--add-milestone", default="", help="Adiciona um novo Marco de Evolução Pessoal em ficha.md")
@@ -855,9 +886,9 @@ def build_cli() -> argparse.ArgumentParser:
     p_arc.add_argument("--title", default="", help="Novo título do arco dramático")
     p_arc.add_argument("--question", default="", help="Nova pergunta central ou conflito do arco")
     p_arc.add_argument("--stage", default="", help="Fase do arco (ex: Preparação, Confrontação, Clímax, Resolução)")
-    p_arc.add_argument("--scene-name", "--scene_name", dest="scene_name", default="", help="Título da nova cena canônica (ex: 'O Colapso em Shinjuku')")
+    p_arc.add_argument("--scene-name", "--scene_name", dest="scene_name", default="", help="Título da nova cena canônica (ex: 'O Cerco da Fortaleza')")
     p_arc.add_argument("--date", default="", help="Nova data/hora canônica (ex: '24 de Dezembro de 2018, 15:30')")
-    p_arc.add_argument("--location", default="", help="Novo local canônico (ex: 'Tóquio, Distrito de Shinjuku')")
+    p_arc.add_argument("--location", default="", help="Novo local canônico (ex: 'Fronteira Norte, Posto Avançado')")
     p_arc.add_argument("--present", default="", help="Nova lista canônica de personagens presentes")
     p_arc.add_argument("--resolve-clocks", action="store_true", help="Marca todos os relógios do arco anterior como RESOLVED")
     p_arc.add_argument("--milestone", default="", help="Registra um marco de encerramento do arco anterior em diario.md")
@@ -878,7 +909,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_npc.add_argument("--relation", default="", help="Relação com Protagonista")
 
     p_init = sub.add_parser("init-campaign", help="Inicializa uma nova campanha canônica com os 5 arquivos Markdown a partir dos templates oficiais")
-    p_init.add_argument("--campaign", required=True, help="ID da pasta da campanha (ex: 'cyber_neo_tokyo')")
+    p_init.add_argument("--campaign", required=True, help="ID da pasta da campanha (ex: 'fantasia_reinos')")
     p_init.add_argument("--title", default="", help="Título legível da campanha")
     p_init.add_argument("--protagonist", default="Protagonista", help="Nome do protagonista")
     p_init.add_argument("--date", default="01 de Outubro de 2026, 12:00", help="Data/Hora inicial no diário")
@@ -1010,7 +1041,11 @@ def main():
             for up in res.get("action_result", {}).get("updates", []):
                 print(f"  * {up}")
     elif args.cmd == "upsert-npc":
-        info = find_campaign(args.campaign)
+        try:
+            info = find_campaign(args.campaign)
+        except (ValueError, FileNotFoundError) as e:
+            print(json.dumps({"error": str(e)}))
+            return
         if not info:
             print(json.dumps({"error": f"Campanha '{args.campaign}' não encontrada."}))
         else:

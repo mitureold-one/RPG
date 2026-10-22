@@ -8,8 +8,8 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 * **Elite do Cenário (Faixa 20):** {{CALIBRACAO_FAIXA_20}}
 * **Calamidade / Feito Lendário (Faixa 25):** {{CALIBRACAO_FAIXA_25}}
 
-```yaml:mechanics
-ruleset: d20_3gates
+```yaml
+system: d20_3gates
 overrides: []
 ```
 

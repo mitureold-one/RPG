@@ -1,3 +1,6 @@
+---
+schema_version: 1
+---
 # Diário da Crônica: {{TITULO_CAMPANHA}}
 
 ## Cena 1: {{NOME_CENA_INICIAL}}

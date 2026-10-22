@@ -8,8 +8,8 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 * **Elite do Cenário (Faixa 20):** Superar combatentes de elite ou resistir a venenos/toxinas potentes.
 * **Calamidade / Feito Lendário (Faixa 25):** Feitos lendários contra calamidades ou anomalias supremas.
 
-```yaml:mechanics
-ruleset: d20_3gates
+```yaml
+system: d20_3gates
 overrides:
   - id: exhaustion_friction
     effect: "Esforço extremo continuado sem repouso gera penalidade cumulativa de exaustão."

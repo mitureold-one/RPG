@@ -1,3 +1,6 @@
+---
+schema_version: 1
+---
 # Diário da Crônica: A Dinastia das Cinzas
 
 ## Cena 1: A Vigília da Meia-Noite

@@ -1,3 +1,6 @@
+---
+schema_version: 1
+---
 # Diário da Crônica: Crônicas de Valíria: O Filho de Krypton
 
 ## Cena 1: O Despertar da Cápsula em Sköll
