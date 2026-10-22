@@ -13,6 +13,7 @@ import re
 import unicodedata
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+from council.helpers import atomic_write_text
 
 REPUTATION_TIERS: Dict[int, str] = {
     3: "Venerado",
@@ -290,7 +291,7 @@ def upsert_faction_in_mundo(
                 text = text.rstrip() + f"\n\n{FACTION_SECTION_HEADER}\n\n{new_line}\n"
         action = "faction_added"
 
-    mundo_path.write_text(text, encoding="utf-8")
+    atomic_write_text(mundo_path, text)
     return {
         "action": action,
         "faction": faction_data,
@@ -457,7 +458,7 @@ def update_reputation_in_ficha(
             new_sec_body = sec_body.rstrip() + f"\n* **Reputação com Facções:**\n{new_sub_bullet}\n"
 
     text = text[:m_vinc.start()] + sec_header + new_sec_body + text[m_vinc.end():]
-    ficha_path.write_text(text, encoding="utf-8")
+    atomic_write_text(ficha_path, text)
 
     return {
         "tag": final_tag,
@@ -579,7 +580,7 @@ def append_faction_ledger_entry(
         ins_pos = (sec_idx + len(FACTION_LEDGER_HEADER) + m_next_sec.start()) if m_next_sec else len(text)
         text = text[:ins_pos].rstrip() + f"\n{entry_line}\n\n" + text[ins_pos:].lstrip("\n")
 
-    diario_path.write_text(text, encoding="utf-8")
+    atomic_write_text(diario_path, text)
     return {
         "turn": cur_turn,
         "faction": faction_name,
@@ -636,7 +637,7 @@ def simulate_faction_tick(campaign_info: Dict[str, Any]) -> Dict[str, Any]:
             should_advance = True
 
         if should_advance:
-            res = upsert_clock_in_diario(diario_path, c_match["name"], advance=1)
+            res = upsert_clock_in_diario(diario_path, c_match["name"], advance=1, create_if_missing=False)
             adv = {
                 "faction": f["name"],
                 "power": power,
@@ -675,7 +676,7 @@ def simulate_faction_tick(campaign_info: Dict[str, Any]) -> Dict[str, Any]:
                 d_text = d_text.replace("### Histórico de Turnos", f"{sec_header}\n{entry_block}\n\n### Histórico de Turnos", 1)
             else:
                 d_text = d_text.rstrip() + f"\n\n{sec_header}\n{entry_block}\n"
-        diario_path.write_text(d_text, encoding="utf-8")
+        atomic_write_text(diario_path, d_text)
 
     return {
         "campaign": campaign_info.get("id", ""),
@@ -848,7 +849,5 @@ def resolve_scene_factions(
                     for mf in matched_factions:
                         if mf["tag"] == f["tag"]:
                             mf["territory_in_scene"] = loc_clean
-
-    return matched_factions
 
     return matched_factions

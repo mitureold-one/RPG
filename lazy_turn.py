@@ -10,9 +10,11 @@ Ponto de entrada (CLI) enxuto que delega a lógica para os módulos especializad
 """
 
 import argparse
+import functools
 import json
 import re
 import sys
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 if sys.stdout.encoding != "utf-8":
@@ -22,6 +24,7 @@ if sys.stdout.encoding != "utf-8":
     except Exception:
         pass
 
+from council.helpers import atomic_write_text, campaign_lock
 from council import (
     CAMPAIGN_DIRS,
     TEMPLATES_DIR,
@@ -83,6 +86,42 @@ from council.factions import (
     simulate_faction_tick,
     resolve_scene_factions,
 )
+
+
+def _serialized_campaign_mutation(func):
+    """Serializa comandos que fazem read-modify-write no SSOT da campanha."""
+
+    @functools.wraps(func)
+    def wrapper(campaign_id, *args, **kwargs):
+        try:
+            info = find_campaign(campaign_id)
+        except (ValueError, FileNotFoundError) as exc:
+            return {"error": str(exc)}
+        if not info:
+            return func(campaign_id, *args, **kwargs)
+        try:
+            with campaign_lock(info["dir"]):
+                # Snapshot dos arquivos mutáveis: se uma exceção inesperada
+                # ocorrer no meio de um commit multiarquivo, restaura o estado
+                # anterior em vez de deixar ficha/npcs/diario divergentes.
+                snapshots = {}
+                for key in ("ficha", "diario", "npcs", "mundo"):
+                    path = info.get(key)
+                    if path and Path(path).exists():
+                        snapshots[Path(path)] = Path(path).read_text(encoding="utf-8")
+                try:
+                    return func(campaign_id, *args, **kwargs)
+                except BaseException:
+                    for path, content in snapshots.items():
+                        try:
+                            atomic_write_text(path, content)
+                        except OSError:
+                            pass
+                    raise
+        except TimeoutError as exc:
+            return {"error": str(exc)}
+
+    return wrapper
 
 
 def cmd_prepare(
@@ -533,6 +572,7 @@ def cmd_prepare(
     return payload
 
 
+@_serialized_campaign_mutation
 def cmd_clock(
     campaign_id: str,
     list_clocks: bool = False,
@@ -562,13 +602,17 @@ def cmd_clock(
     if add_name:
         res = upsert_clock_in_diario(diario_path, add_name, current=0, max_steps=max_steps, trigger=trigger)
     elif advance_name:
-        res = upsert_clock_in_diario(diario_path, advance_name, advance=advance_steps)
+        res = upsert_clock_in_diario(
+            diario_path, advance_name, advance=advance_steps, create_if_missing=False
+        )
     elif resolve_name:
         prior_clocks = parse_clocks_from_diario(diario_path)
         matched_prior = next((c for c in prior_clocks if c["name"].lower() == resolve_name.strip().lower()), None)
         was_active = matched_prior is not None and matched_prior.get("status") == "ACTIVE"
 
-        res = upsert_clock_in_diario(diario_path, resolve_name, status="RESOLVED")
+        res = upsert_clock_in_diario(
+            diario_path, resolve_name, status="RESOLVED", create_if_missing=False
+        )
         all_active_quests = parse_quests_from_diario(diario_path)
         linked_clock_names = {q["clock"].strip().lower() for q in all_active_quests if q.get("clock")}
         if was_active and resolve_name.strip().lower() not in linked_clock_names:
@@ -649,6 +693,7 @@ def cmd_plan(
     }
 
 
+@_serialized_campaign_mutation
 def cmd_arc(
     campaign_id: str,
     title: str = "",
@@ -725,6 +770,7 @@ def cmd_arc(
     }
 
 
+@_serialized_campaign_mutation
 def cmd_quest(
     campaign_id: str,
     list_quests: bool = False,
@@ -863,6 +909,7 @@ def cmd_progress(
     }
 
 
+@_serialized_campaign_mutation
 def cmd_faction(
     campaign_id: str,
     list_factions: bool = False,
@@ -1034,6 +1081,133 @@ def cmd_check_prose(campaign_id: str = "", file_path: str = "", text: str = "") 
     }
 
 
+def _split_name_value(item: str) -> tuple:
+    """Divide 'Nome:valor' pelo último ':' (nomes podem conter ':').
+
+    Retorna (nome, valor). Se não houver valor, o segundo item é vazio.
+    """
+    raw = item.strip()
+    if ":" not in raw:
+        return raw, ""
+    name, value = raw.rsplit(":", 1)
+    return name.strip(), value.strip()
+
+
+def _compute_commit_datetime(
+    current_dt: str,
+    time_str: str,
+    time_advance_mins: int,
+    calendar: dict | None,
+) -> str:
+    """Resolve a nova data/hora do commit antes de qualquer escrita.
+
+    Levanta ``ValueError`` quando o formato é desconhecido ou o calendário da
+    campanha não cobre o mês; o commit deve abortar sem tocar no SSOT.
+    """
+    if time_str:
+        clean = time_str.strip()
+        if clean.startswith("+"):
+            rel_mins = parse_time_increment(clean)
+            if rel_mins <= 0:
+                raise ValueError(
+                    f"Incremento de tempo inválido: '{time_str}'. Use '+30m', '+6h', '+14d', '+2mo' ou '+1y'."
+                )
+            return advance_time_str(current_dt, rel_mins, calendar=calendar)
+        return clean
+    if time_advance_mins > 0:
+        return advance_time_str(current_dt, time_advance_mins, calendar=calendar)
+    return current_dt
+
+
+def validate_commit_entities(
+    info: dict,
+    clock_advance: str = "",
+    clock_resolve: str = "",
+    quest_progress: str = "",
+    quest_complete: str = "",
+    quest_fail: str = "",
+    faction_rep: str = "",
+    faction_favor: str = "",
+    faction_debt: str = "",
+) -> list:
+    """Valida nomes de entidades antes de qualquer escrita do commit.
+
+    Retorna uma lista de erros legíveis. O commit deve abortar sem tocar no
+    SSOT quando a lista não estiver vazia. Isso impede relógios, missões e
+    facções fantasma criados por erro de digitação.
+    """
+    errors = []
+    diario_path = info.get("diario")
+    mundo_path = info.get("mundo")
+
+    clock_names = set()
+    if diario_path and diario_path.exists():
+        clock_names = {c["name"].strip().lower() for c in parse_clocks_from_diario(diario_path)}
+
+    for raw in (clock_advance or "").split("|"):
+        if not raw.strip():
+            continue
+        name, _ = _split_name_value(raw)
+        if name and name.lower() not in clock_names:
+            errors.append(
+                f"Relógio '{name}' não existe em diario.md. Crie-o com 'lazy_turn.py clock --add \"{name}\"'."
+            )
+
+    for raw in (clock_resolve or "").split("|"):
+        name = raw.strip()
+        if name and name.lower() not in clock_names:
+            errors.append(
+                f"Relógio '{name}' não existe em diario.md. Crie-o com 'lazy_turn.py clock --add \"{name}\"'."
+            )
+
+    quests = {}
+    if diario_path and diario_path.exists():
+        quests = {q["id"].upper(): q for q in parse_quests_from_diario(diario_path)}
+
+    for raw in (quest_progress or "").split("|"):
+        if not raw.strip():
+            continue
+        qid = raw.split(":", 1)[0].strip()
+        if qid and qid.upper() not in quests:
+            errors.append(f"Missão '{qid}' não existe em diario.md.")
+
+    for raw in (quest_complete or "").split("|"):
+        qid = raw.strip().upper()
+        if qid and qid not in quests:
+            errors.append(f"Missão '{qid}' não existe em diario.md.")
+
+    for raw in (quest_fail or "").split("|"):
+        if not raw.strip():
+            continue
+        qid = raw.split(":", 1)[0].strip()
+        if qid and qid.upper() not in quests:
+            errors.append(f"Missão '{qid}' não existe em diario.md.")
+
+    faction_keys = set()
+    if mundo_path and mundo_path.exists():
+        for faction in parse_factions_from_mundo(mundo_path):
+            faction_keys.add(faction["name"].strip().lower())
+            faction_keys.add(faction["tag"].strip().lower())
+
+    for label, raw_value in (
+        ("facção", faction_rep),
+        ("facção", faction_favor),
+        ("facção", faction_debt),
+    ):
+        for raw in (raw_value or "").split("|"):
+            if not raw.strip():
+                continue
+            name, _ = _split_name_value(raw)
+            if name and name.lower() not in faction_keys:
+                errors.append(
+                    f"{label.capitalize()} '{name}' não existe em mundo.md. "
+                    f"Registre-a com 'lazy_turn.py faction --add \"{name}\"'."
+                )
+
+    return errors
+
+
+@_serialized_campaign_mutation
 def cmd_commit(
     campaign_id: str,
     summary: str,
@@ -1069,6 +1243,29 @@ def cmd_commit(
         return {"error": str(e)}
     if not info:
         return {"error": f"Campanha Markdown '{campaign_id}' não encontrada."}
+
+    validation_errors = validate_commit_entities(
+        info,
+        clock_advance=clock_advance,
+        clock_resolve=clock_resolve,
+        quest_progress=quest_progress,
+        quest_complete=quest_complete,
+        quest_fail=quest_fail,
+        faction_rep=faction_rep,
+        faction_favor=faction_favor,
+        faction_debt=faction_debt,
+    )
+    if validation_errors:
+        return {
+            "error": "Commit recusado: entidades inexistentes no SSOT. Nenhum arquivo foi alterado.",
+            "validation_errors": validation_errors,
+        }
+
+    known_factions = set()
+    if info.get("mundo") and info["mundo"].exists():
+        for faction in parse_factions_from_mundo(info["mundo"]):
+            known_factions.add(faction["name"].strip().lower())
+            known_factions.add(faction["tag"].strip().lower())
 
     applied = []
     ficha_path = info["ficha"]
@@ -1146,6 +1343,22 @@ def cmd_commit(
 
     deltas, time_advance_mins = parse_cost_string(cost, ficha_data["vitals"])
 
+    # Valida e resolve o tempo antes de qualquer escrita. Um calendário
+    # desconhecido deve falhar alto, não deixar o SSOT parcialmente alterado.
+    diario_ctx_for_time = parse_diario_md(diario_path)
+    try:
+        precomputed_new_dt = _compute_commit_datetime(
+            diario_ctx_for_time["date_time"],
+            time_str,
+            time_advance_mins,
+            info.get("calendar"),
+        )
+    except ValueError as exc:
+        return {
+            "error": f"Commit recusado: {exc}",
+            "validation_errors": [str(exc)],
+        }
+
     if deltas and ficha_path.exists():
         ficha_text = ficha_path.read_text(encoding="utf-8")
         for key, delta in deltas.items():
@@ -1156,7 +1369,7 @@ def cmd_commit(
                 pattern = rf"(\*\s*\*\*{re.escape(v['label'])}:\*\*\s*)\d+(\s*/\s*{v['max']})"
                 ficha_text = re.sub(pattern, rf"\g<1>{new_val}\g<2>", ficha_text)
                 applied.append(f"{v['label']}: {new_val}/{v['max']} ({delta:+d})")
-        ficha_path.write_text(ficha_text, encoding="utf-8")
+        atomic_write_text(ficha_path, ficha_text)
     elif scene_type == "timeskip" and not deltas and ficha_path.exists():
         # Restauração automática de vitais em Timeskips prolongados (sem custo explícito de dano)
         ficha_text = ficha_path.read_text(encoding="utf-8")
@@ -1167,7 +1380,7 @@ def cmd_commit(
                 ficha_text = re.sub(pattern, rf"\g<1>{v['max']}\g<2>", ficha_text)
                 restored.append(f"{v['label']}: {v['max']}/{v['max']} (pleno descanso)")
         if restored:
-            ficha_path.write_text(ficha_text, encoding="utf-8")
+            atomic_write_text(ficha_path, ficha_text)
             applied.extend(restored)
 
     if add_ability or add_milestone or add_item:
@@ -1192,15 +1405,14 @@ def cmd_commit(
         for item in clock_resolve.split("|"):
             c_name = item.strip()
             if c_name:
-                ups_res = upsert_clock_in_diario(diario_path, c_name, status="RESOLVED")
+                ups_res = upsert_clock_in_diario(diario_path, c_name, status="RESOLVED", create_if_missing=False)
                 applied.append(f"Relógio '{c_name}' resolvido via commit [{ups_res.get('status')}].")
                 resolved_clocks.append(c_name)
     if clock_advance and diario_path.exists():
         for item in clock_advance.split("|"):
-            parts = item.split(":")
-            c_name = parts[0].strip()
-            c_steps = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip().isdigit() else 1
-            ups_res = upsert_clock_in_diario(diario_path, c_name, advance=c_steps)
+            c_name, c_steps_raw = _split_name_value(item)
+            c_steps = int(c_steps_raw) if c_steps_raw.isdigit() else 1
+            ups_res = upsert_clock_in_diario(diario_path, c_name, advance=c_steps, create_if_missing=False)
             applied.append(f"Relógio '{c_name}' avançado em +{c_steps} -> {ups_res.get('current', '?')}/{ups_res.get('max', '?')} [{ups_res.get('status', 'ACTIVE')}].")
             if ups_res.get("status") == "RESOLVED":
                 resolved_clocks.append(c_name)
@@ -1211,7 +1423,7 @@ def cmd_commit(
                 c_tokens = [tok.lower() for tok in re.split(r"[\s:,&()-]+", c["name"] + " " + c.get("trigger", "")) if len(tok) >= 4]
                 matches = sum(1 for tok in c_tokens if tok in sum_low)
                 if matches >= 2:
-                    ups_res = upsert_clock_in_diario(diario_path, c["name"], advance=1)
+                    ups_res = upsert_clock_in_diario(diario_path, c["name"], advance=1, create_if_missing=False)
                     applied.append(f"Auto-avanço: Relógio '{c['name']}' avançado em +1 ({ups_res.get('current')}/{ups_res.get('max')} [{ups_res.get('status')}]).")
                     if ups_res.get("status") == "RESOLVED":
                         resolved_clocks.append(c["name"])
@@ -1266,6 +1478,11 @@ def cmd_commit(
                     applied.append(f"ALERTA_CRITICO: Tentativa de pagamento duplicado de XP barrada para missão '{q_match['title']}' ({qid}).")
                     duplicate_quest_attempts.append(q_match)
                     upsert_quest_in_diario(diario_path, "complete", quest_id=qid, current_turn=next_turn)
+                elif q_match.get("status") == "COMPLETED":
+                    applied.append(
+                        f"Aviso de Idempotência: Missão '{q_match['title']}' ({qid}) já está COMPLETED; "
+                        f"XP não concedido novamente. Use 'quest --reopen' antes de concluir outra vez."
+                    )
                 else:
                     reward_xp = q_match.get("reward_xp") or DEFAULT_QUEST_REWARDS.get(q_match.get("type", "MAIN").upper(), 150)
                     upsert_quest_in_diario(diario_path, "complete", quest_id=qid, xp_paid=reward_xp, current_turn=next_turn)
@@ -1276,7 +1493,12 @@ def cmd_commit(
 
                     # Repercussão diplomática automática com a facção contratante
                     contractor = (q_match.get("contractor") or "").strip()
-                    if contractor:
+                    if contractor and contractor.lower() not in known_factions:
+                        applied.append(
+                            f"Contrato Cumprido: facção contratante '{contractor}' não está cadastrada em mundo.md; "
+                            f"reputação e favores não foram alterados."
+                        )
+                    elif contractor:
                         f_res = update_reputation_in_ficha(ficha_path, contractor, score_delta=1, favors_delta=1)
                         append_faction_ledger_entry(
                             diario_path,
@@ -1301,7 +1523,12 @@ def cmd_commit(
             applied.append(f"Missão Fracassada: '{qid}' encerrada com status FAILED ({reason_text or 'Sem justificativa'}).")
             if q_match and q_match.get("contractor"):
                 contractor = q_match["contractor"].strip()
-                if contractor:
+                if contractor and contractor.lower() not in known_factions:
+                    applied.append(
+                        f"Contrato Fracassado: facção contratante '{contractor}' não está cadastrada em mundo.md; "
+                        f"reputação e débitos não foram alterados."
+                    )
+                elif contractor:
                     f_res = update_reputation_in_ficha(ficha_path, contractor, score_delta=-1, debts_delta=1)
                     append_faction_ledger_entry(
                         diario_path,
@@ -1360,19 +1587,7 @@ def cmd_commit(
         for v in ficha_after["vitals"].values()
     )
 
-    new_dt = diario_ctx["date_time"]
-    if time_str:
-        t_clean = time_str.strip()
-        if t_clean.startswith("+"):
-            rel_mins = parse_time_increment(t_clean)
-            if rel_mins > 0:
-                new_dt = advance_time_str(diario_ctx["date_time"], rel_mins)
-            else:
-                new_dt = t_clean
-        else:
-            new_dt = t_clean
-    elif time_advance_mins > 0:
-        new_dt = advance_time_str(diario_ctx["date_time"], time_advance_mins)
+    new_dt = precomputed_new_dt
 
     new_loc = location.strip() if location else diario_ctx["location"]
     new_pres = present_npcs.strip() if present_npcs else diario_ctx["present"]
@@ -1423,7 +1638,7 @@ def cmd_commit(
             applied.append(f"Mudança de Estado registrada: '{clean_shift}'")
         for dup in duplicate_quest_attempts:
             turn_entry += f"  * **Alerta:** Tentativa de pagamento duplicado de XP barrada para missão '{dup['title']}' ({dup['id']}).\n"
-        diario_path.write_text(diario_text + turn_entry, encoding="utf-8")
+        atomic_write_text(diario_path, diario_text + turn_entry)
         applied.append(f"Diário atualizado: Turno {next_turn} registrado.")
 
     # 5. Fase 5 do Conselho: Auditoria Automática Pós-Commit (Modo Revisor)
@@ -1472,7 +1687,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_com.add_argument("--campaign", required=True, help="ID da pasta da campanha")
     p_com.add_argument("--summary", "--narrative", dest="summary", required=True, help="Resumo factual e consequências do turno para o diario.md")
     p_com.add_argument("--cost", default="", help="Qualquer recurso da ficha (ex: 'HP -3, Stamina -2, time +5m' ou '+1 HP, Sanidade -4')")
-    p_com.add_argument("--time", default="", help="Nova data/hora exata ou incremento relativo (ex: '+15m', '+2h', '+14d', '+2m', '+1y')")
+    p_com.add_argument("--time", default="", help="Nova data/hora exata ou incremento relativo (ex: '+15m', '+2h', '+14d', '+2mo', '+1y')")
     p_com.add_argument("--location", default="", help="Novo local caso a cena mude de espaço")
     p_com.add_argument("--present-npcs", "--present_npcs", dest="present_npcs", default="", help="Nova lista de personagens presentes")
     p_com.add_argument("--npc-updates", "--npc_updates", dest="npc_updates", default="", help="Ex: 'NPC A: Nova atitude | NPC B: Nova atitude'")

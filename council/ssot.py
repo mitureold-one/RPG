@@ -8,6 +8,7 @@ from rulesets.progression import (
     DEFAULT_BASE_STEP,
     DEFAULT_STAT_CEILING,
 )
+from council.helpers import atomic_write_text
 from council.quests import (
     parse_xp_ledger_from_diario,
     append_xp_ledger_entry,
@@ -221,7 +222,7 @@ def update_progression_in_ficha(
         else:
             text += f"\n\n{prog_block}"
 
-    ficha_path.write_text(text, encoding="utf-8")
+    atomic_write_text(ficha_path, text)
     return {
         "old_level": old_level,
         "new_level": new_level,
@@ -275,7 +276,7 @@ def spend_attribute_point_in_ficha(
     new_sec_content = stat_pat.sub(rf"\g<1>{new_val}", sec_content, count=1)
     text = text[:m_s_sec.start()] + sec_header + new_sec_content + text[m_s_sec.end():]
 
-    ficha_path.write_text(text, encoding="utf-8")
+    atomic_write_text(ficha_path, text)
 
     # Decrementa 1 ponto de atributo na progressão
     res = update_progression_in_ficha(ficha_path, xp_add=0, attribute_points_delta=-1)
@@ -372,7 +373,7 @@ def upsert_ficha_feature(
             applied.append(f"Item adicionado ao inventário: {item.strip()}")
 
     if applied:
-        ficha_path.write_text(text, encoding="utf-8")
+        atomic_write_text(ficha_path, text)
     return applied
 
 
@@ -502,7 +503,7 @@ def update_arc_in_diario(
             else:
                 applied.append(f"Marco da Crônica '{archive_milestone.strip()}' já constava nos registros.")
 
-    diario_path.write_text(text, encoding="utf-8")
+    atomic_write_text(diario_path, text)
     return {"action": "arc_updated", "updates": applied}
 
 
@@ -514,8 +515,13 @@ def upsert_clock_in_diario(
     trigger: str = "",
     status: str = "",
     advance: int = 0,
+    create_if_missing: bool = True,
 ) -> dict:
-    """Insere, atualiza ou avança um Relógio Narrativo em diario.md atomicamente."""
+    """Insere, atualiza ou avança um Relógio Narrativo em diario.md atomicamente.
+
+    ``create_if_missing=False`` transforma nomes desconhecidos em erro, em vez
+    de criar silenciosamente um relógio fantasma.
+    """
     if not diario_path.exists():
         return {"error": "diario.md não encontrado"}
     text = diario_path.read_text(encoding="utf-8")
@@ -559,7 +565,7 @@ def upsert_clock_in_diario(
         trigger_part = f" (Gatilho: {new_trigger})" if new_trigger else ""
         new_line = f"* **[{name}]:** {new_cur}/{new_max}{trigger_part} [{new_status}]"
         text = text[:m.start()] + new_line + text[m.end():]
-        diario_path.write_text(text, encoding="utf-8")
+        atomic_write_text(diario_path, text)
         return {
             "name": name,
             "current": new_cur,
@@ -570,6 +576,13 @@ def upsert_clock_in_diario(
             "action": "updated",
         }
     else:
+        if not create_if_missing:
+            return {
+                "error": (
+                    f"Relógio '{name}' não encontrado em diario.md. "
+                    f"Crie-o explicitamente com 'lazy_turn.py clock --add \"{name}\"'."
+                )
+            }
         new_max = max_steps if max_steps is not None else 4
         new_cur = current if current is not None else 0
         if advance:
@@ -584,7 +597,7 @@ def upsert_clock_in_diario(
         sec_idx = text.find(section_header)
         after_header = sec_idx + len(section_header)
         text = text[:after_header] + "\n" + new_line + text[after_header:]
-        diario_path.write_text(text, encoding="utf-8")
+        atomic_write_text(diario_path, text)
         return {
             "name": name,
             "current": new_cur,
@@ -674,7 +687,7 @@ def upsert_planned_scene_in_diario(
         if 0 <= mark_done_idx < len(matches):
             m = matches[mark_done_idx]
             text = text[:m.start()] + "* [x] **[" + text[m.end():]
-            diario_path.write_text(text, encoding="utf-8")
+            atomic_write_text(diario_path, text)
             return {"action": "completed", "index": mark_done_idx}
         return {"error": f"Índice de cena {mark_done_idx} não encontrado"}
 
@@ -683,7 +696,7 @@ def upsert_planned_scene_in_diario(
         sec_idx = text.find(section_header) + len(section_header)
         new_line = f"\n* **Marco Futuro:** {future_milestone.strip()}"
         text = text[:sec_idx] + new_line + text[sec_idx:]
-        diario_path.write_text(text, encoding="utf-8")
+        atomic_write_text(diario_path, text)
         return {"action": "milestone_added", "milestone": future_milestone}
 
     # Se for para adicionar nova cena à fila
@@ -692,7 +705,7 @@ def upsert_planned_scene_in_diario(
         new_line = f"\n* [ ] **[{scene_type.lower().strip()}]**{actors_part}: {beat.strip()}"
         sec_idx = text.find(section_header) + len(section_header)
         text = text[:sec_idx] + new_line + text[sec_idx:]
-        diario_path.write_text(text, encoding="utf-8")
+        atomic_write_text(diario_path, text)
         return {"action": "scene_added", "scene_type": scene_type, "actors": actors, "beat": beat}
 
     return {"action": "noop"}

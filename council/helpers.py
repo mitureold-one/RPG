@@ -1,8 +1,11 @@
 """council.helpers: Constantes universais, localização de campanhas e manipulação de tempo."""
 
+import contextlib
 import datetime
 import os
 import re
+import shutil
+import time
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -42,6 +45,97 @@ CURRENT_SCHEMA_VERSION = 1
 DEFAULT_RULESET = "d20_3gates"
 
 
+def atomic_write_text(path: Path, content: str, encoding: str = "utf-8") -> None:
+    """Grava um arquivo de forma atômica no mesmo diretório.
+
+    A escrita ocorre em um temporário exclusivo; o arquivo final só é
+    substituído por ``os.replace`` depois que todo o conteúdo foi gravado e
+    sincronizado. Assim, uma falha no meio da operação não trunca o SSOT.
+    """
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.{time.time_ns()}.tmp")
+    try:
+        with open(tmp, "w", encoding=encoding) as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if target.exists():
+            try:
+                shutil.copymode(target, tmp)
+            except OSError:
+                pass
+        # No Windows, um leitor concorrente (por exemplo, o sync_daemon)
+        # pode manter o arquivo aberto por alguns milissegundos.
+        for attempt in range(5):
+            try:
+                os.replace(tmp, target)
+                break
+            except PermissionError:
+                if attempt == 4:
+                    raise
+                time.sleep(0.05)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            tmp.unlink()
+        raise
+
+
+@contextlib.contextmanager
+def campaign_lock(campaign_dir: Path, timeout: float = 10.0):
+    """Serializa escritores de uma campanha usando um lock de arquivo.
+
+    O lock é cooperativo: protege apenas processos que usam esta função.
+    Em Windows usa ``msvcrt.locking``; em POSIX usa ``fcntl.flock``.
+    """
+    lock_path = Path(campaign_dir) / ".campaign.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(lock_path, "a+", encoding="utf-8")
+    acquired = False
+    try:
+        # Windows não consegue travar um byte além do EOF; garante 1 byte.
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write("0")
+            handle.flush()
+        deadline = time.monotonic() + max(0.1, float(timeout))
+        while True:
+            try:
+                handle.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                acquired = True
+                break
+            except OSError as exc:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(
+                        f"Não foi possível obter o lock da campanha '{campaign_dir}' em {timeout}s."
+                    ) from exc
+                time.sleep(0.05)
+        yield
+    finally:
+        if acquired:
+            try:
+                handle.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+
+                    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    import fcntl
+
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            except OSError:
+                pass
+        handle.close()
+
+
 def get_available_rulesets() -> list[str]:
     """Lista todos os rulesets disponíveis no diretório rulesets/."""
     rulesets_dir = BASE_DIR / "rulesets"
@@ -65,12 +159,47 @@ def load_ruleset(system_name: str = DEFAULT_RULESET):
         )
 
 
+def _normalize_calendar(raw) -> dict:
+    """Normaliza o bloco ``calendar:`` do manifesto de regras.md.
+
+    Formato aceito::
+
+        calendar:
+          months: ["Ventania", "Geada", "..."]
+          days_per_month: 30          # int ou lista alinhada a months
+    """
+    if not isinstance(raw, dict):
+        return {}
+    raw_months = raw.get("months")
+    if not isinstance(raw_months, list):
+        return {}
+    months = [str(m).strip() for m in raw_months if str(m).strip()]
+    if not months:
+        return {}
+
+    raw_days = raw.get("days_per_month", 30)
+    if isinstance(raw_days, int):
+        days = [max(1, raw_days)] * len(months)
+    elif isinstance(raw_days, list):
+        days = []
+        for value in raw_days[: len(months)]:
+            try:
+                days.append(max(1, int(value)))
+            except (TypeError, ValueError):
+                days.append(30)
+        days.extend([30] * (len(months) - len(days)))
+    else:
+        days = [30] * len(months)
+    return {"months": months, "days_per_month": days}
+
+
 def parse_regras_manifest(regras_path: Path) -> dict:
     """Extrai e parseia o manifesto de mecânica e overrides tipados de regras.md."""
     manifest = {
         "system": DEFAULT_RULESET,
         "ruleset": DEFAULT_RULESET,
         "overrides": [],
+        "calendar": {},
     }
     if not regras_path or not regras_path.is_file():
         return manifest
@@ -112,6 +241,7 @@ def parse_regras_manifest(regras_path: Path) -> dict:
                     }
                     valid_overrides.append(ov)
             manifest["overrides"] = valid_overrides
+        manifest["calendar"] = _normalize_calendar(parsed.get("calendar"))
     else:
         # Fallback minimalista de chave-valor nativo (stdlib)
         m_sys = re.search(r"system:\s*([a-zA-Z0-9_\-]+)", yaml_content)
@@ -203,6 +333,7 @@ def find_campaign(campaign_id: str):
                 "schema_version": version,
                 "system": system_name,
                 "overrides": manifest.get("overrides", []),
+                "calendar": manifest.get("calendar", {}),
             }
     return None
 
@@ -322,7 +453,7 @@ def init_campaign_from_templates(
             content = tmpl_path.read_text(encoding="utf-8")
             for placeholder, val in replacements.items():
                 content = content.replace(placeholder, val)
-            (camp_dir / target_name).write_text(content, encoding="utf-8")
+            atomic_write_text(camp_dir / target_name, content)
             created.append(target_name)
 
     return {
@@ -335,7 +466,10 @@ def init_campaign_from_templates(
 
 
 def parse_time_increment(val_str: str) -> int:
-    """Converte strings como '+60d', '+2m', '+1y', '+2h', '+30m' em minutos totais."""
+    """Converte incrementos como '+60d', '+2mo', '+1y', '+2h' e '+30m' em minutos.
+
+    ``m`` é sempre minuto; meses usam ``mo``/``mes``/``meses``.
+    """
     clean = val_str.strip().lstrip("+").lower()
     m = re.match(r"^(\d+)\s*([a-zçã]+)?$", clean)
     if not m:
@@ -357,39 +491,119 @@ def parse_time_increment(val_str: str) -> int:
     return num
 
 
-def advance_time_str(dt_str: str, minutes: int) -> str:
-    """Avança data e hora respeitando dias, meses, anos ou horários simples."""
+def advance_time_str(dt_str: str, minutes: int, calendar: dict | None = None) -> str:
+    """Avança data e hora respeitando dias, meses, anos ou horários simples.
+
+    ``calendar`` é o bloco opcional ``calendar:`` de ``regras.md`` com
+    ``months`` e ``days_per_month``. Sem calendário, aceita meses gregorianos
+    e anos de 1 a 4 dígitos. Datas com mês desconhecido levantam ``ValueError``
+    em vez de serem convertidas silenciosamente para Janeiro.
+    """
     if minutes == 0:
         return dt_str
 
+    cal = calendar or {}
+    months = cal.get("months") or []
+    days_per_month = cal.get("days_per_month") or []
+
     # Padrão A: 'DD de Mês de YYYY, HH:MM' ou 'DD de Mês de YYYY'
     m_full = re.search(
-        r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ]+)\s+de\s+(\d{4})(?:,\s*(\d{1,2}):(\d{2}))?",
+        r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ]+)\s+de\s+(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?",
         dt_str,
         re.IGNORECASE,
     )
     if m_full:
         day = int(m_full.group(1))
-        m_name = m_full.group(2).lower()
+        m_name = m_full.group(2)
         year = int(m_full.group(3))
         h = int(m_full.group(4)) if m_full.group(4) else 12
         mins = int(m_full.group(5)) if m_full.group(5) else 0
+        has_time = bool(m_full.group(4))
 
-        month_num = MONTHS_MAP.get(m_name, 1)
+        if months:
+            month_idx = next(
+                (i for i, name in enumerate(months) if name.casefold() == m_name.casefold()),
+                None,
+            )
+            if month_idx is None:
+                raise ValueError(
+                    f"Mês '{m_name}' não consta no calendário da campanha. "
+                    f"Declare 'calendar.months' em regras.md."
+                )
+            total = h * 60 + mins + minutes
+            day_delta = total // 1440
+            rem = total % 1440
+            new_day = day + day_delta
+            new_idx = month_idx
+            if isinstance(days_per_month, int):
+                days = [max(1, days_per_month)] * len(months)
+            else:
+                days = list(days_per_month or [])
+                if len(days) < len(months):
+                    days.extend([30] * (len(months) - len(days)))
+            while new_day > days[new_idx]:
+                new_day -= days[new_idx]
+                new_idx += 1
+                if new_idx >= len(months):
+                    new_idx = 0
+                    year += 1
+            new_h, new_m = divmod(rem, 60)
+            formatted = f"{new_day} de {months[new_idx]} de {year}"
+            if has_time:
+                formatted += f", {new_h:02d}:{new_m:02d}"
+            return dt_str[:m_full.start()] + formatted + dt_str[m_full.end():]
+
+        month_num = MONTHS_MAP.get(m_name.lower())
+        if not month_num:
+            # Fallback conservador para calendários diegéticos ainda não
+            # declarados: permite avanços que permaneçam no mesmo mês (30 dias)
+            # sem inventar nomes de meses vizinhos. Qualquer travessia de mês
+            # exige o bloco calendar em regras.md.
+            total = h * 60 + mins + minutes
+            day_delta = total // 1440
+            rem = total % 1440
+            new_day = day + day_delta
+            if 1 <= new_day <= 30:
+                new_h, new_m = divmod(rem, 60)
+                formatted = f"{new_day} de {m_name} de {year}"
+                if has_time:
+                    formatted += f", {new_h:02d}:{new_m:02d}"
+                return dt_str[:m_full.start()] + formatted + dt_str[m_full.end():]
+            raise ValueError(
+                f"Mês '{m_name}' não é gregoriano e o avanço ultrapassa o mês. "
+                f"Declare 'calendar.months' em regras.md para atravessar meses."
+            )
         try:
             cur_dt = datetime.datetime(year, month_num, day, h, mins)
-            new_dt = cur_dt + datetime.timedelta(minutes=minutes)
-            new_month_name = MONTHS_PT[new_dt.month]
-            has_time = bool(m_full.group(4))
-            if has_time:
-                formatted = f"{new_dt.day} de {new_month_name} de {new_dt.year}, {new_dt.hour:02d}:{new_dt.minute:02d}"
-            else:
-                formatted = f"{new_dt.day} de {new_month_name} de {new_dt.year}"
-            return dt_str[:m_full.start()] + formatted + dt_str[m_full.end():]
-        except Exception:
-            pass
+        except ValueError as exc:
+            raise ValueError(f"Data inválida '{dt_str}': {exc}") from exc
+        new_dt = cur_dt + datetime.timedelta(minutes=minutes)
+        new_month_name = MONTHS_PT[new_dt.month]
+        if has_time:
+            formatted = f"{new_dt.day} de {new_month_name} de {new_dt.year}, {new_dt.hour:02d}:{new_dt.minute:02d}"
+        else:
+            formatted = f"{new_dt.day} de {new_month_name} de {new_dt.year}"
+        return dt_str[:m_full.start()] + formatted + dt_str[m_full.end():]
 
-    # Padrão B: 'Dia X, HH:MM'
+    # Padrão B: 'DD/MM/YYYY, HH:MM'
+    m_slash = re.search(r"(\d{1,2})/(\d{1,2})/(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?", dt_str)
+    if m_slash:
+        day, month, year = int(m_slash.group(1)), int(m_slash.group(2)), int(m_slash.group(3))
+        h = int(m_slash.group(4)) if m_slash.group(4) else 12
+        mins = int(m_slash.group(5)) if m_slash.group(5) else 0
+        has_time = bool(m_slash.group(4))
+        try:
+            cur_dt = datetime.datetime(year, month, day, h, mins)
+        except ValueError as exc:
+            raise ValueError(f"Data inválida '{dt_str}': {exc}") from exc
+        new_dt = cur_dt + datetime.timedelta(minutes=minutes)
+        if has_time:
+            formatted = f"{new_dt.day:02d}/{new_dt.month:02d}/{new_dt.year}, {new_dt.hour:02d}:{new_dt.minute:02d}"
+        else:
+            formatted = f"{new_dt.day:02d}/{new_dt.month:02d}/{new_dt.year}"
+        return dt_str[:m_slash.start()] + formatted + dt_str[m_slash.end():]
+
+    # Padrão C: 'Dia X, HH:MM'
     m_dia = re.search(r"Dia\s+(\d+)(?:,\s*(\d{1,2}):(\d{2}))?", dt_str, re.IGNORECASE)
     if m_dia:
         day_num = int(m_dia.group(1))
@@ -408,7 +622,7 @@ def advance_time_str(dt_str: str, minutes: int) -> str:
             formatted = f"Dia {new_day}"
         return dt_str[:m_dia.start()] + formatted + dt_str[m_dia.end():]
 
-    # Fallback C: apenas HH:MM
+    # Fallback D: apenas HH:MM (sem data; não inventa dia)
     m_time = re.search(r"(\d{1,2}):(\d{2})", dt_str)
     if m_time:
         h, mins = int(m_time.group(1)), int(m_time.group(2))
@@ -417,4 +631,7 @@ def advance_time_str(dt_str: str, minutes: int) -> str:
         new_m = total % 60
         return dt_str[:m_time.start()] + f"{new_h:02d}:{new_m:02d}" + dt_str[m_time.end():]
 
-    return dt_str
+    raise ValueError(
+        f"Formato de data não reconhecido: '{dt_str}'. Use 'DD de Mês de YYYY, HH:MM', "
+        f"'DD/MM/YYYY, HH:MM', 'Dia X, HH:MM' ou configure 'calendar' em regras.md."
+    )

@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 
 from rulesets.progression import DEFAULT_QUEST_REWARDS
+from council.helpers import atomic_write_text
 
 VALID_QUEST_TYPES = ("MAIN", "SIDE", "PERSONAL", "FACTION")
 VALID_QUEST_STATUSES = ("ACTIVE", "BLOCKED", "COMPLETED", "FAILED", "ABANDONED")
@@ -242,7 +243,7 @@ def append_xp_ledger_entry(
         else:
             text = text.rstrip() + f"\n\n{LEDGER_SECTION_HEADER}\n{entry_line}\n"
 
-    diario_path.write_text(text, encoding="utf-8")
+    atomic_write_text(diario_path, text)
     return {"action": "ledger_entry_added", "amount": amount, "reason": reason, "turn": turn}
 
 
@@ -352,7 +353,7 @@ def upsert_quest_in_diario(
         else:
             text += f"\n\n{SECTION_HEADER}\n\n" + quest_block + "\n"
 
-        diario_path.write_text(text, encoding="utf-8")
+        atomic_write_text(diario_path, text)
         return {"action": "quest_added", "quest_id": new_id, "title": title}
 
     # Para demais ações, localiza a missão alvo pelo ID exato
@@ -391,7 +392,7 @@ def upsert_quest_in_diario(
                 break
         final_pos = line_end + insert_offset
         text = text[:final_pos].rstrip() + f"\n{obj_line}\n\n" + text[final_pos:].lstrip("\n")
-        diario_path.write_text(text, encoding="utf-8")
+        atomic_write_text(diario_path, text)
         return {"action": "objective_added", "quest_id": target_q["id"], "objective": objective.strip()}
 
     # 3. Marcar objetivo como concluído (check)
@@ -426,7 +427,7 @@ def upsert_quest_in_diario(
         replacement = f"{leading_space}* [x] {old_obj_text}"
         text = text[:obj_match_start] + replacement + text[obj_match_end:]
 
-        diario_path.write_text(text, encoding="utf-8")
+        atomic_write_text(diario_path, text)
         return {"action": "objective_checked", "quest_id": target_q["id"], "index": check_index, "text": old_obj_text}
 
     # 4. Transições de status (complete, fail, block, unblock, abandon, reopen, set_xp_paid)
@@ -493,7 +494,7 @@ def upsert_quest_in_diario(
                     insert_at = line_end + offset
                     text = text[:insert_at].rstrip() + f"\n{evidence_line}\n\n" + text[insert_at:].lstrip("\n")
 
-        diario_path.write_text(text, encoding="utf-8")
+        atomic_write_text(diario_path, text)
         return {
             "action": f"quest_{action}",
             "quest_id": target_q["id"],

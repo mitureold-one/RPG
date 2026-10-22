@@ -10,6 +10,9 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 
 ```yaml
 system: d20_3gates
+# calendar:
+#   months: ["Ventania", "Geada", "Desgelo"]
+#   days_per_month: 30
 overrides:
   - id: exemplo_modificador
     type: cost_multiplier

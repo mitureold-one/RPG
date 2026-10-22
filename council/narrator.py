@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from council.helpers import atomic_write_text
 
 
 def extract_md_field(block_text: str, patterns: tuple) -> str:
@@ -381,7 +382,7 @@ def upsert_npc_to_md(
 ) -> dict:
     """Cadastra ou enriquece um NPC completo em npcs.md atomicamente (sem precisar editar Markdown na mão)."""
     if not npcs_path.exists():
-        npcs_path.write_text("# Catálogo de NPCs & Relações de Poder\n\n", encoding="utf-8")
+        atomic_write_text(npcs_path, "# Catálogo de NPCs & Relações de Poder\n\n")
     text = npcs_path.read_text(encoding="utf-8")
     parts = re.split(r"(^###\s+[^\n]+)", text, flags=re.MULTILINE)
     header = parts[0]
@@ -438,24 +439,63 @@ def upsert_npc_to_md(
         blocks.append([new_lines[0].rstrip("\n"), "\n" + "".join(new_lines[1:])])
 
     new_text = header + "".join(b[0] + b[1] for b in blocks)
-    npcs_path.write_text(new_text, encoding="utf-8")
+    atomic_write_text(npcs_path, new_text)
     return {"status": "ok", "npc_upserted": matched_heading}
 
 
+_NPC_SUBFIELDS = (
+    "atitude",
+    "atitudes",
+    "relação",
+    "relacao",
+    "relação com protagonista",
+    "relacao com protagonista",
+    "vínculos",
+    "vinculos",
+    "vínculo",
+    "vinculo",
+    "laços",
+    "lacos",
+    "laço",
+    "laco",
+)
+
+# Um ';' só separa NPCs quando o próximo trecho é um Nome: ... que não seja
+# um subcampo conhecido (Atitude:, Relação:, Vínculos: ...). Sem isso, o
+# formato documentado 'NPC: Atitude: X; Relação: Y' criava um NPC 'Relação'.
+_NPC_SEPARATOR_RE = re.compile(
+    r"\s*;\s*(?!(?:" + "|".join(re.escape(s) for s in _NPC_SUBFIELDS) + r")\s*:)"
+    r"(?=[A-ZÀ-Ú][^:]{1,45}:)",
+    re.IGNORECASE,
+)
+
+
 def split_npc_updates(npc_updates_str: str) -> list:
-    """Divide 'NPC1: texto; NPC2: texto | NPC3: texto' com segurança sem contaminar outros NPCs."""
+    """Divide 'NPC1: texto; NPC2: texto | NPC3: texto' sem confundir subcampos.
+
+    O separador canônico entre NPCs é ``|``. O ponto e vírgula continua aceito
+    para compatibilidade, mas é ignorado quando o trecho seguinte é um
+    subcampo (Atitude, Relação, Vínculos, Laços). O corpo de cada NPC é mantido
+    inteiro para que ``apply_npc_updates_to_md`` extraia os subcampos.
+    """
     if not npc_updates_str:
         return []
-    parts = re.split(r"\s*\|\s*|\s*;\s*(?=[A-ZÀ-Ú][A-Za-zÀ-ú0-9'&\s,\-]{1,45}:)", npc_updates_str.strip())
+    parts = []
+    for block in re.split(r"\s*\|\s*", npc_updates_str.strip()):
+        parts.extend(_NPC_SEPARATOR_RE.split(block))
     pairs = []
     for p in parts:
         p = p.strip()
         if ":" not in p:
             continue
-        name, attitude = p.split(":", 1)
-        name, attitude = name.strip(), attitude.strip().rstrip(".")
-        if name and attitude:
-            pairs.append((name, attitude))
+        name, body = p.split(":", 1)
+        name, body = name.strip(), body.strip().rstrip(".")
+        if not name or not body:
+            continue
+        if name.lower() in _NPC_SUBFIELDS:
+            # Fragmento de subcampo órfão; não é um NPC.
+            continue
+        pairs.append((name, body))
     return pairs
 
 
@@ -556,5 +596,5 @@ def apply_npc_updates_to_md(npcs_path: Path, npc_updates_str: str) -> list:
             applied.append(f"NPC Novo Cadastrado ({target_name}) -> {att_val or raw_update}")
 
     new_text = header + "".join(b[0] + b[1] for b in blocks)
-    npcs_path.write_text(new_text, encoding="utf-8")
+    atomic_write_text(npcs_path, new_text)
     return applied
