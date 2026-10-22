@@ -775,6 +775,62 @@ class TestCLIContracts(unittest.TestCase):
         finally:
             shutil.rmtree(temp_path, ignore_errors=True)
 
+    def test_cmd_faction_cli_contracts(self):
+        """009: Garante contratos de CLI para o subcomando faction e flags no commit."""
+        from unittest.mock import patch
+        import council.helpers as helpers
+        from lazy_turn import cmd_faction
+
+        # Valida que o parser aceita todas as flags especificadas
+        args_list = self.parser.parse_args(["faction", "--campaign", "dinastia_cinzas", "--list", "--json"])
+        self.assertEqual(args_list.cmd, "faction")
+        self.assertTrue(args_list.list)
+        self.assertTrue(args_list.json)
+
+        args_add = self.parser.parse_args([
+            "faction", "--campaign", "dinastia_cinzas", "--add", "Ordem Solar",
+            "--power", "4", "--scale", "regional", "--clock", "Cruzada Solar", "--desc", "Cavaleiros sagrados"
+        ])
+        self.assertEqual(args_add.add, "Ordem Solar")
+        self.assertEqual(args_add.power, 4)
+        self.assertEqual(args_add.scale, "regional")
+
+        args_rep = self.parser.parse_args(["faction", "--campaign", "dinastia_cinzas", "--rep", "Ordem Solar:+1", "--reason", "Doação"])
+        self.assertEqual(args_rep.rep, "Ordem Solar:+1")
+        self.assertEqual(args_rep.reason, "Doação")
+
+        args_tick = self.parser.parse_args(["faction", "--campaign", "dinastia_cinzas", "--tick"])
+        self.assertTrue(args_tick.tick)
+
+        # Valida flags no subcomando commit
+        args_com = self.parser.parse_args([
+            "commit", "--campaign", "dinastia_cinzas", "--summary", "Ação",
+            "--faction-rep", "Ordem Solar:+1", "--faction-favor", "Ordem Solar:+1", "--faction-debt", "Ordem Solar:+0"
+        ])
+        self.assertEqual(args_com.faction_rep, "Ordem Solar:+1")
+        self.assertEqual(args_com.faction_favor, "Ordem Solar:+1")
+        self.assertEqual(args_com.faction_debt, "Ordem Solar:+0")
+
+        # Executa em sandbox isolado
+        temp_path = make_workspace_temp_dir()
+        try:
+            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                res = cmd_faction(campaign_id="dinastia_cinzas", list_factions=True)
+                self.assertEqual(res["campaign"], "dinastia_cinzas")
+                self.assertIsInstance(res.get("factions"), list)
+
+                add_res = cmd_faction(
+                    campaign_id="dinastia_cinzas",
+                    add_name="Fé Purificadora",
+                    power=4,
+                    scale="regional",
+                    desc="Inquisidores devotos",
+                )
+                self.assertEqual(add_res["action_result"].get("action"), "faction_added")
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

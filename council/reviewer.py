@@ -2,10 +2,16 @@
 
 import re
 from pathlib import Path
+from typing import Dict, Any, List, Optional
 from council.helpers import find_campaign, CAMPAIGN_DIRS
 from council.ssot import parse_ficha_md, parse_diario_md, extract_turns_from_diario, parse_progression_from_ficha
 from council.narrator import parse_npcs_md
 from council.quests import parse_quests_from_diario, parse_xp_ledger_from_diario
+from council.factions import (
+    parse_factions_from_mundo,
+    parse_reputation_from_ficha,
+    parse_faction_ledger_from_diario,
+)
 
 # --- Constantes e Padrões de Lints de Prosa Literária (P3) ---
 EMOJI_PATTERN = re.compile(
@@ -549,6 +555,103 @@ def cmd_review(campaign_id: str) -> dict:
             "severity": "HIGH",
             "detail": f"Divergência de XP: O total acumulado na ficha ({prog['xp']} XP) difere da soma dos créditos auditáveis no diário ({total_auditable_xp} XP = {total_xp_paid_quests} de missões + {total_xp_ledger} do registro).",
         })
+
+    # 16. Integridade de Facções & Reputação (FACTION_UNKNOWN, FACTION_ORPHANED_NPC, FACTION_ATTITUDE_DESYNC, FACTION_REP_MISMATCH)
+    mundo_path = info.get("mundo")
+    factions_in_mundo = parse_factions_from_mundo(mundo_path) if mundo_path and Path(mundo_path).exists() else []
+    mundo_faction_names = {f["name"].lower(): f for f in factions_in_mundo}
+    mundo_faction_tags = {f["tag"].lower(): f for f in factions_in_mundo}
+
+    ficha_path = info.get("ficha")
+    reps_in_ficha = parse_reputation_from_ficha(ficha_path) if ficha_path and Path(ficha_path).exists() else {}
+
+    if mundo_path and Path(mundo_path).exists():
+        mundo_text_low = Path(mundo_path).read_text(encoding="utf-8").lower()
+        for f_k, rep_obj in reps_in_ficha.items():
+            if f_k == rep_obj["name"].lower():
+                r_name = rep_obj["name"].lower()
+                matched = False
+                for f in factions_in_mundo:
+                    f_name = f["name"].lower()
+                    f_tag = f["tag"].lower()
+                    if r_name in (f_name, f_tag) or r_name in f_name or f_name in r_name:
+                        matched = True
+                        break
+                    r_words = set(re.findall(r"\w{5,}", r_name))
+                    f_words = set(re.findall(r"\w{5,}", f_name))
+                    if r_words and f_words and (r_words & f_words):
+                        matched = True
+                        break
+                if not matched:
+                    r_sig_words = [w for w in re.findall(r"\w{4,}", r_name) if w not in ("ordem", "conselho", "guarda", "clã", "cla")]
+                    if r_sig_words and any(w in mundo_text_low for w in r_sig_words):
+                        matched = True
+
+                if not matched:
+                    issues.append({
+                        "type": "FACTION_UNKNOWN",
+                        "severity": "HIGH",
+                        "detail": f"A facção '{rep_obj['name']}' consta em ficha.md com reputação ({rep_obj['score']}), mas não está cadastrada em mundo.md sob '## 4. Facções, Forças Ativas & Alianças'.",
+                    })
+
+        for npc in all_npcs:
+            npc_fac = (npc.get("faction") or "").strip()
+            if npc_fac and npc_fac.lower() not in ("nenhuma", "independente", "sem facção", "sem faccao"):
+                fac_match = None
+                for f in factions_in_mundo:
+                    f_name = f["name"].lower()
+                    f_tag = f["tag"].lower()
+                    if npc_fac.lower() in (f_name, f_tag) or npc_fac.lower() in f_name or f_name in npc_fac.lower():
+                        fac_match = f
+                        break
+                    n_words = set(re.findall(r"\w{5,}", npc_fac.lower()))
+                    f_words = set(re.findall(r"\w{5,}", f_name))
+                    if n_words and f_words and (n_words & f_words):
+                        fac_match = f
+                        break
+
+                if not fac_match:
+                    # Também aceita se a facção constar no texto geral de mundo.md
+                    n_sig_words = [w for w in re.findall(r"\w{4,}", npc_fac.lower()) if w not in ("ordem", "conselho", "guarda", "clã", "cla")]
+                    if not (n_sig_words and any(w in mundo_text_low for w in n_sig_words)):
+                        issues.append({
+                            "type": "FACTION_ORPHANED_NPC",
+                            "severity": "MEDIUM",
+                            "detail": f"O NPC '{npc['name']}' em npcs.md está afiliado à facção '{npc_fac}', mas esta não consta em mundo.md.",
+                        })
+                else:
+                    rep_data = reps_in_ficha.get(fac_match["name"].lower()) or reps_in_ficha.get(fac_match["tag"].lower())
+                    if rep_data and rep_data["score"] <= -2:
+                        att_low = (npc.get("attitude") or "").lower()
+                        weak_low = (npc.get("weakness") or "").lower()
+                        will_low = (npc.get("will") or "").lower()
+                        exc = any(k in (weak_low + " " + will_low) for k in ["amor", "trai", "leal a", "paixão", "secreto", "rebel"])
+                        if any(k in att_low for k in ["amigável", "amigavel", "dócil", "docil", "submiss", "lealdade", "servil", "devot"]) and not exc:
+                            issues.append({
+                                "type": "FACTION_ATTITUDE_DESYNC",
+                                "severity": "HIGH",
+                                "detail": f"Incongruência de Atitude: O NPC '{npc['name']}' pertence à facção '{fac_match['name']}', contra a qual o protagonista tem reputação {rep_data['score']} ({rep_data['tier']}), mas sua atitude é amigável ('{npc['attitude'][:60]}...') sem exceção psicológica justificada em Vontade ou Fraquezas.",
+                            })
+
+    diario_path = info.get("diario")
+    faction_ledger = parse_faction_ledger_from_diario(diario_path) if diario_path and Path(diario_path).exists() else []
+    ledger_totals: Dict[str, int] = {}
+    for entry in faction_ledger:
+        fn_low = entry["faction"].lower()
+        ledger_totals[fn_low] = ledger_totals.get(fn_low, 0) + entry["delta_rep"]
+
+    for fn_low, l_tot in ledger_totals.items():
+        matched_rep = None
+        for r_k, r_obj in reps_in_ficha.items():
+            if r_k == fn_low or r_obj["tag"].lower() == fn_low or r_obj["name"].lower() == fn_low:
+                matched_rep = r_obj
+                break
+        if matched_rep and matched_rep["score"] != l_tot:
+            issues.append({
+                "type": "FACTION_REP_MISMATCH",
+                "severity": "HIGH",
+                "detail": f"Divergência de Reputação: A reputação com '{matched_rep['name']}' na ficha ({matched_rep['score']}) difere da soma dos lançamentos do histórico no diário ({l_tot}).",
+            })
 
     return {
         "campaign": campaign_id,

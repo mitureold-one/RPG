@@ -33,7 +33,7 @@ def parse_quests_from_text(text: str) -> List[Dict[str, Any]]:
         return []
 
     # Extrai o bloco da seção até o próximo cabeçalho de nível 2 ou 3 (ex: ### Histórico de Turnos)
-    m_sec = re.search(r"###\s*Missões[^\n]*\n(.*?)(?=\n###|\n##|\Z)", text, re.IGNORECASE | re.DOTALL)
+    m_sec = re.search(r"#{2,3}\s*Missões[^\n]*\n(.*?)(?=\n#{2,3}|\Z)", text, re.IGNORECASE | re.DOTALL)
     if not m_sec:
         return []
 

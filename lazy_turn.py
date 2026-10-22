@@ -72,6 +72,16 @@ from rulesets.progression import (
     get_stat_ceiling_from_overrides,
     DEFAULT_QUEST_REWARDS,
 )
+from council.factions import (
+    parse_factions_from_mundo,
+    upsert_faction_in_mundo,
+    parse_reputation_from_ficha,
+    update_reputation_in_ficha,
+    parse_faction_ledger_from_diario,
+    append_faction_ledger_entry,
+    simulate_faction_tick,
+    resolve_scene_factions,
+)
 
 
 def cmd_prepare(
@@ -483,6 +493,9 @@ def cmd_prepare(
             "active_quests": active_quests_summary,
             "quest_pressure_mandate": quest_mandate,
         },
+        "step_1_faction_context": {
+            "factions_in_scene": resolve_scene_factions(info, [n["name"] for n in focal_npcs], diario.get("location", "")),
+        },
         "step_1_gm_arbitration": {
             "ruleset": system_name,
             "dc_ladder": getattr(ruleset, "DC_LADDER", {}),
@@ -834,6 +847,106 @@ def cmd_progress(
     }
 
 
+def cmd_faction(
+    campaign_id: str,
+    list_factions: bool = False,
+    add_name: str = "",
+    tag: str = "",
+    power: int = 3,
+    scale: str = "regional",
+    clock: str = "",
+    desc: str = "",
+    rep: str = "",
+    reason: str = "",
+    favor: str = "",
+    debt: str = "",
+    tick: bool = False,
+) -> dict:
+    """Gerencia facções, reputação numérica (-3 a +3), favores/débitos e turno off-screen (Fase 3)."""
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
+    if not info:
+        return {"error": f"Campanha '{campaign_id}' não encontrada."}
+
+    mundo_path = info["mundo"]
+    ficha_path = info["ficha"]
+    diario_path = info["diario"]
+
+    action_res = None
+
+    if add_name:
+        action_res = upsert_faction_in_mundo(
+            mundo_path,
+            name=add_name,
+            tag=tag,
+            power=power,
+            scale=scale,
+            clock=clock,
+            desc=desc,
+        )
+    elif rep:
+        parts = rep.split(":")
+        fn = parts[0].strip()
+        delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+        res = update_reputation_in_ficha(ficha_path, fn, score_delta=delta)
+        cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
+        append_faction_ledger_entry(diario_path, fn, delta_rep=delta, new_score=res["new_score"], reason=reason or "Ajuste avulso de reputação", turn=cur_turn)
+        action_res = {"action": "reputation_updated", **res}
+    elif favor:
+        parts = favor.split(":")
+        fn = parts[0].strip()
+        delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+        res = update_reputation_in_ficha(ficha_path, fn, favors_delta=delta)
+        cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
+        append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=reason or "Ajuste de favores", turn=cur_turn, delta_favors=delta)
+        action_res = {"action": "favors_updated", **res}
+    elif debt:
+        parts = debt.split(":")
+        fn = parts[0].strip()
+        delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+        res = update_reputation_in_ficha(ficha_path, fn, debts_delta=delta)
+        cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
+        append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=reason or "Ajuste de débitos", turn=cur_turn, delta_debts=delta)
+        action_res = {"action": "debts_updated", **res}
+    elif tick:
+        action_res = simulate_faction_tick(info)
+
+    factions = parse_factions_from_mundo(mundo_path)
+    reps = parse_reputation_from_ficha(ficha_path)
+    clocks = parse_clocks_from_diario(diario_path)
+    clock_map = {c["name"].lower(): c for c in clocks}
+
+    enriched_factions = []
+    for f in factions:
+        rep_data = reps.get(f["name"].lower(), reps.get(f["tag"].lower(), {}))
+        c_name = f.get("clock")
+        c_match = clock_map.get(c_name.lower()) if c_name else None
+        enriched_factions.append({
+            "tag": f["tag"],
+            "name": f["name"],
+            "description": f["description"],
+            "power": f["power"],
+            "scale": f["scale"],
+            "clock": f.get("clock", ""),
+            "clock_progress": f"{c_match['progress']} [{c_match['status']}]" if c_match else None,
+            "protagonist_reputation": {
+                "score": rep_data.get("score", 0),
+                "tier": rep_data.get("tier", "Neutro"),
+                "favors": rep_data.get("favors", 0),
+                "debts": rep_data.get("debts", 0),
+                "social_dc_modifier": rep_data.get("social_dc_modifier", 0),
+            },
+        })
+
+    return {
+        "campaign": campaign_id,
+        "action_result": action_res,
+        "factions": enriched_factions,
+    }
+
+
 def cmd_check_prose(campaign_id: str = "", file_path: str = "", text: str = "") -> dict:
     """Audita rascunho de prosa literária contra regras de estilo (emojis, formato script, 4ª parede)."""
     prose_content = ""
@@ -908,6 +1021,9 @@ def cmd_commit(
     quest_complete: str = "",
     quest_fail: str = "",
     clock_resolve: str = "",
+    faction_rep: str = "",
+    faction_favor: str = "",
+    faction_debt: str = "",
 ):
     """Atualiza ficha.md, diario.md e npcs.md atomicamente no fim do turno e roda a auditoria automática do Modo Revisor."""
     if not time_str and time:
@@ -1123,13 +1239,74 @@ def cmd_commit(
                     if prog_res.get("level_up"):
                         applied.append(f"EVOLUÇÃO DE NÍVEL: O protagonista atingiu o Nível {prog_res['new_level']}! (+{prog_res['bonuses']['attribute_points']} Ponto(s) de Atributo, vitais expandidos).")
 
+                    # Repercussão diplomática automática com a facção contratante
+                    contractor = (q_match.get("contractor") or "").strip()
+                    if contractor:
+                        f_res = update_reputation_in_ficha(ficha_path, contractor, score_delta=1, favors_delta=1)
+                        append_faction_ledger_entry(
+                            diario_path,
+                            contractor,
+                            delta_rep=1,
+                            new_score=f_res["new_score"],
+                            reason=f"Cumprimento de missão contratada ({qid})",
+                            turn=next_turn,
+                            delta_favors=1,
+                            quest_id=qid,
+                        )
+                        applied.append(f"Contrato Cumprido: Reputação com '{contractor}' +1 -> {f_res['new_score']} [{f_res['new_tier']}], Favores +1.")
+
     if quest_fail and diario_path.exists():
         for item in quest_fail.split("|"):
             parts = item.split(":")
             qid = parts[0].strip().upper()
             reason_text = parts[1].strip() if len(parts) > 1 else ""
+            all_q_before = parse_quests_from_diario(diario_path)
+            q_match = next((q for q in all_q_before if q["id"].upper() == qid), None)
             upsert_quest_in_diario(diario_path, "fail", quest_id=qid, reason=reason_text, current_turn=next_turn)
             applied.append(f"Missão Fracassada: '{qid}' encerrada com status FAILED ({reason_text or 'Sem justificativa'}).")
+            if q_match and q_match.get("contractor"):
+                contractor = q_match["contractor"].strip()
+                if contractor:
+                    f_res = update_reputation_in_ficha(ficha_path, contractor, score_delta=-1, debts_delta=1)
+                    append_faction_ledger_entry(
+                        diario_path,
+                        contractor,
+                        delta_rep=-1,
+                        new_score=f_res["new_score"],
+                        reason=f"Fracasso de missão contratada ({qid}): {reason_text or 'Falha de execução'}",
+                        turn=next_turn,
+                        delta_debts=1,
+                        quest_id=qid,
+                    )
+                    applied.append(f"Contrato Fracassado: Reputação com '{contractor}' -1 -> {f_res['new_score']} [{f_res['new_tier']}], Débitos +1.")
+
+    # 3c. Atualizações Manuais de Facções & Reputação (--faction-rep, --faction-favor, --faction-debt)
+    if faction_rep and ficha_path.exists():
+        for item in faction_rep.split("|"):
+            parts = item.split(":")
+            fn = parts[0].strip()
+            delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+            f_res = update_reputation_in_ficha(ficha_path, fn, score_delta=delta)
+            append_faction_ledger_entry(diario_path, fn, delta_rep=delta, new_score=f_res["new_score"], reason="Ajuste de reputação no commit", turn=next_turn)
+            applied.append(f"Reputação com '{fn}': {delta:+d} -> {f_res['new_score']} [{f_res['new_tier']}].")
+
+    if faction_favor and ficha_path.exists():
+        for item in faction_favor.split("|"):
+            parts = item.split(":")
+            fn = parts[0].strip()
+            delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+            f_res = update_reputation_in_ficha(ficha_path, fn, favors_delta=delta)
+            append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=f_res["new_score"], reason="Ajuste de favores no commit", turn=next_turn, delta_favors=delta)
+            applied.append(f"Favores com '{fn}': {delta:+d} -> {f_res['favors']}.")
+
+    if faction_debt and ficha_path.exists():
+        for item in faction_debt.split("|"):
+            parts = item.split(":")
+            fn = parts[0].strip()
+            delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+            f_res = update_reputation_in_ficha(ficha_path, fn, debts_delta=delta)
+            append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=f_res["new_score"], reason="Ajuste de débitos no commit", turn=next_turn, delta_debts=delta)
+            applied.append(f"Débitos com '{fn}': {delta:+d} -> {f_res['debts']}.")
 
     # 4b. Atualiza diario.md (Data/Hora, Local, Presentes, Mudança de Estado e anexa Turno N)
 
@@ -1274,6 +1451,9 @@ def build_cli() -> argparse.ArgumentParser:
     p_com.add_argument("--quest-progress", default="", help="Avança objetivo de missão (ex: 'Q1:2' para marcar objetivo 2 da missão Q1)")
     p_com.add_argument("--quest-complete", default="", help="Conclui missão como COMPLETED e credita XP (ex: 'Q1')")
     p_com.add_argument("--quest-fail", default="", help="Marca missão como FAILED com razão opcional (ex: 'Q1:motivo')")
+    p_com.add_argument("--faction-rep", "--faction_rep", dest="faction_rep", default="", help="Ajusta reputação com facção no commit (ex: 'Guardiões:+1' ou 'Culto:-1')")
+    p_com.add_argument("--faction-favor", "--faction_favor", dest="faction_favor", default="", help="Concede ou consome favores com facção (ex: 'Guardiões:+1')")
+    p_com.add_argument("--faction-debt", "--faction_debt", dest="faction_debt", default="", help="Registra ou quita débitos com facção (ex: 'Guardiões:+1')")
     p_com.add_argument("--prose", default="", help="Texto direto da prosa para auditoria preventiva de estilo")
     p_com.add_argument("--prose-file", "--prose_file", dest="prose_file", default="", help="Arquivo de rascunho de prosa para auditoria preventiva")
     p_com.add_argument("--force", action="store_true", help="Força a gravação mesmo com violações na prosa")
@@ -1372,6 +1552,22 @@ def build_cli() -> argparse.ArgumentParser:
     p_prg.add_argument("--reason", default="", help="Justificativa diegética para concessão avulsa de XP")
     p_prg.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
+    p_fac = sub.add_parser("faction", help="Gerencia facções, reputação numérica (-3 a +3), favores/débitos e turno off-screen de facções")
+    p_fac.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_fac.add_argument("--list", action="store_true", help="Lista todas as facções, poderes, relógios e reputação do protagonista")
+    p_fac.add_argument("--add", default="", help="Nome da nova facção a cadastrar em mundo.md")
+    p_fac.add_argument("--tag", default="", help="Tag curta identificadora única (ex: 'ordem_guardioes')")
+    p_fac.add_argument("--power", type=int, default=3, choices=[1, 2, 3, 4, 5], help="Poder da facção de 1 a 5 (padrão: 3)")
+    p_fac.add_argument("--scale", default="regional", choices=["local", "urbano", "regional", "continental", "planar"], help="Escala de influência territorial (padrão: regional)")
+    p_fac.add_argument("--clock", default="", help="Nome do relógio narrativo vinculado em diario.md")
+    p_fac.add_argument("--desc", default="", help="Breve descrição factual da facção e sua agenda")
+    p_fac.add_argument("--rep", default="", help="Ajusta reputação com facção (ex: 'ordem_guardioes:+1' ou 'Culto:-1')")
+    p_fac.add_argument("--reason", default="", help="Justificativa diegética para o ajuste de reputação, favores ou débitos")
+    p_fac.add_argument("--favor", default="", help="Ajusta contagem de favores com facção (ex: 'ordem_guardioes:+1' ou '-1')")
+    p_fac.add_argument("--debt", default="", help="Ajusta contagem de débitos com facção (ex: 'ordem_guardioes:+1' ou '-1')")
+    p_fac.add_argument("--tick", action="store_true", help="Executa o avanço autônomo off-screen de relógios de facções ativas")
+    p_fac.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
+
     return parser
 
 
@@ -1424,6 +1620,9 @@ def main():
             quest_progress=args.quest_progress,
             quest_complete=args.quest_complete,
             quest_fail=args.quest_fail,
+            faction_rep=args.faction_rep,
+            faction_favor=args.faction_favor,
+            faction_debt=args.faction_debt,
         )
         print(json.dumps(res, indent=2, ensure_ascii=False))
         if res.get("prose_status") == "REJECTED":
@@ -1605,6 +1804,43 @@ def main():
             print(f"  Pontos de Habilidade Disponíveis: {prg.get('ability_points', 0)}")
             if res.get("action_result"):
                 print(f"\n[Ação]: {res['action_result']}")
+    elif args.cmd == "faction":
+        res = cmd_faction(
+            args.campaign,
+            list_factions=args.list,
+            add_name=args.add,
+            tag=args.tag,
+            power=args.power,
+            scale=args.scale,
+            clock=args.clock,
+            desc=args.desc,
+            rep=args.rep,
+            reason=args.reason,
+            favor=args.favor,
+            debt=args.debt,
+            tick=args.tick,
+        )
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            print(f"\nFacções & Reputação — Campanha '{args.campaign}':")
+            if not res.get("factions"):
+                print("  (Nenhuma facção cadastrada em mundo.md)")
+            for f in res.get("factions", []):
+                rep_info = f.get("protagonist_reputation", {})
+                sc = rep_info.get("score", 0)
+                tier = rep_info.get("tier", "Neutro")
+                fav = rep_info.get("favors", 0)
+                deb = rep_info.get("debts", 0)
+                mod = rep_info.get("social_dc_modifier", 0)
+                clk_str = f" [Relógio: {f['clock_progress'] or f.get('clock')}]" if f.get("clock") else ""
+                print(f"  * [{f['tag']}] {f['name']} (Poder {f['power']} / {f['scale']}){clk_str}")
+                print(f"      Reputação: {sc:+d} [{tier}] (Mod DC: {mod:+d}) | Favores: {fav} | Débitos: {deb}")
+                if f.get("description"):
+                    print(f"      Agenda: {f['description']}")
+            if res.get("action_result"):
+                act = res["action_result"]
+                print(f"\n[Ação]: {json.dumps(act, ensure_ascii=False)}")
     else:
         parser.print_help()
 

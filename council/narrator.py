@@ -303,11 +303,13 @@ def parse_npcs_md(npcs_path: Path) -> list:
         psychology = extract_md_field(body, ("Psicologia",))
         dynamics = extract_md_field(body, ("Atritos", "Relações", "Dinâmica Social", "Laços"))
         attitude = extract_md_field(body, ("Atitude Atual",))
+        faction = extract_md_field(body, ("Facção / Afiliação", "Facção", "Faccao / Afiliacao", "Faccao", "Afiliação", "Afiliacao"))
         bonds = extract_npc_bonds(body)
         is_stub = "Introduzido durante a crônica" in details or "Personagem em Cena" in details
         npcs.append({
             "name": name,
             "attitude": attitude,
+            "faction": faction,
             "psychology": psychology,
             "will": will,
             "weakness": weakness,
