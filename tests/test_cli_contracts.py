@@ -6,10 +6,22 @@ Garante que nenhuma divergência de flags, caminhos ou tipos de cena seja reintr
 import re
 import shlex
 import unittest
+import uuid
+import shutil
 from pathlib import Path
 
 from council.writer import STRUCTURAL_SCENE_MANDATES
 import lazy_turn
+
+SCRATCH_ROOT = Path(__file__).resolve().parent.parent / ".tmp" / "test_scratch"
+
+
+def make_workspace_temp_dir(prefix: str = "test_cli_") -> Path:
+    """Cria diretório temporário no workspace (.tmp/test_scratch) com permissões herdadas, sem ACL restritiva 0o700."""
+    SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+    p = SCRATCH_ROOT / f"{prefix}{uuid.uuid4().hex}"
+    p.mkdir(parents=True, exist_ok=True)
+    return p
 
 
 class TestCLIContracts(unittest.TestCase):
@@ -264,15 +276,12 @@ class TestCLIContracts(unittest.TestCase):
 
     def test_p2_schema_version_and_loud_failures(self):
         """P2: Garante que find_campaign falha alto (FileNotFoundError / ValueError) em esquemas corrompidos ou ruleset desconhecido."""
-        import tempfile
         from unittest.mock import patch
         import council.helpers as helpers
         from council.helpers import find_campaign, CURRENT_SCHEMA_VERSION
 
-        SCRATCH_ROOT = Path(__file__).resolve().parent.parent / ".tmp" / "test_scratch"
-        SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=str(SCRATCH_ROOT)) as tmp_dir:
-            temp_path = Path(tmp_dir)
+        temp_path = make_workspace_temp_dir()
+        try:
             temp_camp = temp_path / "_test_p2_fail_loud"
             temp_camp.mkdir(parents=True, exist_ok=True)
 
@@ -300,6 +309,8 @@ class TestCLIContracts(unittest.TestCase):
                 with self.assertRaises(ValueError) as ctx_sys:
                     find_campaign("_test_p2_fail_loud")
                 self.assertIn("nao_existe_sistema", str(ctx_sys.exception))
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
 
         # 5. Todas as campanhas canônicas reais carregam com sucesso e schema_version == 1
         for cid in ["dinastia_cinzas", "imperio_valiria", "perpetuos_terra_incognita"]:
@@ -439,8 +450,6 @@ class TestCLIContracts(unittest.TestCase):
 
     def test_p3_check_prose_cli_and_commit_enforcement(self):
         """P3: Garante que check-prose e commit --prose auditam a prosa e recusam violações (R1)."""
-        import tempfile
-        import shutil
         from unittest.mock import patch
         import council.helpers as helpers
         from lazy_turn import cmd_check_prose, cmd_commit
@@ -459,10 +468,8 @@ class TestCLIContracts(unittest.TestCase):
         self.assertIn("FOURTH_WALL_QUESTION", bad_types)
 
         # 3 e 4 em diretório temporário para não mutar as campanhas canônicas reais
-        SCRATCH_ROOT = Path(__file__).resolve().parent.parent / ".tmp" / "test_scratch"
-        SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=str(SCRATCH_ROOT)) as tmp_dir:
-            temp_path = Path(tmp_dir)
+        temp_path = make_workspace_temp_dir()
+        try:
             shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 # commit com prosa violando estilo é recusado sem --force
@@ -483,19 +490,17 @@ class TestCLIContracts(unittest.TestCase):
                     force=True,
                 )
                 self.assertEqual(force_res.get("status"), "ok")
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
 
     def test_cmd_commit_quest_flags_execution(self):
         """P0-1: Garante que cmd_commit com --quest-complete, --quest-progress e --quest-fail roda sem UnboundLocalError."""
-        import tempfile
-        import shutil
         from unittest.mock import patch
         import council.helpers as helpers
         from lazy_turn import cmd_commit, cmd_quest
 
-        SCRATCH_ROOT = Path(__file__).resolve().parent.parent / ".tmp" / "test_scratch"
-        SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=str(SCRATCH_ROOT)) as tmp_dir:
-            temp_path = Path(tmp_dir)
+        temp_path = make_workspace_temp_dir()
+        try:
             shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 cmd_quest(
@@ -521,6 +526,254 @@ class TestCLIContracts(unittest.TestCase):
                 )
                 self.assertEqual(cmp_res.get("status"), "ok")
                 self.assertTrue(any("Missão Concluída" in up for up in cmp_res.get("updates", [])))
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
+
+    def test_cmd_quest_cli_operations(self):
+        """P3-16: Valida cobertura direta de operações CLI em cmd_quest (add, check, block, unblock, abandon, reopen, complete, list)."""
+        from unittest.mock import patch
+        import council.helpers as helpers
+        from lazy_turn import cmd_quest
+
+        temp_path = make_workspace_temp_dir()
+        try:
+            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                # 1. Add quest com objetivo
+                add_res = cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    add_title="Explorar as Catacumbas",
+                    quest_type="side",
+                    objective="Mapear a cripta inferior",
+                )
+                self.assertEqual(add_res["action_result"]["action"], "quest_added")
+                qid = add_res["action_result"]["quest_id"]
+                self.assertEqual(qid, "Q1")
+
+                # 2. Check objective
+                chk_res = cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    check_target=f"{qid}:1",
+                )
+                self.assertEqual(chk_res["action_result"]["action"], "objective_checked")
+
+                # 3. Block quest
+                blk_res = cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    block_id=qid,
+                    reason="Desabamento do túnel",
+                )
+                self.assertEqual(blk_res["action_result"]["action"], "quest_block")
+
+                # 4. Unblock quest
+                unblk_res = cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    unblock_id=qid,
+                )
+                self.assertEqual(unblk_res["action_result"]["action"], "quest_unblock")
+
+                # 5. Abandon quest
+                abn_res = cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    abandon_id=qid,
+                    reason="Missão inviável diplomaticamente",
+                )
+                self.assertEqual(abn_res["action_result"]["action"], "quest_abandon")
+
+                # 6. Reopen quest
+                reop_res = cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    reopen_id=qid,
+                    reason="Novas evidências encontradas",
+                )
+                self.assertEqual(reop_res["action_result"]["action"], "quest_reopen")
+
+                # 7. Complete quest com evidência
+                comp_res = cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    complete_id=qid,
+                    evidence="Relatório cartográfico entregue ao lorde",
+                )
+                self.assertEqual(comp_res["action_result"]["action"], "quest_complete")
+                self.assertIn("Relatório cartográfico", comp_res["action_result"]["evidence"])
+
+                # 8. List quests
+                list_res = cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    list_quests=True,
+                )
+                self.assertEqual(list_res["completed_count"], 1)
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
+
+    def test_cmd_progress_cli_operations(self):
+        """P3-16: Valida cobertura direta de operações CLI em cmd_progress (list, spend-attr, spend-ability, award)."""
+        from unittest.mock import patch
+        import council.helpers as helpers
+        from lazy_turn import cmd_progress
+
+        temp_path = make_workspace_temp_dir()
+        try:
+            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                # 1. Concede XP para viabilizar level up e pontos (award code/amount)
+                award_res = cmd_progress(
+                    campaign_id="dinastia_cinzas",
+                    award="discovery",
+                    reason="Ruína ancestral decifrada",
+                )
+                self.assertEqual(award_res["action_result"]["xp_granted"], 25)
+
+                # Concede XP numérico para subir de nível
+                award_lvl = cmd_progress(
+                    campaign_id="dinastia_cinzas",
+                    award="custom:500",
+                    reason="Campanha de batalha vitoriosa",
+                )
+                self.assertTrue(award_lvl["action_result"]["level_up"])
+                self.assertGreaterEqual(award_lvl["progression"]["attribute_points"], 1)
+
+                # 2. Gasta ponto de atributo
+                attr_res = cmd_progress(
+                    campaign_id="dinastia_cinzas",
+                    spend_attr="FOR",
+                )
+                self.assertEqual(attr_res["action_result"]["stat"], "FOR")
+
+                # 3. Gasta ponto de habilidade com treino
+                # Se level 2, ganha 1 ability point
+                if award_lvl["progression"]["ability_points"] >= 1:
+                    abil_res = cmd_progress(
+                        campaign_id="dinastia_cinzas",
+                        spend_ability="Lâmina de Ferro: Causa +2 de dano",
+                        training="Treino matinal nos pátios com instrutor de armas",
+                    )
+                    self.assertIn("Lâmina de Ferro", abil_res["action_result"]["ability"])
+
+                # 4. List progress
+                list_res = cmd_progress(
+                    campaign_id="dinastia_cinzas",
+                    list_progress=True,
+                )
+                self.assertGreater(list_res["progression"]["level"], 1)
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
+
+    def test_duplicate_quest_complete_alert_and_reviewer_lint(self):
+        """P1-7: Garante que commit duplicado gera alerta persistido no diário e reviewer dispara QUEST_REWARD_PAID_TWICE."""
+        from unittest.mock import patch
+        import council.helpers as helpers
+        from lazy_turn import cmd_commit, cmd_quest, cmd_review
+
+        temp_path = make_workspace_temp_dir()
+        try:
+            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    add_title="Resgatar os Reféns",
+                    quest_type="main",
+                    objective="Infiltrar no acampamento",
+                )
+
+                # Primeiro commit: conclui com sucesso
+                res1 = cmd_commit(
+                    campaign_id="dinastia_cinzas",
+                    summary="Aemon liberta os prisioneiros e retorna ao forte.",
+                    quest_complete="Q1",
+                    force=True,
+                )
+                self.assertEqual(res1.get("status"), "ok")
+
+                # Segundo commit: tentativa duplicada para a mesma missão
+                res2 = cmd_commit(
+                    campaign_id="dinastia_cinzas",
+                    summary="Aemon tenta reivindicar novamente a mesma recompensa de reféns.",
+                    quest_complete="Q1",
+                    force=True,
+                )
+                self.assertEqual(res2.get("status"), "ok")
+
+                # Verifica que o diário gravou o alerta no corpo do turno
+                diario_content = (temp_path / "dinastia_cinzas" / "diario.md").read_text(encoding="utf-8")
+                self.assertIn("Tentativa de pagamento duplicado de XP barrada", diario_content)
+
+                # Executa review e verifica que o lint QUEST_REWARD_PAID_TWICE dispara com severidade CRITICAL
+                rev = cmd_review("dinastia_cinzas")
+                issue_types = [i["type"] for i in rev.get("issues", [])]
+                self.assertIn("QUEST_REWARD_PAID_TWICE", issue_types)
+                target_issue = next(i for i in rev["issues"] if i["type"] == "QUEST_REWARD_PAID_TWICE")
+                self.assertEqual(target_issue["severity"], "CRITICAL")
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
+
+    def test_clock_resolve_xp_and_ledger(self):
+        """P1-4: Garante que --clock-resolve no commit e --resolve no clock concedem XP unlinked e registram no ledger."""
+        from unittest.mock import patch
+        import council.helpers as helpers
+        from lazy_turn import cmd_clock, cmd_commit
+        from council.ssot import parse_progression_from_ficha, parse_xp_ledger_from_diario
+
+        temp_path = make_workspace_temp_dir()
+        try:
+            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                # Adiciona relógio desvinculado
+                cmd_clock(campaign_id="dinastia_cinzas", add_name="Cerco dos Rebeldes", max_steps=4)
+
+                # Resolve via cmd_commit --clock-resolve
+                c_res = cmd_commit(
+                    campaign_id="dinastia_cinzas",
+                    summary="Aemon dissipa o cerco por completo.",
+                    clock_resolve="Cerco dos Rebeldes",
+                    force=True,
+                )
+                self.assertEqual(c_res.get("status"), "ok")
+
+                ficha_file = temp_path / "dinastia_cinzas" / "ficha.md"
+                diario_file = temp_path / "dinastia_cinzas" / "diario.md"
+                prog = parse_progression_from_ficha(ficha_file)
+                self.assertEqual(prog["xp"], 40)
+
+                ledger = parse_xp_ledger_from_diario(diario_file)
+                self.assertTrue(any("Cerco dos Rebeldes" in e["reason"] for e in ledger))
+
+                # Adiciona outro relógio e resolve via cmd_clock --resolve
+                cmd_clock(campaign_id="dinastia_cinzas", add_name="Infiltração Noturna", max_steps=4)
+                clk_res = cmd_clock(campaign_id="dinastia_cinzas", resolve_name="Infiltração Noturna")
+                self.assertEqual(clk_res["action_result"].get("xp_granted"), 40)
+
+                prog2 = parse_progression_from_ficha(ficha_file)
+                self.assertEqual(prog2["xp"], 80)
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
+
+    def test_arc_milestone_xp_and_ledger(self):
+        """P1-4: Garante que cmd_arc --milestone concede +80 XP e registra no ledger."""
+        from unittest.mock import patch
+        import council.helpers as helpers
+        from lazy_turn import cmd_arc
+        from council.ssot import parse_progression_from_ficha, parse_xp_ledger_from_diario
+
+        temp_path = make_workspace_temp_dir()
+        try:
+            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                arc_res = cmd_arc(
+                    campaign_id="dinastia_cinzas",
+                    milestone="A Queda do Usurpador e a Coroação de Aemon",
+                )
+                self.assertEqual(arc_res["action_result"].get("arc_milestone_xp"), 80)
+
+                ficha_file = temp_path / "dinastia_cinzas" / "ficha.md"
+                diario_file = temp_path / "dinastia_cinzas" / "diario.md"
+                prog = parse_progression_from_ficha(ficha_file)
+                self.assertEqual(prog["xp"], 80)
+
+                ledger = parse_xp_ledger_from_diario(diario_file)
+                self.assertTrue(any("A Queda do Usurpador" in e["reason"] for e in ledger))
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
 
 
 if __name__ == "__main__":

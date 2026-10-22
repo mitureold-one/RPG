@@ -7,6 +7,20 @@ Totalmente em Python Standard Library (sem dependências externas).
 
 from typing import Dict, Any, List, Optional, Tuple
 
+# Tabela de Concessão Determinística de XP (SSOT de Recompensas)
+# Fontes automáticas via ciclo de vida:
+# - obj_main (+40 XP): commit --quest-progress <QID:idx> em missão MAIN
+# - obj_side (+15 XP): commit --quest-progress <QID:idx> em missão SIDE/PERSONAL/FACTION
+# - quest_main (+150 XP): commit --quest-complete <QID>
+# - quest_side (+60 XP): commit --quest-complete <QID>
+# - quest_personal (+50 XP): commit --quest-complete <QID>
+# - clock_resolved (+40 XP): clock --resolve ou commit --clock-resolve (quando não vinculado a missão ativa)
+# - arc_milestone (+80 XP): arc --milestone <marco>
+# Fontes discricionárias / de arbitragem do Mestre:
+# - discovery (+25 XP): progress --award discovery --reason "<descoberta>"
+# - adversity (+20 XP): progress --award adversity --reason "<superação de revés>"
+# - clock_breached (+30 XP): progress --award clock_breached --reason "<consequência de ruptura>"
+# - turn (0 XP): marcador neutro de tempo/ritmo
 XP_GRANT_TABLE: Dict[str, int] = {
     "obj_main": 40,
     "obj_side": 15,

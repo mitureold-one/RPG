@@ -140,26 +140,28 @@ Harness (Segurança / Sandbox)
    * Teste de contrato de CLI: valida comandos documentados contra `build_cli()`.
    * Teste de snapshot de payload: congela a estrutura do JSON gerado por `lazy_turn.py prepare`.
 
-### Fase P4 — Sistema de Missões e Sistema de Progressão (XP) (Entregue)
+### Fase P4 — Sistema de Missões, Economia de XP e Remediação Integral (Entregue)
 1. **Sistema de Missões & Objetivos (`council/quests.py` & `lazy_turn.py quest`):**
-   * Dono textual em `diario.md`: seção estruturada `### Missões & Objetivos` com metadados tipados (`ID`, `type`, `status`, `phase`, `contractor`, `clock`, `reward`, `last_progress`, `xp_paid`) e checkboxes aninhados (`* [ ]` / `* [x]`).
-   * Máquina de estados determinística (`ACTIVE`, `BLOCKED`, `COMPLETED`, `FAILED`, `ABANDONED`) com auditoria de reabertura (`--reopen`).
-   * Subcomando CLI `lazy_turn.py quest` com suporte a `--list`, `--json`, `--add`, `--check`, `--complete`, `--fail`, `--block`, `--reopen`.
+   * Dono textual em `diario.md`: seção estruturada `### Missões & Objetivos` com metadados tipados e identificador monotônico obrigatório (`[Q1]`, `[Q2]...`) inserido no final do bloco.
+   * Máquina de estados determinística (`ACTIVE`, `BLOCKED`, `COMPLETED`, `FAILED`, `ABANDONED`) com suporte completo a `--unblock`, `--abandon`, `--reopen` e gravação de `--evidence`.
+   * Subcomando CLI `lazy_turn.py quest` com suporte a `--list`, `--json`, `--add`, `--check`, `--complete`, `--fail`, `--block`, `--unblock`, `--abandon`, `--reopen`.
 2. **Motor de Progressão e Economia de XP (`rulesets/progression.py` & `council/ssot.py`):**
-   * Tabela canônica de concessão determinística de XP (`XP_GRANT_TABLE`) anti-grind vinculada a objetivos e adversidades.
-   * Curva de nível quadrática: $T(L) = 250 \times \frac{(L - 1) \times L}{2}$ com suporte a overrides em `regras.md`.
-   * Blindagem absoluta contra colisões de regex: nomenclatura canônica `* **Experiência (XP):** <valor>` e escopo estrito de seções em `council/ssot.py`, impedindo contaminação de `vitals` e `stats`.
-   * Idempotência estrita: gravação automática da tag `XP Pago: <valor>` na linha da missão no diário; tentativas duplicadas são no-op.
-3. **Integração no Motor e Sincronização com Relógios de Ameaça:**
-   * Injeção de contexto teleológico em `lazy_turn.py prepare` (`step_1_quest_context` com alerta de urgência para relógios críticos a $cur \ge max - 1$ e escala calibrada por nível em `protagonist.progression`).
-   * Flags `--quest-progress`, `--quest-complete`, `--quest-fail` integradas ao `lazy_turn.py commit`.
-   * Prevenção de double-dipping de XP na resolução de missão e desarme de relógio simultâneo.
-   * Auditoria de orfandade em `lazy_turn.py arc --resolve-clocks`.
+   * Tabela canônica de concessão determinística de XP (`XP_GRANT_TABLE`) anti-grind como SSOT único (`rulesets/progression.py`).
+   * Curva de nível quadrática com blindagem contra loops (`max(1, base_step)`) e suporte a overrides de `regras.md`.
+   * Blindagem absoluta contra colisões de regex e isolamento rigoroso por seção em `ficha.md`.
+   * Registro histórico auditável em `### Registro de Experiência` para toda concessão avulsa, objetivo, relógio resolvido e marco de arco.
+3. **Integração no Motor e Sincronização com Relógios e Arcos:**
+   * Injeção de contexto teleológico em `lazy_turn.py prepare` (`step_1_quest_context` e escala calibrada por nível em `protagonist.progression`).
+   * Flags `--quest-progress`, `--quest-complete`, `--quest-fail` e `--clock-resolve` no `lazy_turn.py commit`.
+   * Ordem de execução garantida no commit (`next_turn` calculado antes de missões e XP; vitais expandidos refletidos no snapshot do turno).
+   * Concessão determinística de XP para relógios resolvidos não vinculados (`clock_resolved`: 40 XP via `clock --resolve` ou `commit --clock-resolve`) e marcos de arco (`arc_milestone`: 80 XP via `arc --milestone`).
+   * Tentativas duplicadas de `--quest-complete` barram re-pagamento, gravam alerta de tentativa duplicada no diário e disparam o lint `QUEST_REWARD_PAID_TWICE` (CRITICAL).
 4. **Subcomando de Build e Lints de Auditoria (`lazy_turn.py progress` & `council/reviewer.py`):**
-   * Subcomando `lazy_turn.py progress` para consulta, concessão administrativa (`--award`), gasto de atributos (`--spend-attr` respeitando teto 20) e técnicas (`--spend-ability` exigindo `--training`).
-   * Novos lints de integridade no reviewer: `QUEST_WITHOUT_OBJECTIVES`, `QUEST_STALE`, `QUEST_CLOCK_LINK_BROKEN`, `QUEST_OVERDUE`, `QUEST_REWARD_PAID_TWICE`, `XP_MISMATCH`.
-5. **Suíte de Testes Automatizada (`tests/test_quest_progression.py`):**
-   * 8 novos testes unitários e de integração; suíte completa do RPGPRO expandida para 27 testes 100% verdes.
+   * Subcomando `lazy_turn.py progress` com `--list`, `--spend-attr` (teto 20), `--spend-ability` (exige `--training`) e `--award`.
+   * Novos lints determinísticos: `QUEST_WITHOUT_OBJECTIVES`, `QUEST_STALE`, `QUEST_CLOCK_LINK_BROKEN`, `QUEST_OVERDUE`, `QUEST_REWARD_PAID_TWICE` (CRITICAL), `XP_MISMATCH` (reconciliação bidirecional exata).
+5. **Suíte de Testes Automatizada & Compatibilidade com Sandbox (`tests/`):**
+   * Erradicação de `tempfile.mkdtemp` e `tempfile.TemporaryDirectory` (que impunham máscara restritiva `0o700`); adoção de diretórios locais `.tmp/test_scratch/` com herança padrão de permissões.
+   * Suíte completa expandida para 36 testes automatizados, rodando 100% verde sem elevação de privilégios.
 
 ---
 

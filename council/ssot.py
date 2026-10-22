@@ -8,6 +8,10 @@ from rulesets.progression import (
     DEFAULT_BASE_STEP,
     DEFAULT_STAT_CEILING,
 )
+from council.quests import (
+    parse_xp_ledger_from_diario,
+    append_xp_ledger_entry,
+)
 
 def normalize_vital_key(raw: str, vitals_dict: dict = None) -> str:
     """Normaliza o nome de qualquer recurso vital dinamicamente a partir da ficha.md ou sinônimos universais."""

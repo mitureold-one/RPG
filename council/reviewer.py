@@ -527,14 +527,14 @@ def cmd_review(campaign_id: str) -> dict:
             })
 
     # Auditoria de tentativas duplicadas registradas no histórico
-    for t_item in diario.get("turns", []):
-        t_text = t_item.get("text", "")
-        if "Tentativa de pagamento duplicado de XP barrada" in t_text:
-            issues.append({
-                "type": "QUEST_REWARD_PAID_TWICE",
-                "severity": "CRITICAL",
-                "detail": f"Tentativa de pagamento duplicado de XP detectada no histórico (Turno {t_item['turn']}).",
-            })
+    if "Tentativa de pagamento duplicado de XP barrada" in diario_text:
+        m_dup = re.search(r"Turno\s+(\d+)[^\n]*\n(?:[ \t]+\*[^\n]*\n)*?[ \t]+\*\s*\*\*Alerta:\*\*\s*Tentativa de pagamento duplicado de XP barrada", diario_text, re.IGNORECASE)
+        t_num = m_dup.group(1) if m_dup else diario.get("last_turn_num", "?")
+        issues.append({
+            "type": "QUEST_REWARD_PAID_TWICE",
+            "severity": "CRITICAL",
+            "detail": f"Tentativa de pagamento duplicado de XP detectada no histórico (Turno {t_num}).",
+        })
 
     # 15. Auditoria de Progressão & Coerência de XP (XP_MISMATCH)
     prog = parse_progression_from_ficha(info["ficha"])

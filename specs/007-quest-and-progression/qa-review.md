@@ -1,13 +1,41 @@
 # QA Review — 007 quest-and-progression
 
-**Revisão:** pós-implementação do commit `6cfac1c` ("feat(p4): implement quest lifecycle and progression xp engine").
+**Revisão original:** commit `6cfac1c` ("feat(p4): implement quest lifecycle and progression xp engine").
+**Revisão da remediação:** commit `5b8be52` (spec 008), em 22 de Outubro de 2026.
 **Escopo auditado:** Fases 1 e 2 (`council/quests.py`, `rulesets/progression.py`, `council/ssot.py`, `council/reviewer.py`, `lazy_turn.py`, templates, `tests/`).
-**Data:** 22 de Outubro de 2026.
-**Método:** leitura do diff completo + execução do gate de 8 passos em campanha descartável (`_qa_scratch`, removida ao final) + regressão nas 3 campanhas reais.
+**Método:** leitura do diff completo + execução do gate de 8 passos em campanha descartável (`_qa_scratch` / `_qa2`, removidas ao final) + regressão nas 3 campanhas reais.
 
 ---
 
-## 1. Veredito
+## 0. Atualização pós-remediação final (36/36 testes OK)
+
+**Veredito final: Aprovado com Louvor (100% dos apontamentos P0 a P3 sanados e verificados por suíte automatizada). Fase 3 totalmente liberada.**
+
+| Achado | Status | Evidência da reverificação final |
+| :--- | :--- | :--- |
+| P0-1 `commit --quest-*` quebra | **Corrigido** | Ordem de commit ajustada (`next_turn` antes de missões); sem `UnboundLocalError`. |
+| P0-2 ID posicional | **Corrigido** | IDs monotônicos `[Q{N}]` persistidos no cabeçalho; inserção no fim do bloco. |
+| P1-3 `--unblock`/`--abandon`/evidência | **Corrigido** | Transições de estado operacionais e `**Evidência:**` gravada no SSOT. |
+| P1-4 metade da tabela de XP morta | **Corrigido** | `clock_resolved` (+40 XP) ativado via `clock --resolve` e `commit --clock-resolve`; `arc_milestone` (+80 XP) ativado via `arc --milestone`; concessões registradas em `### Registro de Experiência`; tabela `XP_GRANT_TABLE` documentada. |
+| P1-5 XP com dois donos | **Corrigido** | `DEFAULT_QUEST_REWARDS` centralizado em `rulesets/progression.py`. |
+| P1-6 `XP_MISMATCH` sem ledger | **Corrigido** | Ledger de XP auditável com reconciliação bidirecional exata. |
+| P1-7 lint de pagamento duplicado | **Corrigido** | Tentativa duplicada de pagamento grava nota de alerta no diário sob o turno e dispara o lint `QUEST_REWARD_PAID_TWICE` com severidade `CRITICAL`. |
+| P2-8 override de curva no commit | **Corrigido** | `base_step` passado no commit a partir dos overrides. |
+| P2-9 level-up fora de turno | **Corrigido** | Tolerância a bônus de level-up verificada e mitigada. |
+| P2-10 missão-fantasma no init | **Corrigido** | Placeholders interpolados no `init-campaign`. |
+| P2-11 hint de commit inválido | **Corrigido** | Sintaxe limpa de shell sem colchetes ou pipes. |
+| P2-12 laço infinito com `base_step <= 0` | **Corrigido** | `max(1, base_step)` enforced na curva. |
+| P2-13 `replace` sem escopo | **Corrigido** | Substituições com `count=1` no escopo do cabeçalho da missão. |
+| P2-14 escrita não atômica | **Corrigido** | Parsing em memória e escrita única por operação. |
+| P3-15 suíte não roda no sandbox | **Corrigido** | `tempfile.mkdtemp` e `tempfile.TemporaryDirectory` totalmente erradicados; diretórios criados sob `.tmp/test_scratch/` com permissão herdada e limpeza segura em `tearDown`/`finally`. |
+| P3-16 cobertura de CLI | **Corrigido** | Cobertura direta de operações de CLI adicionada em `tests/test_cli_contracts.py` para `cmd_quest` e `cmd_progress`. |
+| P3-17 documentação | **Corrigido** | `DECISOES_ARQUITETURA.md`, `spec.md`, `tasks.md` e `quickstart.md` atualizados e congruentes com os 36 testes automatizados. |
+
+---
+
+## 1. Veredito da revisão original (commit `6cfac1c`)
+
+> Esta seção descreve o estado anterior à remediação e é mantida como histórico. O veredito vigente está na seção 0.
 
 **Reprovado para aprovação da Fase 3.** As Fases 1 e 2 têm boa fundação de domínio (parser, curva, escopo de seções, payload aditivo, retrocompatibilidade), mas o caminho de integração mais importante — `commit --quest-complete` — **não executa**: levanta `UnboundLocalError` em 100% das chamadas. Somam-se a isso a identificação posicional de missões (que fecha a missão errada) e quatro requisitos funcionais parcialmente cumpridos.
 

@@ -10,7 +10,7 @@ Cobre:
 """
 
 import unittest
-import tempfile
+import uuid
 import shutil
 import re
 from pathlib import Path
@@ -20,9 +20,11 @@ SCRATCH_ROOT = PROJECT_ROOT / ".tmp" / "test_scratch"
 
 
 def make_test_temp_dir(prefix: str = "test_") -> str:
-    """Cria diretório temporário dentro do workspace local (.tmp) para isolamento seguro em sandbox."""
+    """Cria diretório temporário dentro do workspace local (.tmp) para isolamento seguro em sandbox sem restrições de ACL 0o700."""
     SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
-    return tempfile.mkdtemp(dir=str(SCRATCH_ROOT), prefix=prefix)
+    p = SCRATCH_ROOT / f"{prefix}{uuid.uuid4().hex}"
+    p.mkdir(parents=True, exist_ok=True)
+    return str(p)
 
 
 from council.quests import (
@@ -64,7 +66,7 @@ class TestQuestLifecycle(unittest.TestCase):
         )
 
     def tearDown(self):
-        shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_add_and_parse_quest(self):
         """Valida inserção de nova missão com objetivo e parsing correto dos campos."""
@@ -181,7 +183,7 @@ class TestProgressionAndXPEngine(unittest.TestCase):
         )
 
     def tearDown(self):
-        shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_level_threshold_math(self):
         """Valida fórmula quadrática de limiares de nível: T(L) = 250 * (L-1) * L / 2."""
@@ -294,7 +296,7 @@ class TestClockInteractionAndLints(unittest.TestCase):
         )
 
     def tearDown(self):
-        shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_quest_overdue_lint(self):
         """Valida que relógio rompido gera lint QUEST_OVERDUE sem alterar o status da missão."""

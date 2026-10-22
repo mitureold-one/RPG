@@ -551,6 +551,19 @@ def cmd_clock(
         res = upsert_clock_in_diario(diario_path, advance_name, advance=advance_steps)
     elif resolve_name:
         res = upsert_clock_in_diario(diario_path, resolve_name, status="RESOLVED")
+        all_active_quests = parse_quests_from_diario(diario_path)
+        linked_clock_names = {q["clock"].strip().lower() for q in all_active_quests if q.get("clock")}
+        if resolve_name.strip().lower() not in linked_clock_names:
+            camp_overrides = get_campaign_overrides(campaign_id)
+            base_step = get_base_step_from_overrides(camp_overrides)
+            clock_xp = evaluate_xp_gain("clock_resolved", overrides=camp_overrides)
+            prog_res = update_progression_in_ficha(info["ficha"], xp_add=clock_xp, base_step=base_step)
+            diario_ctx = parse_diario_md(diario_path)
+            cur_turn = diario_ctx.get("last_turn_num")
+            append_xp_ledger_entry(diario_path, clock_xp, reason=f"Relógio '{resolve_name}' resolvido", turn=cur_turn)
+            res["xp_granted"] = clock_xp
+            if prog_res.get("level_up"):
+                res["level_up"] = prog_res["new_level"]
 
     clocks = parse_clocks_from_diario(diario_path)
     return {
@@ -654,6 +667,17 @@ def cmd_arc(
         resolve_clocks=resolve_clocks,
         archive_milestone=milestone,
     )
+    if milestone:
+        camp_overrides = get_campaign_overrides(campaign_id)
+        base_step = get_base_step_from_overrides(camp_overrides)
+        arc_xp = evaluate_xp_gain("arc_milestone", overrides=camp_overrides)
+        prog_res = update_progression_in_ficha(info["ficha"], xp_add=arc_xp, base_step=base_step)
+        diario_ctx = parse_diario_md(info["diario"])
+        cur_turn = diario_ctx.get("last_turn_num")
+        append_xp_ledger_entry(info["diario"], arc_xp, reason=f"Marco de arco arquivado: '{milestone}'", turn=cur_turn)
+        res["arc_milestone_xp"] = arc_xp
+        if prog_res.get("level_up"):
+            res["level_up"] = prog_res["new_level"]
     if resolve_clocks:
         quests = parse_quests_from_diario(info["diario"])
         orphaned = [q for q in quests if q["status"] == "ACTIVE" and q.get("clock")]
@@ -883,6 +907,7 @@ def cmd_commit(
     quest_progress: str = "",
     quest_complete: str = "",
     quest_fail: str = "",
+    clock_resolve: str = "",
 ):
     """Atualiza ficha.md, diario.md e npcs.md atomicamente no fim do turno e roda a auditoria automática do Modo Revisor."""
     if not time_str and time:
@@ -1012,6 +1037,13 @@ def cmd_commit(
 
     # 3. Avança relógios de facções ou prazos especificados em --clock-advance ou auto-detectados
     resolved_clocks = []
+    if clock_resolve and diario_path.exists():
+        for item in clock_resolve.split("|"):
+            c_name = item.strip()
+            if c_name:
+                ups_res = upsert_clock_in_diario(diario_path, c_name, status="RESOLVED")
+                applied.append(f"Relógio '{c_name}' resolvido via commit [{ups_res.get('status')}].")
+                resolved_clocks.append(c_name)
     if clock_advance and diario_path.exists():
         for item in clock_advance.split("|"):
             parts = item.split(":")
@@ -1071,6 +1103,7 @@ def cmd_commit(
                 if prog_res.get("level_up"):
                     applied.append(f"EVOLUÇÃO DE NÍVEL: O protagonista atingiu o Nível {prog_res['new_level']}! (+{prog_res['bonuses']['attribute_points']} Ponto(s) de Atributo, vitais expandidos).")
 
+    duplicate_quest_attempts = []
     if quest_complete and diario_path.exists():
         for qid in quest_complete.split("|"):
             qid = qid.strip().upper()
@@ -1080,6 +1113,7 @@ def cmd_commit(
                 if q_match.get("xp_paid") is not None and q_match.get("xp_paid") > 0:
                     applied.append(f"Aviso de Idempotência: Missão '{q_match['title']}' ({qid}) já teve recompensa de XP concedida ({q_match['xp_paid']} XP).")
                     applied.append(f"ALERTA_CRITICO: Tentativa de pagamento duplicado de XP barrada para missão '{q_match['title']}' ({qid}).")
+                    duplicate_quest_attempts.append(q_match)
                     upsert_quest_in_diario(diario_path, "complete", quest_id=qid, current_turn=next_turn)
                 else:
                     reward_xp = q_match.get("reward_xp") or DEFAULT_QUEST_REWARDS.get(q_match.get("type", "MAIN").upper(), 150)
@@ -1175,6 +1209,8 @@ def cmd_commit(
             clean_shift = state_shift.strip().rstrip(".")
             turn_entry += f"  * **Mudança de Estado:** {clean_shift}.\n"
             applied.append(f"Mudança de Estado registrada: '{clean_shift}'")
+        for dup in duplicate_quest_attempts:
+            turn_entry += f"  * **Alerta:** Tentativa de pagamento duplicado de XP barrada para missão '{dup['title']}' ({dup['id']}).\n"
         diario_path.write_text(diario_text + turn_entry, encoding="utf-8")
         applied.append(f"Diário atualizado: Turno {next_turn} registrado.")
 
@@ -1230,6 +1266,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_com.add_argument("--npc-updates", "--npc_updates", dest="npc_updates", default="", help="Ex: 'NPC A: Nova atitude | NPC B: Nova atitude'")
     p_com.add_argument("--state-shift", "--state_shift", dest="state_shift", default="", help="Mudança concreta de estado no mundo, alianças ou recursos gerada pelo turno")
     p_com.add_argument("--clock-advance", "--clock_advance", dest="clock_advance", default="", help="Avança um ou mais relógios (ex: 'Invasão:1' ou 'Conspiração:2')")
+    p_com.add_argument("--clock-resolve", "--clock_resolve", dest="clock_resolve", default="", help="Nome do relógio a resolver com sucesso no commit (ex: 'Invasão' ou 'Conspiração|Cerco')")
     p_com.add_argument("--scene-type", "--scene_type", dest="scene_type", default="standard", choices=["standard", "interlude", "parallel", "timeskip", "dossier", "flashback", "prologue", "epilogue", "post_credits", "fade_to_black"], help="Tipo estrutural do turno para etiquetagem no diário")
     p_com.add_argument("--add-ability", default="", help="Adiciona uma nova Habilidade & Técnica em ficha.md")
     p_com.add_argument("--add-milestone", default="", help="Adiciona um novo Marco de Evolução Pessoal em ficha.md")
@@ -1376,6 +1413,7 @@ def main():
             args.npc_updates,
             state_shift=args.state_shift,
             clock_advance=args.clock_advance,
+            clock_resolve=args.clock_resolve,
             scene_type=args.scene_type,
             add_ability=args.add_ability,
             add_milestone=args.add_milestone,

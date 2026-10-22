@@ -89,12 +89,24 @@
 ## Phase 8: Polish & Cross-Cutting Verification Gate
 
 *Goal*: Execute full 8-step QA verification gate and prove 100% clean operations across all active campaigns.  
-*Independent Test Criteria*: All 8 steps of `quickstart.md` pass cleanly; regression review on `sombra_da_coroa`, `dinastia_cinzas`, and `o_veo_de_ignis` reports zero new issues.
+*Independent Test Criteria*: All 8 steps of `quickstart.md` pass cleanly; regression review on `dinastia_cinzas`, `imperio_valiria`, and `perpetuos_terra_incognita` reports zero new issues.
 
 - [X] T030 Execute complete 8-step verification gate from `specs/008-fix-quest-progression/quickstart.md`
-- [X] T031 Run regression test suite `python -m unittest discover tests` asserting 100% passing tests
+- [X] T031 Run regression test suite `python -m unittest discover tests` asserting 100% passing tests (36/36)
 - [X] T032 Run `lazy_turn.py review` on all three active campaigns to ensure zero regressions
 - [X] T033 Remove all temporary test campaigns and artifacts created during verification
+
+---
+
+## Phase 9: Final QA Remediations (P1-4, P1-7, P3-15, P3-16, P3-17)
+
+*Goal*: Close all residual QA review findings so Feature 008 is 100% sealed without pending P1/P3 items.
+
+- [X] T034 [P1-4] Connect `clock_resolved` (+40 XP) to `lazy_turn.py clock --resolve` and `lazy_turn.py commit --clock-resolve`, and `arc_milestone` (+80 XP) to `lazy_turn.py arc --milestone`, logging awards in `diario.md` ledger and documenting `XP_GRANT_TABLE`
+- [X] T035 [P1-7] Persist duplicate quest payout alert directly into `diario.md` committed turn text and verify `council/reviewer.py` fires `QUEST_REWARD_PAID_TWICE` (CRITICAL)
+- [X] T036 [P3-15] Eradicate `tempfile.mkdtemp` and `tempfile.TemporaryDirectory` completely, adopting workspace `.tmp/test_scratch/` with inherited permissions to run green under restricted sandboxes without elevation
+- [X] T037 [P3-16] Add direct integration tests in `tests/test_cli_contracts.py` for `cmd_quest` and `cmd_progress`
+- [X] T038 [P3-17] Synchronize architectural decisions in `DECISOES_ARQUITETURA.md` and spec documentation with accurate test counts (36 tests) and execution realities
 
 ---
 
