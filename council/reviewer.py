@@ -3,8 +3,9 @@
 import re
 from pathlib import Path
 from council.helpers import find_campaign, CAMPAIGN_DIRS
-from council.ssot import parse_ficha_md, parse_diario_md, extract_turns_from_diario
+from council.ssot import parse_ficha_md, parse_diario_md, extract_turns_from_diario, parse_progression_from_ficha
 from council.narrator import parse_npcs_md
+from council.quests import parse_quests_from_diario
 
 # --- Constantes e Padrões de Lints de Prosa Literária (P3) ---
 EMOJI_PATTERN = re.compile(
@@ -451,6 +452,66 @@ def cmd_review(campaign_id: str) -> dict:
             prose_texts_checked.add(t_text)
             lbl = f"diario.md (Turno {t_item['turn']})"
             issues.extend(check_prose_lints(t_text, context_label=lbl, known_speakers=known_speakers))
+
+    # 14. Integridade de Missões & Objetivos (QUEST_WITHOUT_OBJECTIVES, QUEST_STALE, QUEST_CLOCK_LINK_BROKEN, QUEST_OVERDUE, QUEST_REWARD_PAID_TWICE)
+    quests = parse_quests_from_diario(info["diario"])
+    clock_map = {c["name"].lower(): c for c in diario.get("clocks", [])}
+    for q in quests:
+        if not q.get("objectives"):
+            issues.append({
+                "type": "QUEST_WITHOUT_OBJECTIVES",
+                "severity": "MEDIUM",
+                "detail": f"A missão '{q['title']}' ({q['id']}) foi cadastrada sem nenhum objetivo em sub-bullets [ ] no diário.",
+            })
+
+        if q.get("status") == "ACTIVE":
+            if q.get("last_progress"):
+                m_turn = re.search(r"Turno\s*(\d+)", q["last_progress"], re.IGNORECASE)
+                if m_turn:
+                    last_p_turn = int(m_turn.group(1))
+                    if diario["last_turn_num"] - last_p_turn >= 10:
+                        issues.append({
+                            "type": "QUEST_STALE",
+                            "severity": "LOW",
+                            "detail": f"A missão ativa '{q['title']}' ({q['id']}) não registra progresso há mais de {diario['last_turn_num'] - last_p_turn} turnos (último: Turno {last_p_turn}).",
+                        })
+
+            if q.get("clock"):
+                c_low = q["clock"].strip().lower()
+                if c_low not in clock_map:
+                    issues.append({
+                        "type": "QUEST_CLOCK_LINK_BROKEN",
+                        "severity": "HIGH",
+                        "detail": f"A missão '{q['title']}' ({q['id']}) está vinculada ao relógio '{q['clock']}', mas este não consta em '### Relógios de Ameaça & Prazos'.",
+                    })
+                elif clock_map[c_low]["status"] == "BREACHED":
+                    issues.append({
+                        "type": "QUEST_OVERDUE",
+                        "severity": "HIGH",
+                        "detail": (
+                            f"O relógio vinculado '{clock_map[c_low]['name']}' rompeu ({clock_map[c_low]['progress']}) "
+                            f"enquanto a missão '{q['title']}' ({q['id']}) permanece com status ACTIVE. "
+                            f"O Mestre deve arbitrar diegeticamente a falha (--quest-fail) ou nova fase de contingência."
+                        ),
+                    })
+
+        raw_header = q.get("raw_header", "")
+        if raw_header.lower().count("xp pago") > 1:
+            issues.append({
+                "type": "QUEST_REWARD_PAID_TWICE",
+                "severity": "CRITICAL",
+                "detail": f"Duplicidade de pagamento detectada na missão '{q['title']}' ({q['id']}): mais de um carimbo de 'XP Pago' presente na linha.",
+            })
+
+    # 15. Auditoria de Progressão & Coerência de XP (XP_MISMATCH)
+    prog = parse_progression_from_ficha(info["ficha"])
+    total_xp_paid = sum(q.get("xp_paid") or 0 for q in quests)
+    if total_xp_paid > 0 and prog["xp"] < total_xp_paid:
+        issues.append({
+            "type": "XP_MISMATCH",
+            "severity": "HIGH",
+            "detail": f"Divergência de XP: A soma de XP pago nas missões do diário ({total_xp_paid} XP) é superior ao total acumulado na ficha ({prog['xp']} XP).",
+        })
 
     return {
         "campaign": campaign_id,

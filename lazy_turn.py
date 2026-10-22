@@ -58,6 +58,17 @@ from council import (
     update_arc_in_diario,
     MODE_PROSE_MANDATES,
     STRUCTURAL_SCENE_MANDATES,
+    parse_quests_from_diario,
+    upsert_quest_in_diario,
+    parse_progression_from_ficha,
+    update_progression_in_ficha,
+    spend_attribute_point_in_ficha,
+    spend_ability_point_in_ficha,
+)
+from rulesets.progression import (
+    evaluate_xp_gain,
+    get_base_step_from_overrides,
+    get_stat_ceiling_from_overrides,
 )
 
 
@@ -383,6 +394,55 @@ def cmd_prepare(
 
     next_turn_num = diario["last_turn_num"] + 1 if mandate_cfg["requires_commit"] else diario["last_turn_num"]
 
+    # Contexto de Missões e Objetivos (step_1_quest_context)
+    all_quests = parse_quests_from_diario(info["diario"])
+    active_quests = [q for q in all_quests if q["status"] == "ACTIVE"]
+
+    clock_map = {c["name"].lower(): c for c in diario.get("clocks", [])}
+    critical_quest_alerts = []
+    active_quests_summary = []
+
+    for q in active_quests:
+        clk_name = q.get("clock", "").strip()
+        is_clk_crit = False
+        c_obj = clock_map.get(clk_name.lower()) if clk_name else None
+        if c_obj:
+            if c_obj.get("current", 0) >= c_obj.get("max", 4) - 1 and c_obj.get("status") == "ACTIVE":
+                is_clk_crit = True
+                critical_quest_alerts.append(
+                    f"ALERTA CRÍTICO: O relógio '{c_obj['name']}' vinculado à missão '{q['title']}' está em {c_obj['progress']} (a 1 passo da ruptura iminente). A cena DEVE gerar atrito extremo sobre esta missão."
+                )
+        pending_objs = [o["text"] for o in q.get("objectives", []) if not o.get("done")]
+        active_quests_summary.append({
+            "id": q["id"],
+            "title": q["title"],
+            "type": q["type"],
+            "phase": q.get("phase", ""),
+            "contractor": q.get("contractor", ""),
+            "clock": clk_name,
+            "clock_status": c_obj["status"] if c_obj else "NONE",
+            "clock_progress": c_obj["progress"] if c_obj else "",
+            "clock_critical": is_clk_crit,
+            "pending_objectives": pending_objs,
+            "reward": q.get("reward", ""),
+        })
+
+    quest_mandate = " ".join(critical_quest_alerts) if critical_quest_alerts else (
+        "Uma missão ativa deve produzir atrito concreto nesta cena. Vincule as decisões do protagonista aos seus objetivos declarados."
+        if active_quests_summary else "Nenhuma missão ativa no momento; o protagonista pode buscar novos objetivos ou investigar o cenário."
+    )
+
+    progression_data = dict(ficha.get("progression") or parse_progression_from_ficha(info["ficha"]))
+    lvl = progression_data.get("level", 1)
+    scale_guide = (
+        f"Protagonista Nível {lvl}: Calibre a escala de oponentes e atrito para desafios "
+        + ("iniciais de sobrevivência e reputação local." if lvl == 1 else
+           ("moderados condizentes com um herói em ascensão." if lvl <= 3 else
+            ("veteranos e ameaças regionais de alta letalidade." if lvl <= 6 else
+             "épicos e forças transcendentais de nível mestre.")))
+    )
+    progression_data["scale_guidance"] = scale_guide
+
     if focal_npcs:
         prefilled_npc = " | ".join(f"{n['name']}: Atitude: <postura pós-cena>; Relação: <relação pós-cena>" for n in focal_npcs)
     else:
@@ -395,6 +455,8 @@ def cmd_prepare(
         commit_hint += ' --cost "<HP -X, Stamina -Y>"'
     if scene_type != "standard":
         commit_hint += f' --scene-type {scene_type}'
+    if active_quests_summary:
+        commit_hint += f' [--quest-progress "{active_quests_summary[0]["id"]}:1" | --quest-complete "{active_quests_summary[0]["id"]}"]'
 
     mandates_by_type = STRUCTURAL_SCENE_MANDATES
 
@@ -413,6 +475,11 @@ def cmd_prepare(
             "name": ficha["name"],
             "vitals": ficha["raw_vitals_line"],
             "stats": ficha["stats"],
+            "progression": progression_data,
+        },
+        "step_1_quest_context": {
+            "active_quests": active_quests_summary,
+            "quest_pressure_mandate": quest_mandate,
         },
         "step_1_gm_arbitration": {
             "ruleset": system_name,
@@ -585,6 +652,14 @@ def cmd_arc(
         resolve_clocks=resolve_clocks,
         archive_milestone=milestone,
     )
+    if resolve_clocks:
+        quests = parse_quests_from_diario(info["diario"])
+        orphaned = [q for q in quests if q["status"] == "ACTIVE" and q.get("clock")]
+        if orphaned:
+            res["orphaned_quests_warning"] = [
+                f"Aviso de Orfandade: Missão '{q['title']}' ({q['id']}) permanece ACTIVE mas seu relógio '{q['clock']}' foi arquivado/resolvido na transição de arco."
+                for q in orphaned
+            ]
     diario = parse_diario_md(info["diario"])
     return {
         "campaign": campaign_id,
@@ -592,6 +667,132 @@ def cmd_arc(
         "current_scene_header": f"[{diario['date_time']}] | [{diario['location']}] | [{diario['present']}]",
         "arc": diario.get("arc", {}),
         "active_clocks": [c for c in diario.get("clocks", []) if c["status"] == "ACTIVE"],
+    }
+
+
+def cmd_quest(
+    campaign_id: str,
+    list_quests: bool = False,
+    add_title: str = "",
+    quest_type: str = "main",
+    objective: str = "",
+    faction: str = "",
+    clock: str = "",
+    reward: str = "",
+    phase: str = "",
+    add_objective: str = "",
+    check_target: str = "",
+    complete_id: str = "",
+    fail_id: str = "",
+    block_id: str = "",
+    reopen_id: str = "",
+    reason: str = "",
+    evidence: str = "",
+) -> dict:
+    """Gerencia missões, objetivos pontuais e máquina de estados em diario.md."""
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
+    if not info:
+        return {"error": f"Campanha '{campaign_id}' não encontrada."}
+
+    diario_path = info["diario"]
+    res = {}
+
+    if add_title:
+        res = upsert_quest_in_diario(
+            diario_path,
+            action="add",
+            title=add_title,
+            quest_type=quest_type,
+            objective=objective,
+            contractor=faction,
+            clock=clock,
+            reward=reward,
+            phase=phase,
+        )
+    elif add_objective or (objective and not add_title):
+        raw_obj = add_objective or objective
+        parts = raw_obj.split(":", 1)
+        if len(parts) == 2 and re.match(r"^Q\d+$", parts[0].strip(), re.IGNORECASE):
+            qid = parts[0].strip().upper()
+            obj_txt = parts[1].strip()
+        else:
+            qid = "Q1"
+            obj_txt = raw_obj.strip()
+        res = upsert_quest_in_diario(diario_path, action="add_objective", quest_id=qid, objective=obj_txt)
+    elif check_target:
+        parts = check_target.split(":")
+        qid = parts[0].strip().upper()
+        idx = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip().isdigit() else 1
+        res = upsert_quest_in_diario(diario_path, action="check", quest_id=qid, check_index=idx)
+    elif complete_id:
+        res = upsert_quest_in_diario(diario_path, action="complete", quest_id=complete_id.strip().upper(), evidence=evidence)
+    elif fail_id:
+        res = upsert_quest_in_diario(diario_path, action="fail", quest_id=fail_id.strip().upper(), reason=reason)
+    elif block_id:
+        res = upsert_quest_in_diario(diario_path, action="block", quest_id=block_id.strip().upper(), reason=reason)
+    elif reopen_id:
+        res = upsert_quest_in_diario(diario_path, action="reopen", quest_id=reopen_id.strip().upper(), reason=reason)
+
+    quests = parse_quests_from_diario(diario_path)
+    active_count = len([q for q in quests if q["status"] == "ACTIVE"])
+    completed_count = len([q for q in quests if q["status"] == "COMPLETED"])
+
+    return {
+        "campaign": campaign_id,
+        "action_result": res if res else None,
+        "quests": quests,
+        "active_count": active_count,
+        "completed_count": completed_count,
+    }
+
+
+def cmd_progress(
+    campaign_id: str,
+    list_progress: bool = False,
+    spend_attr: str = "",
+    spend_ability: str = "",
+    training: str = "",
+    award: str = "",
+) -> dict:
+    """Gerencia consulta de progresso, gasto de pontos de atributo/habilidade e concessão de XP em ficha.md."""
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
+    if not info:
+        return {"error": f"Campanha '{campaign_id}' não encontrada."}
+
+    ficha_path = info["ficha"]
+    res = {}
+
+    if spend_attr:
+        overrides = get_campaign_overrides(campaign_id)
+        stat_ceil = get_stat_ceiling_from_overrides(overrides)
+        res = spend_attribute_point_in_ficha(ficha_path, spend_attr, stat_ceiling=stat_ceil)
+    elif spend_ability:
+        res = spend_ability_point_in_ficha(ficha_path, spend_ability, training)
+    elif award:
+        parts = award.split(":")
+        code = parts[0].strip()
+        amount = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip().isdigit() else None
+        if code.isdigit():
+            amount = int(code)
+            code = "custom"
+        overrides = get_campaign_overrides(campaign_id)
+        base_step = get_base_step_from_overrides(overrides)
+        xp_gain = evaluate_xp_gain(code, amount=amount, overrides=overrides)
+        res = update_progression_in_ficha(ficha_path, xp_add=xp_gain, base_step=base_step)
+        res["source"] = code
+        res["xp_granted"] = xp_gain
+
+    progression = parse_progression_from_ficha(ficha_path)
+    return {
+        "campaign": campaign_id,
+        "action_result": res if res else None,
+        "progression": progression,
     }
 
 
@@ -665,6 +866,9 @@ def cmd_commit(
     prose: str = "",
     prose_file: str = "",
     force: bool = False,
+    quest_progress: str = "",
+    quest_complete: str = "",
+    quest_fail: str = "",
 ):
     """Atualiza ficha.md, diario.md e npcs.md atomicamente no fim do turno e roda a auditoria automática do Modo Revisor."""
     if not time_str and time:
@@ -810,6 +1014,48 @@ def cmd_commit(
                     ups_res = upsert_clock_in_diario(diario_path, c["name"], advance=1)
                     applied.append(f"Auto-avanço: Relógio '{c['name']}' avançado em +1 ({ups_res.get('current')}/{ups_res.get('max')} [{ups_res.get('status')}]).")
 
+    # 3b. Atualiza Missões & Concessão de XP (--quest-progress, --quest-complete, --quest-fail)
+    if quest_progress and diario_path.exists():
+        for item in quest_progress.split("|"):
+            parts = item.split(":")
+            qid = parts[0].strip().upper()
+            idx = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip().isdigit() else 1
+            ups_res = upsert_quest_in_diario(diario_path, "check", quest_id=qid, check_index=idx, current_turn=next_turn)
+            if ups_res.get("action") == "objective_checked":
+                all_q = parse_quests_from_diario(diario_path)
+                q_match = next((q for q in all_q if q["id"].upper() == qid), None)
+                code = "obj_main" if (q_match and q_match.get("type") == "MAIN") else "obj_side"
+                xp_gain = evaluate_xp_gain(code, overrides=get_campaign_overrides(campaign_id))
+                prog_res = update_progression_in_ficha(ficha_path, xp_add=xp_gain)
+                applied.append(f"Progresso de Missão: Objetivo {qid}:{idx} marcado como concluído (+{xp_gain} XP).")
+                if prog_res.get("level_up"):
+                    applied.append(f"EVOLUÇÃO DE NÍVEL: O protagonista atingiu o Nível {prog_res['new_level']}! (+{prog_res['bonuses']['attribute_points']} Ponto(s) de Atributo, vitais expandidos).")
+
+    if quest_complete and diario_path.exists():
+        for qid in quest_complete.split("|"):
+            qid = qid.strip().upper()
+            all_q = parse_quests_from_diario(diario_path)
+            q_match = next((q for q in all_q if q["id"].upper() == qid), None)
+            if q_match:
+                if q_match.get("xp_paid") is not None and q_match.get("xp_paid") > 0:
+                    applied.append(f"Aviso de Idempotência: Missão '{q_match['title']}' ({qid}) já teve recompensa de XP concedida ({q_match['xp_paid']} XP).")
+                    upsert_quest_in_diario(diario_path, "complete", quest_id=qid, current_turn=next_turn)
+                else:
+                    reward_xp = q_match.get("reward_xp") or (150 if q_match.get("type") == "MAIN" else 60)
+                    upsert_quest_in_diario(diario_path, "complete", quest_id=qid, xp_paid=reward_xp, current_turn=next_turn)
+                    prog_res = update_progression_in_ficha(ficha_path, xp_add=reward_xp)
+                    applied.append(f"Missão Concluída: '{q_match['title']}' ({qid}) finalizada com sucesso (+{reward_xp} XP concedido).")
+                    if prog_res.get("level_up"):
+                        applied.append(f"EVOLUÇÃO DE NÍVEL: O protagonista atingiu o Nível {prog_res['new_level']}! (+{prog_res['bonuses']['attribute_points']} Ponto(s) de Atributo, vitais expandidos).")
+
+    if quest_fail and diario_path.exists():
+        for item in quest_fail.split("|"):
+            parts = item.split(":")
+            qid = parts[0].strip().upper()
+            reason_text = parts[1].strip() if len(parts) > 1 else ""
+            upsert_quest_in_diario(diario_path, "fail", quest_id=qid, reason=reason_text, current_turn=next_turn)
+            applied.append(f"Missão Fracassada: '{qid}' encerrada com status FAILED ({reason_text or 'Sem justificativa'}).")
+
     # 4. Atualiza diario.md (Data/Hora, Local, Presentes, Mudança de Estado e anexa Turno N)
     diario_ctx = parse_diario_md(diario_path)
     next_turn = diario_ctx["last_turn_num"] + 1
@@ -949,6 +1195,9 @@ def build_cli() -> argparse.ArgumentParser:
     p_com.add_argument("--add-ability", default="", help="Adiciona uma nova Habilidade & Técnica em ficha.md")
     p_com.add_argument("--add-milestone", default="", help="Adiciona um novo Marco de Evolução Pessoal em ficha.md")
     p_com.add_argument("--add-item", default="", help="Adiciona um item ao Equipamento & Inventário em ficha.md")
+    p_com.add_argument("--quest-progress", default="", help="Avança objetivo de missão (ex: 'Q1:2' para marcar objetivo 2 da missão Q1)")
+    p_com.add_argument("--quest-complete", default="", help="Conclui missão como COMPLETED e credita XP (ex: 'Q1')")
+    p_com.add_argument("--quest-fail", default="", help="Marca missão como FAILED com razão opcional (ex: 'Q1:motivo')")
     p_com.add_argument("--prose", default="", help="Texto direto da prosa para auditoria preventiva de estilo")
     p_com.add_argument("--prose-file", "--prose_file", dest="prose_file", default="", help="Arquivo de rascunho de prosa para auditoria preventiva")
     p_com.add_argument("--force", action="store_true", help="Força a gravação mesmo com violações na prosa")
@@ -1016,6 +1265,34 @@ def build_cli() -> argparse.ArgumentParser:
     p_init.add_argument("--date", default="01 de Outubro de 2026, 12:00", help="Data/Hora inicial no diário")
     p_init.add_argument("--location", default="Local Inicial", help="Local inicial da cena")
 
+    p_qst = sub.add_parser("quest", help="Gerencia missões, objetivos e ciclo de vida teleológico em diario.md")
+    p_qst.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_qst.add_argument("--list", action="store_true", help="Lista todas as missões cadastradas")
+    p_qst.add_argument("--add", default="", help="Título da nova missão a cadastrar")
+    p_qst.add_argument("--type", default="main", choices=["main", "side", "personal", "faction"], help="Tipo de missão (padrão: main)")
+    p_qst.add_argument("--objective", default="", help="Objetivo inicial ao cadastrar com --add OU adicionar a missão existente (ex: 'Q1: texto')")
+    p_qst.add_argument("--faction", "--contractor", dest="faction", default="", help="Contratante ou facção patrona da missão")
+    p_qst.add_argument("--clock", default="", help="Nome do relógio de ameaça vinculado")
+    p_qst.add_argument("--reward", default="", help="Recompensa textual e XP sugerido (ex: '150 XP')")
+    p_qst.add_argument("--phase", default="", help="Fase atual da missão (ex: Investigação, Confronto)")
+    p_qst.add_argument("--check", default="", help="Marca objetivo como concluído [x] (ex: 'Q1:1')")
+    p_qst.add_argument("--complete", default="", help="Conclui a missão como COMPLETED (ex: 'Q1')")
+    p_qst.add_argument("--fail", default="", help="Marca a missão como FAILED (ex: 'Q1')")
+    p_qst.add_argument("--block", default="", help="Bloqueia a missão como BLOCKED (ex: 'Q1')")
+    p_qst.add_argument("--reopen", default="", help="Reabre missão terminal como ACTIVE com justificativa auditada")
+    p_qst.add_argument("--reason", default="", help="Justificativa para falha, bloqueio ou reabertura")
+    p_qst.add_argument("--evidence", default="", help="Evidência diegética de cumprimento da missão")
+    p_qst.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
+
+    p_prg = sub.add_parser("progress", help="Gerencia consulta de XP, evolução de nível e gastos de build em ficha.md")
+    p_prg.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_prg.add_argument("--list", action="store_true", help="Lista nível, XP acumulado e pontos disponíveis")
+    p_prg.add_argument("--spend-attr", default="", help="Gasta 1 Ponto de Atributo para aumentar o atributo escolhido (ex: 'FOR')")
+    p_prg.add_argument("--spend-ability", default="", help="Gasta 1 Ponto de Habilidade para adquirir nova técnica (ex: 'Golpe: efeito')")
+    p_prg.add_argument("--training", default="", help="Justificativa diegética ou cena de treino necessária para gastar Ponto de Habilidade")
+    p_prg.add_argument("--award", default="", help="Concede XP administrativo/retroativo (ex: 'quest_main:150', 'obj_main', '100')")
+    p_prg.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
+
     return parser
 
 
@@ -1064,6 +1341,9 @@ def main():
             prose=args.prose,
             prose_file=args.prose_file,
             force=args.force,
+            quest_progress=args.quest_progress,
+            quest_complete=args.quest_complete,
+            quest_fail=args.quest_fail,
         )
         print(json.dumps(res, indent=2, ensure_ascii=False))
         if res.get("prose_status") == "REJECTED":
@@ -1188,6 +1468,60 @@ def main():
             start_loc=args.location,
         )
         print(json.dumps(res, indent=2, ensure_ascii=False))
+    elif args.cmd == "quest":
+        res = cmd_quest(
+            args.campaign,
+            list_quests=args.list,
+            add_title=args.add,
+            quest_type=args.type,
+            objective=args.objective,
+            faction=args.faction,
+            clock=args.clock,
+            reward=args.reward,
+            phase=args.phase,
+            check_target=args.check,
+            complete_id=args.complete,
+            fail_id=args.fail,
+            block_id=args.block,
+            reopen_id=args.reopen,
+            reason=args.reason,
+            evidence=args.evidence,
+        )
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            print(f"\nMissões & Objetivos — Campanha '{args.campaign}':")
+            if not res.get("quests"):
+                print("  (Nenhuma missão cadastrada em diario.md)")
+            for q in res.get("quests", []):
+                st_icon = q["status"]
+                prg = f"[{q['progress_summary']}]"
+                print(f"  * [{q['id']}] [{q['type']}] {q['title']} — {prg} [{st_icon}] (Recompensa: {q.get('reward') or 'N/A'})")
+                for obj in q.get("objectives", []):
+                    chk = "[x]" if obj["done"] else "[ ]"
+                    print(f"      {obj['index']}. {chk} {obj['text']}")
+            if res.get("action_result"):
+                print(f"\n[Ação]: {res['action_result']}")
+    elif args.cmd == "progress":
+        res = cmd_progress(
+            args.campaign,
+            list_progress=args.list,
+            spend_attr=args.spend_attr,
+            spend_ability=args.spend_ability,
+            training=args.training,
+            award=args.award,
+        )
+        if args.json:
+            print(json.dumps(res, indent=2, ensure_ascii=False))
+        else:
+            prg = res.get("progression", {})
+            print(f"\nProgressão do Protagonista — Campanha '{args.campaign}':")
+            print(f"  Nível: {prg.get('level', 1)}")
+            print(f"  Experiência (XP): {prg.get('xp', 0)} / {prg.get('next_threshold', 250)}")
+            print(f"  Pontos de Atributo Disponíveis: {prg.get('attribute_points', 0)}")
+            print(f"  Pontos de Habilidade Disponíveis: {prg.get('ability_points', 0)}")
+            if res.get("action_result"):
+                print(f"\n[Ação]: {res['action_result']}")
     else:
         parser.print_help()
 

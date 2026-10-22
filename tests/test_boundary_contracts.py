@@ -200,6 +200,14 @@ class TestBoundaryContracts(unittest.TestCase):
         self.assertEqual(payload["operation_mode"], "gm")
         self.assertEqual(payload["scene_type"], "standard")
 
+        # Validação do Contexto Teleológico de Missões e Progressão
+        self.assertIn("step_1_quest_context", payload)
+        self.assertIn("active_quests", payload["step_1_quest_context"])
+        self.assertIn("quest_pressure_mandate", payload["step_1_quest_context"])
+        self.assertIn("progression", payload["protagonist"])
+        self.assertIn("level", payload["protagonist"]["progression"])
+        self.assertIn("xp", payload["protagonist"]["progression"])
+
         # 2. Step 1: GM Arbitration Snapshot
         step_1 = payload["step_1_gm_arbitration"]
         self.assertIn("ruleset", step_1)

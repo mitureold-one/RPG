@@ -41,6 +41,17 @@ from council.ssot import (
     upsert_planned_scene_in_diario,
     parse_diario_md,
     extract_turns_from_diario,
+    parse_progression_from_ficha,
+    update_progression_in_ficha,
+    spend_attribute_point_in_ficha,
+    spend_ability_point_in_ficha,
+)
+
+from council.quests import (
+    parse_quests_from_diario,
+    upsert_quest_in_diario,
+    format_quest_header,
+    parse_reward_xp,
 )
 
 from council.gm import (

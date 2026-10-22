@@ -19,6 +19,13 @@
 * **VON (Vontade & Resiliência):** 10
 * **MAG (Poder Místico / Energia):** 10
 
+### Progressão
+* **Nível:** 1
+* **Experiência (XP):** 0
+* **Próximo Nível:** 250
+* **Pontos de Atributo:** 0
+* **Pontos de Habilidade:** 0
+
 ### Habilidades & Técnicas
 * **Habilidade Inata / Especialidade:** {{DESCRICAO_DA_HABILIDADE_INATA}}
 * **Estilo de Combate:** {{DESCRICAO_DO_ESTILO_DE_LUTA}}

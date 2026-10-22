@@ -11,6 +11,11 @@ schema_version: 1
 ### Relógios de Ameaça & Prazos
 * **[{{NOME_DO_RELOGIO}}]:** 0/4 (Gatilho: {{EVENTO_DE_RUPTURA_AO_COMPLETAR}}) [ACTIVE]
 
+### Missões & Objetivos
+* **[MAIN] {{NOME_MISSAO_PRINCIPAL}}** | Fase: Início | Status: ACTIVE | Contratante: {{CONTRATANTE_OU_FACCAO}} | Relógio: {{NOME_DO_RELOGIO}} | Recompensa: 150 XP
+  * [ ] {{PRIMEIRO_OBJETIVO_DA_MISSAO}}
+  * [ ] {{SEGUNDO_OBJETIVO_DA_MISSAO}}
+
 ### Arco Dramático Ativo
 * **Título:** {{TITULO_DO_ARCO_ATUAL}}
 * **Pergunta Central:** {{DILEMA_OU_CONFLITO_CENTRAL_DO_ARCO}}
