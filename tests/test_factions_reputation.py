@@ -622,5 +622,161 @@ class TestFactionReviewerLints(unittest.TestCase):
         self.assertIn("FACTION_ATTITUDE_DESYNC", issue_types)
 
 
+class TestPhase3QAFindingsRemediation(unittest.TestCase):
+    """Testes específicos para remediação dos achados da QA da Fase 3 (P1-A, P1-B, P1-C, P1-D, P2)."""
+
+    def setUp(self):
+        self.temp_dir = make_test_temp_dir("qa_rem_")
+        self.camps_dir = self.temp_dir / "campaigns"
+        self.camps_dir.mkdir(parents=True, exist_ok=True)
+        helpers.CAMPAIGN_DIRS.insert(0, self.camps_dir)
+
+        self.camp_dir = self.camps_dir / "qa_camp"
+        self.camp_dir.mkdir(parents=True, exist_ok=True)
+        self.mundo_path = self.camp_dir / "mundo.md"
+        self.ficha_path = self.camp_dir / "ficha.md"
+        self.diario_path = self.camp_dir / "diario.md"
+        self.npcs_path = self.camp_dir / "npcs.md"
+        self.regras_path = self.camp_dir / "regras.md"
+
+        self.regras_path.write_text("system: d20_3gates\nxp_curve: 250\n", encoding="utf-8")
+        self.mundo_path.write_text(
+            "# Cenário\n\n"
+            "## 4. Facções, Forças Ativas & Alianças\n"
+            "* **[ORDEM_ESTABELECIDA] Ordem Estabelecida:** Nobres que governam a Cidadela Branca | Poder: 4 | Escala: global | Relógio: Prazo Final\n"
+            "* **[A_GUARDA] A Guarda da Meia-Noite:** Tropa veterana liderada por Malakor | Poder: 5 | Escala: regional\n",
+            encoding="utf-8",
+        )
+        self.ficha_path.write_text(
+            "# Ficha\n\n"
+            "### Vitais & Recursos\n"
+            "- **HP:** 25/25\n"
+            "- **Stamina:** 20/20\n\n"
+            "### Progressão & Nível\n"
+            "- **Nível:** 1\n"
+            "- **Experiência (XP):** 0 / 250\n"
+            "- **Pontos de Atributo:** 0\n"
+            "- **Pontos de Habilidade:** 0\n\n"
+            "### Vínculos\n"
+            "* **Reputação com Facções:**\n"
+            "  * **[ORDEM_ESTABELECIDA] Ordem Estabelecida:** +2 (Aliado) | Favores: 1 | Débitos: 0\n",
+            encoding="utf-8",
+        )
+        self.npcs_path.write_text(
+            "# NPCs\n\n"
+            "### Malakor\n"
+            "* **Grau / Classificação:** Comandante\n"
+            "* **Papel:** Rival Militar\n"
+            "* **Atitude Atual:** Desafiador e vigilante.\n"
+            "* **Vontade Própria:** Tomar o comando da guarda.\n"
+            "* **Fraquezas:** Arrogância.\n",
+            encoding="utf-8",
+        )
+        self.diario_path.write_text(
+            "# Diário\n<!-- schema_version: 1 -->\n\n"
+            "## Cena 1: Encontro\n"
+            "* **Data & Local:** 01/10/2026, 12:00 — Cidadela Branca.\n"
+            "* **Presentes:** Protagonista, Malakor.\n\n"
+            "### Relógios de Ameaça & Prazos\n"
+            "* **[Prazo Final]:** 1/4 (Gatilho: Ruptura) [ACTIVE]\n\n"
+            "### Arco Dramático Ativo\n"
+            "* **Título:** Queda do Portão\n"
+            "* **Pergunta Central:** O portão resistirá?\n"
+            "* **Fase:** Clímax\n\n"
+            "### Marcos da Crônica (Histórico de Arcos & Milestones)\n"
+            "* **Marco 0 (Prólogo):** [01/10/2026]: Início.\n\n"
+            "### Histórico de Turnos\n"
+            "* **Turno 1:** Defesa inicial.\n\n"
+            "### Registro de Experiência\n\n"
+            "### Registro de Reputação & Facções\n",
+            encoding="utf-8",
+        )
+
+    def tearDown(self):
+        if self.camps_dir in helpers.CAMPAIGN_DIRS:
+            helpers.CAMPAIGN_DIRS.remove(self.camps_dir)
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_p1_a_clock_resolve_and_arc_milestone_idempotence(self):
+        # 1. Primeira resolução de relógio: concede +40 XP
+        res1 = lazy_turn.cmd_clock("qa_camp", resolve_name="Prazo Final")
+        self.assertEqual(res1.get("action_result", {}).get("xp_granted"), 40)
+
+        # 2. Segunda resolução do mesmo relógio: deve conceder 0 XP
+        res2 = lazy_turn.cmd_clock("qa_camp", resolve_name="Prazo Final")
+        self.assertIsNone(res2.get("action_result", {}).get("xp_granted"))
+        self.assertIn("xp_warning", res2.get("action_result", {}))
+
+        # 3. Primeiro marco de arco: concede +80 XP
+        arc1 = lazy_turn.cmd_arc("qa_camp", milestone="Queda do Portão de Ferro")
+        self.assertEqual(arc1.get("action_result", {}).get("arc_milestone_xp"), 80)
+
+        # 4. Segundo marco com mesmo texto: deve conceder 0 XP
+        arc2 = lazy_turn.cmd_arc("qa_camp", milestone="Queda do Portão de Ferro")
+        self.assertIsNone(arc2.get("action_result", {}).get("arc_milestone_xp"))
+        self.assertIn("arc_milestone_warning", arc2.get("action_result", {}))
+
+    def test_p1_b_resolve_scene_factions_inference_and_territory(self):
+        c_info = helpers.find_campaign("qa_camp")
+        # Inclusão por inferência do NPC Malakor (citado na descrição da Guarda da Meia-Noite)
+        sc1 = resolve_scene_factions(c_info, ["Malakor"], "Local Neutro")
+        matched_tags1 = [f["tag"] for f in sc1]
+        self.assertIn("A_GUARDA", matched_tags1)
+
+        # Inclusão por território (Cidadela Branca está na descrição de Ordem Estabelecida)
+        sc2 = resolve_scene_factions(c_info, [], "Cidadela Branca")
+        matched_tags2 = [f["tag"] for f in sc2]
+        self.assertIn("ORDEM_ESTABELECIDA", matched_tags2)
+        ordem_fac = next(f for f in sc2 if f["tag"] == "ORDEM_ESTABELECIDA")
+        self.assertEqual(ordem_fac["social_dc_mod"], -2)
+        self.assertEqual(ordem_fac["source"], "territory")
+
+    def test_p1_c_reputation_mismatch_no_false_positive_on_clamp_or_baseline(self):
+        # Ficha começa em +2. Ajuste de +1 leva a +3 (Venerado).
+        lazy_turn.cmd_faction("qa_camp", rep="Ordem Estabelecida:+1", reason="Ajuda militar")
+        res1 = rev.cmd_review("qa_camp")
+        issues1 = [iss["type"] for iss in res1.get("issues", [])]
+        self.assertNotIn("FACTION_REP_MISMATCH", issues1)
+
+        # Mais um +1 tenta passar de +3, mas é clampeado em +3.
+        lazy_turn.cmd_faction("qa_camp", rep="Ordem Estabelecida:+1", reason="Outra ajuda")
+        res2 = rev.cmd_review("qa_camp")
+        issues2 = [iss["type"] for iss in res2.get("issues", [])]
+        self.assertNotIn("FACTION_REP_MISMATCH", issues2)
+
+    def test_p1_d_faction_unknown_detects_phantom_with_stopword(self):
+        # Insere Ordem Fantasma na ficha (compartilha a palavra 'ordem' com 'Ordem Estabelecida')
+        text = self.ficha_path.read_text(encoding="utf-8")
+        text = text.replace(
+            "### Vínculos\n* **Reputação com Facções:**\n",
+            "### Vínculos\n* **Reputação com Facções:**\n  * **[ORDEM_FANTASMA] Ordem Fantasma:** +1 (Amigável) | Favores: 0 | Débitos: 0\n",
+        )
+        self.ficha_path.write_text(text, encoding="utf-8")
+
+        res = rev.cmd_review("qa_camp")
+        issues = {iss["type"]: iss for iss in res.get("issues", [])}
+        self.assertIn("FACTION_UNKNOWN", issues)
+        self.assertEqual(issues["FACTION_UNKNOWN"]["severity"], "HIGH")
+
+    def test_p2_findings_remediation(self):
+        # P2-1: Aviso ao ajustar reputação de facção que não consta em mundo.md
+        res_warn = lazy_turn.cmd_faction("qa_camp", rep="Faccao Fantasma:+1")
+        self.assertIn("warning", res_warn.get("action_result", {}))
+
+        # P2-2 & P2-3: Tick off-screen grava no diário e retorna campaign id
+        res_tick = lazy_turn.cmd_faction("qa_camp", tick=True)
+        act = res_tick.get("action_result", {})
+        self.assertEqual(act.get("campaign"), "qa_camp")
+        self.assertGreater(len(act.get("advancements", [])), 0)
+
+        diario_content = self.diario_path.read_text(encoding="utf-8")
+        self.assertIn("### Movimentações de Facções Off-Screen", diario_content)
+
+        # P2-4: Escala global aceita e gravada
+        res_scale = lazy_turn.cmd_faction("qa_camp", add_name="Império Solar", scale="global", desc="Força estelar")
+        mundo_content = self.mundo_path.read_text(encoding="utf-8")
+        self.assertIn("Escala: global", mundo_content)
+
+
 if __name__ == "__main__":
     unittest.main()

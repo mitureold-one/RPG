@@ -3,6 +3,7 @@
 ### Lady Vespera
 * **Grau / Classificação:** Nobreza de Sangue Puro (Casa de Cinzas)
 * **Papel:** Esposa de Aliança Política & Consorte Protetora
+* **Facção / Afiliação:** Conselho dos Lordes de Cinzas
 * **Atitude Atual:** Olhar fixo e possessivo, desconfiando de cada sombra no corredor.
 * **Psicologia & Tell:** Drive +3, Diligence +2, Boldness +2, Warmth +3, Empathy -3, Composure +1 (respiração desacelera bruscamente e as unhas cravam na seda do vestido ao pressentir rivais).
 * **Vontade Própria & Agenda:** Assegurar a coroa para si e para Aemon, aniquilando qualquer cortesão ou amante que ameace sua posição exclusiva de poder e afeto.
@@ -17,6 +18,7 @@
 ### Lorde Malakor
 * **Grau / Classificação:** Marechal da Guarda de Pedra-Negra & Meio-Irmão
 * **Papel:** Rival Dinástico & Comandante Militar
+* **Facção / Afiliação:** A Guarda da Meia-Noite
 * **Atitude Atual:** Braços cruzados sobre o peitoral de aço polido, sorriso cínico nos lábios.
 * **Psicologia & Tell:** Drive +2, Diligence +2, Boldness +3, Warmth -2, Empathy -2, Composure +2 (inclina a cabeça com falso respeito e toca o pomo da adaga com o polegar).
 * **Vontade Própria & Agenda:** Desafiar a primogenitura de Aemon, provar sua superioridade marcial e tomar o controle das guarnições da fronteira.
@@ -30,6 +32,7 @@
 ### Sylvia
 * **Grau / Classificação:** Dama de Câmara Juramentada
 * **Papel:** Serva Íntima & Confidente Silenciosa
+* **Facção / Afiliação:** Independente
 * **Atitude Atual:** Olhos baixos, passos inaudíveis sobre o tapete e postura de recolhimento reverente.
 * **Psicologia & Tell:** Drive +1, Diligence +3, Boldness -2, Warmth +2, Empathy +2, Composure -1 (respiração entrecortada e dedos entrelaçados em prece silenciosa sob o avental de linho).
 * **Vontade Própria & Agenda:** Permanecer essencial ao bem-estar íntimo de Aemon, servindo de refúgio emocional nas sombras da fortaleza sem ser expulsa ou morta por Vespera.

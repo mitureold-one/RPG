@@ -494,9 +494,13 @@ def update_arc_in_diario(
     if archive_milestone:
         sec_m = "### Marcos da Crônica"
         if sec_m in text:
-            idx = text.find(sec_m) + len(sec_m)
-            text = text[:idx] + f"\n* {archive_milestone.strip()}" + text[idx:]
-            applied.append(f"Marco da Crônica registrado: '{archive_milestone.strip()}'.")
+            ms_entry = f"* {archive_milestone.strip()}"
+            if ms_entry not in text:
+                idx = text.find(sec_m) + len(sec_m)
+                text = text[:idx] + f"\n{ms_entry}" + text[idx:]
+                applied.append(f"Marco da Crônica registrado: '{archive_milestone.strip()}'.")
+            else:
+                applied.append(f"Marco da Crônica '{archive_milestone.strip()}' já constava nos registros.")
 
     diario_path.write_text(text, encoding="utf-8")
     return {"action": "arc_updated", "updates": applied}

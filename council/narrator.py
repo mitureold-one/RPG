@@ -369,6 +369,7 @@ def upsert_npc_to_md(
     name: str,
     classification: str = "",
     role: str = "",
+    faction: str = "",
     attitude: str = "",
     psychology: str = "",
     will: str = "",
@@ -391,6 +392,7 @@ def upsert_npc_to_md(
     field_specs = [
         ("Grau / Classificação", classification),
         ("Papel", role),
+        ("Facção / Afiliação", faction),
         ("Atitude Atual", attitude),
         ("Psicologia & Tell", psychology),
         ("Vontade Própria & Agenda", will),

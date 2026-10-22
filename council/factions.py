@@ -46,6 +46,7 @@ SUGGESTED_VARIANTS: Dict[int, str] = {
 
 FACTION_SECTION_HEADER: str = "## 4. Facções, Forças Ativas & Alianças"
 FACTION_LEDGER_HEADER: str = "### Registro de Reputação & Facções"
+VALID_SCALES: set = {"local", "urbano", "regional", "continental", "global", "planar"}
 
 
 def normalize_ascii_slug(text: str) -> str:
@@ -178,7 +179,8 @@ def parse_factions_from_mundo(mundo_path: Path) -> List[Dict[str, Any]]:
             elif "escala:" in p_low:
                 m_s = re.search(r"escala:\s*([A-Za-zÀ-ÿ]+)", p, re.IGNORECASE)
                 if m_s:
-                    scale = m_s.group(1).lower().strip()
+                    sc_cand = m_s.group(1).lower().strip()
+                    scale = sc_cand if sc_cand in VALID_SCALES else "regional"
             elif "relógio:" in p_low or "relogio:" in p_low:
                 m_c = re.search(r"rel[oó]gio:\s*([^|]+)", p, re.IGNORECASE)
                 if m_c:
@@ -210,7 +212,8 @@ def format_faction_line(faction: Dict[str, Any]) -> str:
     name = faction.get("name", "").strip()
     desc = faction.get("description", "").strip()
     power = max(1, min(5, int(faction.get("power", 3))))
-    scale = (faction.get("scale") or "regional").strip()
+    raw_scale = (faction.get("scale") or "regional").strip().lower()
+    scale = raw_scale if raw_scale in VALID_SCALES else "regional"
     clock = (faction.get("clock") or "").strip()
     rivals = faction.get("rivals", [])
 
@@ -244,7 +247,8 @@ def upsert_faction_in_mundo(
     clean_name = name.strip()
     clean_tag = (tag.strip() or normalize_ascii_slug(clean_name)).upper()
     power_clamped = max(1, min(5, int(power)))
-    scale_clean = (scale or "regional").strip().lower()
+    raw_scale = (scale or "regional").strip().lower()
+    scale_clean = raw_scale if raw_scale in VALID_SCALES else "regional"
 
     target = None
     for f in existing_factions:
@@ -594,14 +598,20 @@ def append_faction_ledger_entry(
 # ==============================================================================
 
 def simulate_faction_tick(campaign_info: Dict[str, Any]) -> Dict[str, Any]:
-    """Avança deterministicamente relógios narrativos de facções com base em seu atributo de Poder (1 a 5)."""
+    """Avança deterministicamente relógios narrativos de facções com base em seu atributo de Poder (1 a 5).
+    
+    Regra de Agência Off-Screen Determinística:
+    - Poder 4 ou 5: avança 1 passo garantido no tick.
+    - Poder 2 ou 3: avança 1 passo se o relógio já foi iniciado em cena (current >= 1).
+    - Poder 1: só avança em cena sob intervenção direta do protagonista.
+    """
     mundo_path = campaign_info["mundo"]
     diario_path = campaign_info["diario"]
 
     if not mundo_path.exists() or not diario_path.exists():
         return {"error": "Arquivos mundo.md ou diario.md não localizados."}
 
-    from council.ssot import parse_clocks_from_diario, upsert_clock_in_diario
+    from council.ssot import parse_clocks_from_diario, upsert_clock_in_diario, parse_diario_md
 
     factions = parse_factions_from_mundo(mundo_path)
     clocks = parse_clocks_from_diario(diario_path)
@@ -619,10 +629,6 @@ def simulate_faction_tick(campaign_info: Dict[str, Any]) -> Dict[str, Any]:
             continue
 
         power = f.get("power", 3)
-        # Regra de Agência Off-Screen:
-        # Poder 4 ou 5: avança 1 passo garantido no tick
-        # Poder 2 ou 3: avança 1 passo se já tiver ao menos 1 passo andado
-        # Poder 1: só avança em cena
         should_advance = False
         if power >= 4:
             should_advance = True
@@ -642,6 +648,34 @@ def simulate_faction_tick(campaign_info: Dict[str, Any]) -> Dict[str, Any]:
             advancements.append(adv)
             if res.get("status") == "BREACHED":
                 breaches.append(adv)
+
+    if advancements:
+        cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
+        d_text = diario_path.read_text(encoding="utf-8")
+        lines_to_add = [f"* **Tick Off-Screen (Turno {cur_turn}):**"]
+        for adv in advancements:
+            b_note = " [Gatilho de Ruptura Disparado!]" if adv.get("status") == "BREACHED" else ""
+            lines_to_add.append(
+                f"  * **{adv['faction']}:** Avançou relógio '{adv['clock']}' para {adv['new_progress']} (Poder {adv['power']}){b_note}."
+            )
+        entry_block = "\n".join(lines_to_add)
+
+        sec_header = "### Movimentações de Facções Off-Screen"
+        if sec_header in d_text:
+            m_sec = re.search(rf"({re.escape(sec_header)}[^\n]*\n)(.*?)(?=\n###|\Z)", d_text, re.DOTALL)
+            if m_sec:
+                header_part = m_sec.group(1)
+                body_part = m_sec.group(2)
+                new_sec = header_part + body_part.rstrip() + "\n" + entry_block + "\n"
+                d_text = d_text[:m_sec.start()] + new_sec + d_text[m_sec.end():]
+            else:
+                d_text = d_text.rstrip() + f"\n\n{sec_header}\n{entry_block}\n"
+        else:
+            if "### Histórico de Turnos" in d_text:
+                d_text = d_text.replace("### Histórico de Turnos", f"{sec_header}\n{entry_block}\n\n### Histórico de Turnos", 1)
+            else:
+                d_text = d_text.rstrip() + f"\n\n{sec_header}\n{entry_block}\n"
+        diario_path.write_text(d_text, encoding="utf-8")
 
     return {
         "campaign": campaign_info.get("id", ""),
@@ -669,27 +703,53 @@ def resolve_scene_factions(
         return []
 
     factions = parse_factions_from_mundo(mundo_path)
+    if not factions:
+        return []
     reputations = parse_reputation_from_ficha(ficha_path) if ficha_path and ficha_path.exists() else {}
 
-    # Mapeia afiliação de NPCs de npcs.md
+    # Mapeia afiliação de NPCs de npcs.md com fallback de inferência
     from council.narrator import parse_npcs_md
     all_npcs = parse_npcs_md(npcs_path) if npcs_path and npcs_path.exists() else []
     npc_faction_map = {}
     for n in all_npcs:
+        n_low = n["name"].lower().strip()
         n_fac = (n.get("faction") or "").strip()
-        if n_fac:
-            npc_faction_map[n["name"].lower()] = n_fac
+
+        # Se não tiver facção explícita ou for genérica
+        if not n_fac or n_fac.lower() in ("independente", "neutro", "nenhuma", "-"):
+            for f in factions:
+                if n_low in f.get("description", "").lower():
+                    n_fac = f["name"]
+                    break
+            if not n_fac or n_fac.lower() in ("independente", "neutro", "nenhuma", "-"):
+                npc_profile = f"{n.get('role', '')} {n.get('classification', '')} {n.get('summary', '')}".lower()
+                for f in factions:
+                    if f["name"].lower() in npc_profile or f["tag"].lower() in npc_profile:
+                        n_fac = f["name"]
+                        break
+
+        if n_fac and n_fac.lower() not in ("independente", "neutro", "nenhuma", "-"):
+            npc_faction_map[n_low] = n_fac
 
     matched_factions = []
     seen_tags = set()
 
+    # 1. Resolução por NPCs presentes em cena
     for pres_name in scene_npcs:
         pres_low = pres_name.lower().strip()
+        if not pres_low:
+            continue
         matched_npc_fac = None
         for n_k, n_fac in npc_faction_map.items():
             if n_k in pres_low or pres_low in n_k:
                 matched_npc_fac = n_fac
                 break
+
+        if not matched_npc_fac:
+            for f in factions:
+                if f["name"].lower() in pres_low:
+                    matched_npc_fac = f["name"]
+                    break
 
         if matched_npc_fac:
             for f in factions:
@@ -719,9 +779,76 @@ def resolve_scene_factions(
                             "debts": debts,
                             "social_dc_mod": dc_mod,
                             "suggested_variant": variant,
+                            "source": "npc",
                             "focal_members": [pres_name],
                             "members_in_scene": [pres_name],
                             "writer_directive": directive,
                         })
+                    else:
+                        for mf in matched_factions:
+                            if mf["tag"] == f["tag"]:
+                                if pres_name not in mf["members_in_scene"]:
+                                    mf["members_in_scene"].append(pres_name)
+                                    mf["focal_members"].append(pres_name)
+
+    # 2. Resolução por Território / Localização (P1-B & P2-5)
+    loc_clean = (location or "").strip()
+    if loc_clean:
+        loc_low = loc_clean.lower()
+        stopwords_loc = {"posto", "zona", "ruas", "porto", "sala", "torre", "ponte", "castelo", "distrito", "vila", "cidade", "aposentos", "palacio", "quarto", "corredor"}
+        loc_keywords = [w for w in re.findall(r"\w{4,}", loc_low) if w not in stopwords_loc]
+
+        for f in factions:
+            f_desc_low = f.get("description", "").lower()
+            f_name_low = f["name"].lower()
+            is_territory = False
+
+            if f_name_low in loc_low:
+                is_territory = True
+            elif loc_low in f_desc_low:
+                is_territory = True
+            elif any(kw in f_desc_low for kw in loc_keywords):
+                is_territory = True
+
+            if is_territory:
+                if f["tag"] not in seen_tags:
+                    seen_tags.add(f["tag"])
+                    rep_data = reputations.get(f["name"].lower(), reputations.get(f["tag"].lower(), {}))
+                    score = rep_data.get("score", 0)
+                    tier = rep_data.get("tier", "Neutro")
+                    favors = rep_data.get("favors", 0)
+                    debts = rep_data.get("debts", 0)
+                    dc_mod = SOCIAL_DC_MODIFIERS.get(score, 0)
+                    variant = SUGGESTED_VARIANTS.get(score, "normal")
+
+                    directive = f"TERRITÓRIO DOMINADO POR {f['name']} ({tier}): O protagonista opera sob jurisdição e vigilância de {f['name']} em '{loc_clean}'."
+                    if score >= 2:
+                        directive += " Facilidade de trânsito, refúgio seguro e cooperação da população local."
+                    elif score <= -2:
+                        directive += " Território hostil: patrulhas ativas, desconfiança ostensiva e risco imediato de emboscada ou denúncia."
+                    else:
+                        directive += f" Modificador social {dc_mod} aplicado em interações públicas."
+
+                    matched_factions.append({
+                        "name": f["name"],
+                        "tag": f["tag"],
+                        "score": score,
+                        "tier": tier,
+                        "favors": favors,
+                        "debts": debts,
+                        "social_dc_mod": dc_mod,
+                        "suggested_variant": variant,
+                        "source": "territory",
+                        "territory_in_scene": loc_clean,
+                        "focal_members": [],
+                        "members_in_scene": [],
+                        "writer_directive": directive,
+                    })
+                else:
+                    for mf in matched_factions:
+                        if mf["tag"] == f["tag"]:
+                            mf["territory_in_scene"] = loc_clean
+
+    return matched_factions
 
     return matched_factions

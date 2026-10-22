@@ -13,6 +13,7 @@ import argparse
 import json
 import re
 import sys
+from typing import Optional, Dict, Any, List
 
 if sys.stdout.encoding != "utf-8":
     try:
@@ -563,10 +564,14 @@ def cmd_clock(
     elif advance_name:
         res = upsert_clock_in_diario(diario_path, advance_name, advance=advance_steps)
     elif resolve_name:
+        prior_clocks = parse_clocks_from_diario(diario_path)
+        matched_prior = next((c for c in prior_clocks if c["name"].lower() == resolve_name.strip().lower()), None)
+        was_active = matched_prior is not None and matched_prior.get("status") == "ACTIVE"
+
         res = upsert_clock_in_diario(diario_path, resolve_name, status="RESOLVED")
         all_active_quests = parse_quests_from_diario(diario_path)
         linked_clock_names = {q["clock"].strip().lower() for q in all_active_quests if q.get("clock")}
-        if resolve_name.strip().lower() not in linked_clock_names:
+        if was_active and resolve_name.strip().lower() not in linked_clock_names:
             camp_overrides = get_campaign_overrides(campaign_id)
             base_step = get_base_step_from_overrides(camp_overrides)
             clock_xp = evaluate_xp_gain("clock_resolved", overrides=camp_overrides)
@@ -577,6 +582,8 @@ def cmd_clock(
             res["xp_granted"] = clock_xp
             if prog_res.get("level_up"):
                 res["level_up"] = prog_res["new_level"]
+        elif not was_active:
+            res["xp_warning"] = f"Relógio '{resolve_name}' já se encontrava em status '{matched_prior.get('status') if matched_prior else 'INEXISTENTE'}'. Recompensa de XP não duplicada."
 
     clocks = parse_clocks_from_diario(diario_path)
     return {
@@ -668,6 +675,13 @@ def cmd_arc(
     system_name = info.get("system", DEFAULT_RULESET)
     ruleset = load_ruleset(system_name)
 
+    diario_text_before = info["diario"].read_text(encoding="utf-8") if info["diario"].exists() else ""
+    milestone_clean = milestone.strip() if milestone else ""
+    already_archived = (
+        milestone_clean
+        and (f"* {milestone_clean}" in diario_text_before or f"- {milestone_clean}" in diario_text_before)
+    )
+
     res = update_arc_in_diario(
         info["diario"],
         title=title,
@@ -680,17 +694,19 @@ def cmd_arc(
         resolve_clocks=resolve_clocks,
         archive_milestone=milestone,
     )
-    if milestone:
+    if milestone_clean and not already_archived:
         camp_overrides = get_campaign_overrides(campaign_id)
         base_step = get_base_step_from_overrides(camp_overrides)
         arc_xp = evaluate_xp_gain("arc_milestone", overrides=camp_overrides)
         prog_res = update_progression_in_ficha(info["ficha"], xp_add=arc_xp, base_step=base_step)
         diario_ctx = parse_diario_md(info["diario"])
         cur_turn = diario_ctx.get("last_turn_num")
-        append_xp_ledger_entry(info["diario"], arc_xp, reason=f"Marco de arco arquivado: '{milestone}'", turn=cur_turn)
+        append_xp_ledger_entry(info["diario"], arc_xp, reason=f"Marco de arco arquivado: '{milestone_clean}'", turn=cur_turn)
         res["arc_milestone_xp"] = arc_xp
         if prog_res.get("level_up"):
             res["level_up"] = prog_res["new_level"]
+    elif milestone_clean and already_archived:
+        res["arc_milestone_warning"] = f"Marco de arco '{milestone_clean}' já constava no diário; XP não duplicado."
     if resolve_clocks:
         quests = parse_quests_from_diario(info["diario"])
         orphaned = [q for q in quests if q["status"] == "ACTIVE" and q.get("clock")]
@@ -870,11 +886,21 @@ def cmd_faction(
     if not info:
         return {"error": f"Campanha '{campaign_id}' não encontrada."}
 
+    info["id"] = campaign_id
     mundo_path = info["mundo"]
     ficha_path = info["ficha"]
     diario_path = info["diario"]
 
     action_res = None
+
+    def _warn_if_unknown(fn_name: str) -> Optional[str]:
+        factions_in_mundo = parse_factions_from_mundo(mundo_path)
+        known = any(f["name"].lower() == fn_name.lower() or f["tag"].lower() == fn_name.lower() for f in factions_in_mundo)
+        if not known:
+            w = f"Facção '{fn_name}' não encontrada em mundo.md. Registre-a previamente com 'faction --add' para garantir consistência política."
+            sys.stderr.write(f"[AVISO] {w}\n")
+            return w
+        return None
 
     if add_name:
         action_res = upsert_faction_in_mundo(
@@ -887,29 +913,38 @@ def cmd_faction(
             desc=desc,
         )
     elif rep:
-        parts = rep.split(":")
+        parts = rep.rsplit(":", 1)
         fn = parts[0].strip()
         delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+        w_msg = _warn_if_unknown(fn)
         res = update_reputation_in_ficha(ficha_path, fn, score_delta=delta)
         cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
         append_faction_ledger_entry(diario_path, fn, delta_rep=delta, new_score=res["new_score"], reason=reason or "Ajuste avulso de reputação", turn=cur_turn)
         action_res = {"action": "reputation_updated", **res}
+        if w_msg:
+            action_res["warning"] = w_msg
     elif favor:
-        parts = favor.split(":")
+        parts = favor.rsplit(":", 1)
         fn = parts[0].strip()
         delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+        w_msg = _warn_if_unknown(fn)
         res = update_reputation_in_ficha(ficha_path, fn, favors_delta=delta)
         cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
         append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=reason or "Ajuste de favores", turn=cur_turn, delta_favors=delta)
         action_res = {"action": "favors_updated", **res}
+        if w_msg:
+            action_res["warning"] = w_msg
     elif debt:
-        parts = debt.split(":")
+        parts = debt.rsplit(":", 1)
         fn = parts[0].strip()
         delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+        w_msg = _warn_if_unknown(fn)
         res = update_reputation_in_ficha(ficha_path, fn, debts_delta=delta)
         cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
         append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=reason or "Ajuste de débitos", turn=cur_turn, delta_debts=delta)
         action_res = {"action": "debts_updated", **res}
+        if w_msg:
+            action_res["warning"] = w_msg
     elif tick:
         action_res = simulate_faction_tick(info)
 
@@ -1505,6 +1540,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_npc.add_argument("--name", required=True, help="Nome do NPC")
     p_npc.add_argument("--classification", default="", help="Grau / Classificação do NPC")
     p_npc.add_argument("--role", default="", help="Papel na trama")
+    p_npc.add_argument("--faction", default="", help="Facção ou afiliação do NPC")
     p_npc.add_argument("--attitude", default="", help="Atitude Atual na cena")
     p_npc.add_argument("--psychology", default="", help="Psicologia & Tell (Drive, Diligence, Boldness...)")
     p_npc.add_argument("--will", default="", help="Vontade Própria & Agenda Autônoma (o que quer para si)")
@@ -1558,7 +1594,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_fac.add_argument("--add", default="", help="Nome da nova facção a cadastrar em mundo.md")
     p_fac.add_argument("--tag", default="", help="Tag curta identificadora única (ex: 'ordem_guardioes')")
     p_fac.add_argument("--power", type=int, default=3, choices=[1, 2, 3, 4, 5], help="Poder da facção de 1 a 5 (padrão: 3)")
-    p_fac.add_argument("--scale", default="regional", choices=["local", "urbano", "regional", "continental", "planar"], help="Escala de influência territorial (padrão: regional)")
+    p_fac.add_argument("--scale", default="regional", choices=["local", "urbano", "regional", "continental", "global", "planar"], help="Escala de influência territorial (padrão: regional)")
     p_fac.add_argument("--clock", default="", help="Nome do relógio narrativo vinculado em diario.md")
     p_fac.add_argument("--desc", default="", help="Breve descrição factual da facção e sua agenda")
     p_fac.add_argument("--rep", default="", help="Ajusta reputação com facção (ex: 'ordem_guardioes:+1' ou 'Culto:-1')")
@@ -1728,6 +1764,7 @@ def main():
                 name=args.name,
                 classification=args.classification,
                 role=args.role,
+                faction=args.faction,
                 attitude=args.attitude,
                 psychology=args.psychology,
                 will=args.will,

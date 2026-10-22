@@ -192,6 +192,7 @@ def find_campaign(campaign_id: str):
             system_name = manifest.get("system", DEFAULT_RULESET)
             load_ruleset(system_name)
             return {
+                "id": campaign_id,
                 "type": "markdown",
                 "dir": camp_dir,
                 "ficha": camp_dir / "ficha.md",
@@ -297,6 +298,7 @@ def init_campaign_from_templates(
         "{{RELACAO_E_DIVIDA}}": "Relação de respeito forjada em combate e confiança mútua",
         "{{RIVAL_INICIAL}}": "Rival Inicial",
         "{{MOTIVO_DO_ATRITO}}": "Divergência de métodos e objetivos em rota de colisão",
+        "{{FACCAO_OU_AFILIACAO_OU_INDEPENDENTE}}": "Independente",
         "{{MARCO_INICIAL_PROTAGONISTA}}": "Assumiu a liderança do destacamento e superou o incidente inicial",
         "{{RELACAO_NPC_1_COM_PROTAGONISTA}}": "Confiança +1 (Respeito cauteloso e cooperação tática em campo)",
         "{{RELACAO_NPC_2_COM_PROTAGONISTA}}": "Confiança -1 (Desdém velado e postura desafiadora)",

@@ -3,6 +3,7 @@
 ### Fenra Presa-de-Aço
 * **Grau / Classificação:** Matriarca Alfa / Comandante Boreal
 * **Papel:** Líder da Matilha de Sköll / Primeira Força de Contato
+* **Facção / Afiliação:** As Matilhas Livres de Sköll
 * **Atitude Atual:** Liderando a marcha desesperada de evacuação através dos cânions glaciais, olhando para trás em choque e devoção ao ver Kon-El barrar o feixe imperial com o próprio corpo.
 * **Psicologia & Tell:** Drive +2, Diligence +1, Boldness +2, Warmth -1, Empathy +0, Composure +1 (toca o punho do machado duplo na cinta e trinca os dentes quando desafiada).
 * **Vontade Própria & Agenda:** Manter a soberania de Sköll contra o Império de Valíria e garantir que a força de Kon-El sirva como trunfo para proteger sua matilha, e não como o estopim de um massacre imperial.
@@ -14,6 +15,7 @@
 ### Ylva Olho-de-Lince
 * **Grau / Classificação:** Batedora Sênior / Rastreadora de Vanguarda
 * **Papel:** Guia de Campo da Matilha / Olhos de Sköll
+* **Facção / Afiliação:** As Matilhas Livres de Sköll
 * **Atitude Atual:** Armando o arco curto entre chamas e choro de civis, cobrando a promessa de salvação.
 * **Psicologia & Tell:** Drive +1, Diligence +2, Boldness +1, Warmth -1, Empathy -1, Composure +2 (contrai as orelhas pontiagudas e estreita os olhos âmbar a cada estalo de galho).
 * **Vontade Própria & Agenda:** Proteger Fenra de ciladas imperiais e evitar a todo custo que a marcha da Inquisição de Valíria alcance os refúgios da floresta boreal.
@@ -25,6 +27,7 @@
 ### Comandante Vaelia
 * **Grau / Classificação:** Comandante de Esquadrão das Lâminas de Éter.
 * **Papel:** Vanguarda Militar do Império de Valíria.
+* **Facção / Afiliação:** A Ordem das Lâminas de Éter
 * **Atitude Atual:** De pé sobre os escombros da cratera entre bestas caídas e armaduras fumegantes, limpando sangue do lábio com a manopla de prata; despachando corvo de éter urgente para a capital com ordem de mobilização inquisitorial.
 * **Psicologia & Tell:** Drive +2, Diligence +2, Boldness +1, Warmth -2, Empathy -1, Composure +2 (ajusta a luva de placas de prata e inclina a lamina com precisao letal).
 * **Vontade Própria & Agenda:** Capturar qualquer anomalia de fronteira para a gloria do Senado das Matriarcas e submeter os clas rebeldes de Skoll.
@@ -35,6 +38,7 @@
 ### Tenente Cassia
 * **Grau / Classificação:** Oficial de Voo das Lâminas de Éter.
 * **Papel:** Líder da Esquadrilha de Grifos de Sköll.
+* **Facção / Afiliação:** A Ordem das Lâminas de Éter
 * **Atitude Atual:** Puxando as rédeas de seu grifo ofegante no meio do cânion estreito, queixo erguido para disfarçar o pavor diante de um macho que flutua sem éter.
 * **Psicologia & Tell:** Drive +1, Diligence +2, Boldness +0, Warmth -1, Empathy +0, Composure +1 (ajusta as rédeas de couro e engole em seco ao ver o abismo sob as asas).
 * **Vontade Própria & Agenda:** Cumprir seu dever militar sem massacrar suas montarias aladas ou ser aniquilada por um poder incompreensível.
@@ -44,6 +48,7 @@
 ### Velha Vorn
 * **Grau / Classificação:** Matriarca Anciã da Matilha da Garra de Gelo.
 * **Papel:** Antagonista Tribal / Comandante Boreal Rival.
+* **Facção / Afiliação:** As Matilhas Livres de Sköll
 * **Atitude Atual:** Correndo ao lado de Fenra com a alabarda em punho, comandando as cinquenta guerreiras sob a proteção dos drones estelares.
 * **Psicologia & Tell:** Drive +2, Diligence +1, Boldness +2, Warmth -2, Empathy -2, Composure -1 (cerra as presas velhas e solta uivos roucos de vitoria).
 * **Vontade Própria & Agenda:** Reivindicar Kon-El como consorte supremo da Garra de Gelo para gerar herdeiras celestiais invulneraveis e esmagar a matilha de Fenra.
@@ -53,6 +58,7 @@
 ### Inquisitora Selene
 * **Grau / Classificação:** Inquisitora-Geral de Sol-Branco / Prelada Imperial.
 * **Papel:** Comandante da Nau Capitânia Aurora de Prata / Olhos do Senado.
+* **Facção / Afiliação:** O Conselho das Matriarcas de Valíria
 * **Atitude Atual:** De joelhos com a palma cortada sangrando no mármore após o Juramento de Sangue, olhos ardendo de devoção fanática e vergonha exposta.
 * **Psicologia & Tell:** Drive +2, Diligence +3, Boldness +1, Warmth -3, Empathy -2, Composure +3 (gira um anel de sinete de éter no dedo anelar e fala com frieza aristocrática).
 * **Vontade Própria & Agenda:** Proteger a capital Sol-Branco das legiões remanescentes da Rainha Demônio, reorganizar a frota de guerra de Valíria e purgar os conspiradores que sabotaram as baterias de éter da capital.
@@ -63,6 +69,7 @@
 ### Grã-Matriarca Vanya
 * **Grau / Classificação:** Líder Suprema do Senado de Sol-Branco / Árbitra Imperial.
 * **Papel:** Líder da Facção Parlamentar / Rival Política de Selene.
+* **Facção / Afiliação:** O Conselho das Matriarcas de Valíria
 * **Atitude Atual:** Protegida por paladinas rebeldes em tiroteio de éter, clamando que o homem celeste deslegitimou a Inquisição.
 * **Psicologia & Tell:** Drive +3, Diligence +2, Boldness +2, Warmth -3, Empathy -3, Composure +1 (bate o báculo imperial no chão com autoridade despótica).
 * **Vontade Própria & Agenda:** Preservar a hegemonia parlamentar do Senado sobre o Tesouro de Éter, impedir que a Imperatriz retome poder absolutista e sabotar a influência de forças estrangeiras sobre as leis sagradas de Valíria.
@@ -74,6 +81,7 @@
 ### Imperatriz Aurelia
 * **Grau / Classificação:** Monarca Suprema de Valíria / Oráculo do Sangue Puro.
 * **Papel:** Soberana do Império de Valíria / Autoridade Máxima do Trono.
+* **Facção / Afiliação:** O Conselho das Matriarcas de Valíria
 * **Atitude Atual:** Amparada por Kon-El após a explosão da granada, implorando que ele restaure a ordem antes que o império se autodestrua.
 * **Psicologia & Tell:** Drive +2, Diligence +2, Boldness +1, Warmth +0, Empathy +1, Composure +3 (mantém a mão trêmula erguida e fala com autoridade mística inabalável).
 * **Vontade Própria & Agenda:** Reassumir o comando soberano do Trono de Valíria, conter o alastramento da Praga do Sangue Roxo nas províncias e erradicar as legiões da Rainha Demônio antes do rompimento total do Véu Abissal.

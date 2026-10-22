@@ -1,12 +1,32 @@
 # QA Review — 009 factions-and-reputation (Fase 3)
 
 **Commits auditados:** `e26009e` (fechamento dos achados da 007/008) e `ba847e0` (Fase 3).
-**Data:** 22 de Outubro de 2026.
+**Data da Revisão Original:** 22 de Outubro de 2026.
+**Data da Remediação:** 22 de Outubro de 2026.
 **Método:** leitura do diff completo, execução do gate em campanha descartável (`_qa3`) e em uma cópia de `dinastia_cinzas` (`_qa4`), regressão nas 3 campanhas reais, suíte sob sandbox.
 
 ---
 
-## 1. Veredito
+## 0. Atualização pós-remediação
+
+**Veredito atual: Fase 3 aprovada com todos os 4 P1 e defeitos P2 corrigidos e verificados por testes unitários e de integração.**
+A suíte avançou para 56/56 testes 100% OK em ambiente sandbox. As 3 campanhas canônicas estão íntegras e limpas.
+
+| Achado | Status | Evidência da reverificação |
+| :--- | :---: | :--- |
+| **P1-A** Economia de XP farmável | **Corrigido** | `cmd_clock` valida transição `ACTIVE -> RESOLVED` (segunda resolução concede 0 XP); `cmd_arc` valida unicidade do marco antes de creditar +80 XP. Testado em `test_p1_a_clock_resolve_and_arc_milestone_idempotence`. |
+| **P1-B** Modificador social nunca chega ao modelo | **Corrigido** | Campo `* **Facção / Afiliação:**` adicionado aos templates e preenchido nas 3 campanhas canônicas. `resolve_scene_factions` implementa inferência por citação em `mundo.md`/papel e injeção por território em `location`. Testado em `prepare --campaign dinastia_cinzas` (emite `social_dc_mod: -2` e diretiva aliada) e em `test_p1_b_resolve_scene_factions_inference_and_territory`. |
+| **P1-C** Falso-positivo em `FACTION_REP_MISMATCH` | **Corrigido** | Comparação refeita contra `new_score` do último registro no ledger em vez de soma de deltas a partir de zero. Clampeamento no teto (+3) e baselines herdados não geram mais divergência. Testado em `test_p1_c_reputation_mismatch_no_false_positive_on_clamp_or_baseline`. |
+| **P1-D** `FACTION_UNKNOWN` falha por colisão de palavras | **Corrigido** | Adicionada lista canônica de `FACTION_STOPWORDS` (`ordem`, `conselho`, `guarda`, `clã`, etc.) antes da interseção de tokens. `Ordem Fantasma` agora dispara `FACTION_UNKNOWN` HIGH mesmo com `Ordem Estabelecida` em `mundo.md`. Testado em `test_p1_d_faction_unknown_detects_phantom_with_stopword`. |
+| **P2-1** `faction --rep` em facção inexistente | **Corrigido** | Emite aviso explícito no `stderr` e grava `"warning"` no payload caso a facção não conste em `mundo.md`. Split seguro por `rsplit(":", 1)`. |
+| **P2-2** O tick não deixa rastro | **Corrigido** | `simulate_faction_tick` persiste registro factual em `diario.md` sob `### Movimentações de Facções Off-Screen` identificando autoria, relógio, novo progresso e turnos. |
+| **P2-3** `campaign` vazio no tick | **Corrigido** | `find_campaign` agora inclui `"id": campaign_id` em seu dicionário canônico e `cmd_faction` propaga o id para o retorno do tick. |
+| **P2-4** Vocabulário de escala | **Corrigido** | `global` adicionado ao conjunto de escolhas da CLI e normalizado em `VALID_SCALES`. |
+| **P2-5** Território ignorado | **Corrigido** | Unificado com P1-B: parâmetro `location` agora injeta a facção territorial com bônus/penalidade e diretiva de jurisdição. |
+
+---
+
+## 1. Veredito Original (Histórico)
 
 **Arquitetura aprovada. Entrega da Fase 3 reprovada por 4 P1.** A base é sólida — parsing tolerante a legado, ledger de reputação que faz round-trip, tick off-screen determinístico e retrocompatibilidade limpa. Mas dois defeitos atingem exatamente o que a fase prometia entregar (o modificador social nunca chega ao modelo; a economia de XP pode ser farmada) e dois tornam a camada de auditoria não confiável (um lint que sempre acusa e outro que nunca acusa).
 

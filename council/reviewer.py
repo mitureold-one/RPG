@@ -11,6 +11,7 @@ from council.factions import (
     parse_factions_from_mundo,
     parse_reputation_from_ficha,
     parse_faction_ledger_from_diario,
+    normalize_ascii_slug,
 )
 
 # --- Constantes e Padrões de Lints de Prosa Literária (P3) ---
@@ -565,6 +566,15 @@ def cmd_review(campaign_id: str) -> dict:
     ficha_path = info.get("ficha")
     reps_in_ficha = parse_reputation_from_ficha(ficha_path) if ficha_path and Path(ficha_path).exists() else {}
 
+    # Stopwords comuns de facções que não devem permitir match isolado
+    FACTION_STOPWORDS = {
+        "ordem", "conselho", "guarda", "clã", "clan", "cla", "seita", "culto",
+        "irmandade", "matilha", "matilhas", "tribo", "tropas", "tropa", "legiao",
+        "legião", "exercito", "exército", "aliança", "alianca", "força", "forcas",
+        "forças", "povo", "povos", "habitantes", "sociedade", "guilda", "familia",
+        "família", "casa", "livres", "livre", "novo", "nova", "antigo", "antiga"
+    }
+
     if mundo_path and Path(mundo_path).exists():
         mundo_text_low = Path(mundo_path).read_text(encoding="utf-8").lower()
         for f_k, rep_obj in reps_in_ficha.items():
@@ -574,16 +584,21 @@ def cmd_review(campaign_id: str) -> dict:
                 for f in factions_in_mundo:
                     f_name = f["name"].lower()
                     f_tag = f["tag"].lower()
-                    if r_name in (f_name, f_tag) or r_name in f_name or f_name in r_name:
+                    if r_name in (f_name, f_tag):
                         matched = True
                         break
-                    r_words = set(re.findall(r"\w{5,}", r_name))
-                    f_words = set(re.findall(r"\w{5,}", f_name))
-                    if r_words and f_words and (r_words & f_words):
+                    if normalize_ascii_slug(r_name) in (normalize_ascii_slug(f_name), normalize_ascii_slug(f_tag)):
                         matched = True
                         break
+                    # Match por substring apenas se contiver palavras significativas (não-stopwords)
+                    r_sig = set(re.findall(r"\w{4,}", r_name)) - FACTION_STOPWORDS
+                    f_sig = set(re.findall(r"\w{4,}", f_name)) - FACTION_STOPWORDS
+                    if r_sig and f_sig and (r_sig & f_sig):
+                        matched = True
+                        break
+
                 if not matched:
-                    r_sig_words = [w for w in re.findall(r"\w{4,}", r_name) if w not in ("ordem", "conselho", "guarda", "clã", "cla")]
+                    r_sig_words = [w for w in re.findall(r"\w{4,}", r_name) if w not in FACTION_STOPWORDS]
                     if r_sig_words and any(w in mundo_text_low for w in r_sig_words):
                         matched = True
 
@@ -601,18 +616,20 @@ def cmd_review(campaign_id: str) -> dict:
                 for f in factions_in_mundo:
                     f_name = f["name"].lower()
                     f_tag = f["tag"].lower()
-                    if npc_fac.lower() in (f_name, f_tag) or npc_fac.lower() in f_name or f_name in npc_fac.lower():
+                    if npc_fac.lower() in (f_name, f_tag):
                         fac_match = f
                         break
-                    n_words = set(re.findall(r"\w{5,}", npc_fac.lower()))
-                    f_words = set(re.findall(r"\w{5,}", f_name))
-                    if n_words and f_words and (n_words & f_words):
+                    if normalize_ascii_slug(npc_fac) in (normalize_ascii_slug(f_name), normalize_ascii_slug(f_tag)):
+                        fac_match = f
+                        break
+                    n_sig = set(re.findall(r"\w{4,}", npc_fac.lower())) - FACTION_STOPWORDS
+                    f_sig = set(re.findall(r"\w{4,}", f_name)) - FACTION_STOPWORDS
+                    if n_sig and f_sig and (n_sig & f_sig):
                         fac_match = f
                         break
 
                 if not fac_match:
-                    # Também aceita se a facção constar no texto geral de mundo.md
-                    n_sig_words = [w for w in re.findall(r"\w{4,}", npc_fac.lower()) if w not in ("ordem", "conselho", "guarda", "clã", "cla")]
+                    n_sig_words = [w for w in re.findall(r"\w{4,}", npc_fac.lower()) if w not in FACTION_STOPWORDS]
                     if not (n_sig_words and any(w in mundo_text_low for w in n_sig_words)):
                         issues.append({
                             "type": "FACTION_ORPHANED_NPC",
@@ -635,22 +652,22 @@ def cmd_review(campaign_id: str) -> dict:
 
     diario_path = info.get("diario")
     faction_ledger = parse_faction_ledger_from_diario(diario_path) if diario_path and Path(diario_path).exists() else []
-    ledger_totals: Dict[str, int] = {}
+    last_ledger_scores: Dict[str, int] = {}
     for entry in faction_ledger:
         fn_low = entry["faction"].lower()
-        ledger_totals[fn_low] = ledger_totals.get(fn_low, 0) + entry["delta_rep"]
+        last_ledger_scores[fn_low] = entry["new_score"]
 
-    for fn_low, l_tot in ledger_totals.items():
+    for fn_low, l_score in last_ledger_scores.items():
         matched_rep = None
         for r_k, r_obj in reps_in_ficha.items():
             if r_k == fn_low or r_obj["tag"].lower() == fn_low or r_obj["name"].lower() == fn_low:
                 matched_rep = r_obj
                 break
-        if matched_rep and matched_rep["score"] != l_tot:
+        if matched_rep and matched_rep["score"] != l_score:
             issues.append({
                 "type": "FACTION_REP_MISMATCH",
                 "severity": "HIGH",
-                "detail": f"Divergência de Reputação: A reputação com '{matched_rep['name']}' na ficha ({matched_rep['score']}) difere da soma dos lançamentos do histórico no diário ({l_tot}).",
+                "detail": f"Divergência de Reputação: A reputação com '{matched_rep['name']}' na ficha ({matched_rep['score']}) difere do saldo final registrado no diário ({l_score}).",
             })
 
     return {
