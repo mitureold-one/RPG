@@ -3,8 +3,151 @@
 import re
 from pathlib import Path
 from council.helpers import find_campaign, CAMPAIGN_DIRS
-from council.ssot import parse_ficha_md, parse_diario_md
+from council.ssot import parse_ficha_md, parse_diario_md, extract_turns_from_diario
 from council.narrator import parse_npcs_md
+
+# --- Constantes e Padrões de Lints de Prosa Literária (P3) ---
+EMOJI_PATTERN = re.compile(
+    r"[\U0001F300-\U0001F5FF"  # Symbols & Pictographs
+    r"\U0001F600-\U0001F64F"  # Emoticons
+    r"\U0001F680-\U0001F6FF"  # Transport & Map
+    r"\U0001F700-\U0001F77F"  # Alchemical Symbols
+    r"\U0001F780-\U0001F7FF"  # Geometric Shapes Extended
+    r"\U0001F800-\U0001F8FF"  # Supplemental Arrows-C
+    r"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
+    r"\U0001FA00-\U0001FA6F"  # Chess Symbols
+    r"\U0001FA70-\U0001FAFF"  # Symbols and Pictographs Extended-A
+    r"\u2600-\u26FF"          # Misc Symbols (ex: ⚔, ⚰, ⚡, ☕)
+    r"\u2700-\u27BF]"          # Dingbats (ex: ✨, ❌, ❓)
+)
+
+SCRIPT_BRACKET_PATTERN = re.compile(
+    r"(?m)^\s*(?:\*\s*)?(?:\*\*[^*]+\*\*\s*)?\[([A-Za-zÀ-ÖØ-öø-ÿ\s]{2,30})\]\s*:(?!\*\*)\s*(.+)"
+)
+SCRIPT_UNBRACKETED_PATTERN = re.compile(
+    r"(?m)^\s*(?:\*\s*)?(?:\*\*[^*]+\*\*\s*)?([A-ZÀ-ÖØ-ß][A-Za-zÀ-ÖØ-öø-ÿ\s]{1,30})\s*:\s*(.+)"
+)
+
+FOURTH_WALL_PATTERN = re.compile(
+    r"(?i)\b(?:o\s+que\s+(?:(?:você|voce|vc)\s+)?(?:faz|fará|fara|vai\s+fazer|decide|escolhe)|"
+    r"qual\s+(?:é\s+a\s+sua|a\s+sua|é\s+sua|sua)\s+(?:ação|acao|decisão|decisao|escolha)|"
+    r"como\s+(?:(?:você|voce|vc)\s+)?(?:reage|responde))\b[^\n.!?]*\??",
+    re.IGNORECASE,
+)
+
+RESERVED_METADATA_KEYS = {
+    "turno", "vitais", "data", "data & local", "presentes", "fatos",
+    "mudança de estado", "mudanca de estado", "marco", "status",
+    "gatilho", "atores", "título", "titulo", "fase", "pergunta central",
+    "conflito central", "questão", "questao", "nota", "cena", "arco",
+    "hp", "stamina", "ce", "pv", "mp", "rad",
+    # Metadados de resumo, pós-turno e commit:
+    "atitude", "relação", "relacao", "local", "resumo", "custo", "item", "tempo",
+    "autor", "personagem", "classe", "grau", "nível", "nivel"
+}
+
+SPEECH_VERBS = {
+    "disse", "respondeu", "falou", "gritou", "murmurou", "sussurrou",
+    "exclamou", "perguntou", "declarou", "afirmou", "adverte", "indaga",
+    "prossegue", "comenta", "acrescentou", "retrucou", "rebateu", "ordenou",
+    "anunciou", "avisa", "avisou", "lembra", "lembrou"
+}
+
+
+def check_prose_lints(
+    text: str,
+    context_label: str = "diario.md",
+    known_speakers: set | list | None = None,
+) -> list:
+    """Audita violações duras de estilo literário: emojis, formato script [Nome]: e perguntas de 4ª parede.
+    
+    Se known_speakers for fornecido, a detecção de 'Nome: Fala' (sem colchetes) restringe-se
+    a personagens conhecidos da campanha, eliminando falsos positivos com metadados ou cláusulas
+    de diálogo legítimas ('Ela disse:', 'Resumo:', 'Atitude:').
+    """
+    issues = []
+    if not text:
+        return issues
+
+    known_lower = {s.lower().strip() for s in known_speakers} if known_speakers else None
+
+    # 1. Zero Emojis
+    m_emoji = EMOJI_PATTERN.search(text)
+    if m_emoji:
+        emoji_char = m_emoji.group(0)
+        issues.append({
+            "type": "EMOJI_DETECTED",
+            "severity": "MEDIUM",
+            "detail": (
+                f"Caractere emoji detectado em {context_label} ('{emoji_char}'): "
+                f"o estilo literário do RPGPRO exige prosa textual pura sem emojis."
+            ),
+        })
+
+    # 2. Proibição de Roteiro Teatral ([Nome]: ou Nome: fala)
+    # 2a. Formato com colchetes: [Nome]: ... (sempre violação de roteiro teatral)
+    m_bracket = SCRIPT_BRACKET_PATTERN.search(text)
+    if m_bracket:
+        bracket_name = m_bracket.group(1).strip()
+        bracket_str = f"[{bracket_name}]:"
+        issues.append({
+            "type": "SCRIPT_FORMAT_DETECTED",
+            "severity": "HIGH",
+            "detail": (
+                f"Formato teatral detectado em {context_label} ('{bracket_str}'): "
+                f"utilize travessão literário (—) e diálogo integrado à narrativa em vez de '[Nome]:'."
+            ),
+        })
+    else:
+        # 2b. Formato sem colchetes: Nome: fala
+        for m_unbracket in SCRIPT_UNBRACKETED_PATTERN.finditer(text):
+            raw_speaker = m_unbracket.group(1).strip()
+            rest = m_unbracket.group(2).strip()
+            speaker_low = raw_speaker.lower()
+
+            if speaker_low in RESERVED_METADATA_KEYS:
+                continue
+
+            speaker_words = [w.lower() for w in re.split(r"\s+", raw_speaker) if w]
+            if any(w in SPEECH_VERBS for w in speaker_words):
+                continue
+
+            # Se known_speakers foi passado, só dispara para personagens conhecidos da campanha
+            is_script = False
+            if known_lower is not None:
+                if speaker_low in known_lower or any(speaker_low == k or speaker_low in k for k in known_lower):
+                    is_script = True
+            else:
+                # Sem lista de personagens: exige que a fala comece com aspas ou tenha padrão claro de diálogo
+                if rest.startswith(('"', "'", "“", "”")):
+                    is_script = True
+
+            if is_script:
+                snippet = f"{raw_speaker}: {rest[:40]}"
+                issues.append({
+                    "type": "SCRIPT_FORMAT_DETECTED",
+                    "severity": "HIGH",
+                    "detail": (
+                        f"Formato teatral detectado em {context_label} ('{snippet}'): "
+                        f"utilize travessão literário (—) e diálogo integrado à narrativa em vez de '{raw_speaker}:'."
+                    ),
+                })
+                break
+
+    # 3. Proibição de Quarta Parede ("O que você faz?")
+    m_4th = FOURTH_WALL_PATTERN.search(text)
+    if m_4th:
+        question_str = m_4th.group(0).strip()
+        issues.append({
+            "type": "FOURTH_WALL_QUESTION",
+            "severity": "MEDIUM",
+            "detail": (
+                f"Pergunta de quebra de quarta parede detectada em {context_label} ('{question_str}'): "
+                f"encerre com impacto sensorial e gancho dramático aberto, sem recorrer ao clichê 'O que você faz?'."
+            ),
+        })
+
+    return issues
 
 PT_MONTHS = {
     "janeiro": 1, "fevereiro": 2, "março": 3, "marco": 3, "abril": 4,
@@ -279,6 +422,35 @@ def cmd_review(campaign_id: str) -> dict:
                         f"Verifique se este marco foi alcançado e, se sim, promova-o para os Marcos da Crônica e atualize a ficha via '--add-milestone'."
                     ),
                 })
+
+    # 13. Lints de Estilo e Prosa Literária (EMOJI_DETECTED, SCRIPT_FORMAT_DETECTED, FOURTH_WALL_QUESTION)
+    known_speakers = set()
+    if ficha.get("name"):
+        known_speakers.add(ficha["name"].strip())
+        for tok in re.split(r"[\s(),&_-]+", ficha["name"]):
+            if len(tok) >= 3 and tok[0].isupper():
+                known_speakers.add(tok)
+    for npc_obj in all_npcs:
+        n_name = npc_obj.get("name", "").strip()
+        if n_name:
+            known_speakers.add(n_name)
+            for tok in re.split(r"[\s(),&_-]+", n_name):
+                if len(tok) >= 3 and tok[0].isupper():
+                    known_speakers.add(tok)
+
+    prose_texts_checked = set()
+    if diario.get("last_turn_summary"):
+        lbl = f"diario.md (Turno {diario['last_turn_num']} - Resumo)"
+        prose_texts_checked.add(diario["last_turn_summary"])
+        issues.extend(check_prose_lints(diario["last_turn_summary"], context_label=lbl, known_speakers=known_speakers))
+
+    recent_turns = extract_turns_from_diario(info["diario"], turns_spec="")
+    for t_item in recent_turns:
+        t_text = t_item["text"]
+        if t_text not in prose_texts_checked:
+            prose_texts_checked.add(t_text)
+            lbl = f"diario.md (Turno {t_item['turn']})"
+            issues.extend(check_prose_lints(t_text, context_label=lbl, known_speakers=known_speakers))
 
     return {
         "campaign": campaign_id,

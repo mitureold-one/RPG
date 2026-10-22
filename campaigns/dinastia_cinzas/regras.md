@@ -12,7 +12,10 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 system: d20_3gates
 overrides:
   - id: exhaustion_friction
-    effect: "Esforço extremo continuado sem repouso gera penalidade cumulativa de exaustão."
+    type: cost_multiplier
+    target: stamina
+    value: 2.0
+    condition: "Esforço extremo continuado sem repouso gera penalidade cumulativa de exaustão"
 ```
 
 ---

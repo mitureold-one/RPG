@@ -65,6 +65,87 @@ def load_ruleset(system_name: str = DEFAULT_RULESET):
         )
 
 
+def parse_regras_manifest(regras_path: Path) -> dict:
+    """Extrai e parseia o manifesto de mecânica e overrides tipados de regras.md."""
+    manifest = {
+        "system": DEFAULT_RULESET,
+        "ruleset": DEFAULT_RULESET,
+        "overrides": [],
+    }
+    if not regras_path or not regras_path.is_file():
+        return manifest
+
+    text = regras_path.read_text(encoding="utf-8")
+    m = re.search(r"```yaml(?:[:a-zA-Z_-]*)\n(.*?)\n```", text, re.DOTALL)
+    if not m:
+        m_sys = re.search(r"system:\s*([a-zA-Z0-9_\-]+)", text)
+        if m_sys:
+            manifest["system"] = m_sys.group(1).strip()
+            manifest["ruleset"] = m_sys.group(1).strip()
+        return manifest
+
+    yaml_content = m.group(1)
+    parsed = None
+    try:
+        import yaml
+        parsed = yaml.safe_load(yaml_content)
+    except Exception:
+        parsed = None
+
+    if isinstance(parsed, dict):
+        if "system" in parsed:
+            manifest["system"] = str(parsed["system"]).strip()
+        if "ruleset" in parsed:
+            manifest["ruleset"] = str(parsed["ruleset"]).strip()
+        else:
+            manifest["ruleset"] = manifest["system"]
+        if "overrides" in parsed and isinstance(parsed["overrides"], list):
+            valid_overrides = []
+            for item in parsed["overrides"]:
+                if isinstance(item, dict):
+                    ov = {
+                        "id": str(item.get("id", "custom_override")).strip(),
+                        "type": str(item.get("type", "custom")).strip(),
+                        "target": str(item.get("target", "general")).strip(),
+                        "value": item.get("value", True),
+                        "condition": str(item.get("condition", item.get("effect", ""))).strip(),
+                    }
+                    valid_overrides.append(ov)
+            manifest["overrides"] = valid_overrides
+    else:
+        # Fallback minimalista de chave-valor nativo (stdlib)
+        m_sys = re.search(r"system:\s*([a-zA-Z0-9_\-]+)", yaml_content)
+        if m_sys:
+            manifest["system"] = m_sys.group(1).strip()
+            manifest["ruleset"] = m_sys.group(1).strip()
+        override_blocks = re.findall(r"-\s*id:\s*([^\n]+)(.*?)(?=\n\s*-\s*id:|\Z)", yaml_content, re.DOTALL)
+        for ov_id, ov_body in override_blocks:
+            def _extract_field(field_name, default=""):
+                mf = re.search(rf"{field_name}:\s*([^\n]+)", ov_body)
+                return mf.group(1).strip().strip('"\'') if mf else default
+            manifest["overrides"].append({
+                "id": ov_id.strip().strip('"\''),
+                "type": _extract_field("type", "custom"),
+                "target": _extract_field("target", "general"),
+                "value": _extract_field("value", True),
+                "condition": _extract_field("condition", _extract_field("effect", "")),
+            })
+
+    return manifest
+
+
+def get_campaign_overrides(campaign_id: str) -> list:
+    """Retorna a lista de overrides mecânicos tipados de regras.md da campanha."""
+    for base in CAMPAIGN_DIRS:
+        if not base.exists():
+            continue
+        regras_path = base / campaign_id / "regras.md"
+        if regras_path.is_file():
+            manifest = parse_regras_manifest(regras_path)
+            return manifest.get("overrides", [])
+    return []
+
+
 def get_campaign_system(campaign_id: str) -> str:
     """Extrai o identificador de sistema de resolução declarado em regras.md."""
     for base in CAMPAIGN_DIRS:
@@ -72,10 +153,8 @@ def get_campaign_system(campaign_id: str) -> str:
             continue
         regras_path = base / campaign_id / "regras.md"
         if regras_path.is_file():
-            text = regras_path.read_text(encoding="utf-8")
-            m = re.search(r"system:\s*([a-zA-Z0-9_\-]+)", text)
-            if m:
-                return m.group(1).strip()
+            manifest = parse_regras_manifest(regras_path)
+            return manifest.get("system", DEFAULT_RULESET)
     return DEFAULT_RULESET
 
 
@@ -109,7 +188,8 @@ def find_campaign(campaign_id: str):
                 raise ValueError(
                     f"Campanha '{campaign_id}' incompatível: schema_version {version} é superior à versão suportada pelo motor ({CURRENT_SCHEMA_VERSION})."
                 )
-            system_name = get_campaign_system(campaign_id)
+            manifest = parse_regras_manifest(camp_dir / "regras.md")
+            system_name = manifest.get("system", DEFAULT_RULESET)
             load_ruleset(system_name)
             return {
                 "type": "markdown",
@@ -121,6 +201,7 @@ def find_campaign(campaign_id: str):
                 "regras": camp_dir / "regras.md",
                 "schema_version": version,
                 "system": system_name,
+                "overrides": manifest.get("overrides", []),
             }
     return None
 

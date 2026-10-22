@@ -28,6 +28,7 @@ from council import (
     DEFAULT_RULESET,
     load_ruleset,
     get_campaign_system,
+    get_campaign_overrides,
     find_campaign,
     init_campaign_from_templates,
     parse_ficha_md,
@@ -46,6 +47,7 @@ from council import (
     apply_npc_updates_to_md,
     extract_turns_from_diario,
     upsert_ficha_feature,
+    check_prose_lints,
     cmd_review,
     extract_epistemic_forbidden_terms,
     derive_situational_scene_structures,
@@ -415,6 +417,7 @@ def cmd_prepare(
         "step_1_gm_arbitration": {
             "ruleset": system_name,
             "dc_ladder": getattr(ruleset, "DC_LADDER", {}),
+            "overrides": get_campaign_overrides(campaign_id) or info.get("overrides", []),
             "dice_resolution": contest_data["summary"] if contest_data else (roll_data["summary"] if roll_data else "Sem rolagem de dados (Ação sem oposição mecânica direta)"),
             "cost_directive": cost_guide,
             **({"contest_resolution": contest_data, "npc_reaction_mandate": contest_data["npc_reaction_mandate"], "outcome_narrative_guidance": contest_data["outcome"]} if contest_data else {}),
@@ -592,6 +595,58 @@ def cmd_arc(
     }
 
 
+def cmd_check_prose(campaign_id: str = "", file_path: str = "", text: str = "") -> dict:
+    """Audita rascunho de prosa literária contra regras de estilo (emojis, formato script, 4ª parede)."""
+    prose_content = ""
+    label = "prosa_inline"
+    if file_path:
+        f = Path(file_path)
+        if not f.exists():
+            return {"error": f"Arquivo de prosa '{file_path}' não encontrado.", "status": "FILE_NOT_FOUND", "has_violations": True, "issues": []}
+        prose_content = f.read_text(encoding="utf-8")
+        label = file_path
+    elif text:
+        prose_content = text
+    else:
+        if not sys.stdin.isatty():
+            prose_content = sys.stdin.read()
+            label = "stdin"
+        else:
+            return {"error": "Nenhum texto fornecido para check-prose. Use --file ou --text.", "status": "EMPTY", "has_violations": False, "issues": []}
+
+    known_speakers = None
+    if campaign_id:
+        try:
+            info = find_campaign(campaign_id)
+            if info:
+                ficha = parse_ficha_md(info["ficha"])
+                all_npcs = parse_npcs_md(info["npcs"])
+                known_speakers = set()
+                if ficha.get("name"):
+                    known_speakers.add(ficha["name"].strip())
+                    for tok in re.split(r"[\s(),&_-]+", ficha["name"]):
+                        if len(tok) >= 3 and tok[0].isupper():
+                            known_speakers.add(tok)
+                for npc_obj in all_npcs:
+                    n_name = npc_obj.get("name", "").strip()
+                    if n_name:
+                        known_speakers.add(n_name)
+                        for tok in re.split(r"[\s(),&_-]+", n_name):
+                            if len(tok) >= 3 and tok[0].isupper():
+                                known_speakers.add(tok)
+        except Exception:
+            pass
+
+    issues = check_prose_lints(prose_content, context_label=label, known_speakers=known_speakers)
+    return {
+        "status": "CLEAN" if not issues else f"FOUND_{len(issues)}_ISSUES",
+        "has_violations": len(issues) > 0,
+        "campaign": campaign_id or None,
+        "target": label,
+        "issues": issues,
+    }
+
+
 def cmd_commit(
     campaign_id: str,
     summary: str,
@@ -607,6 +662,9 @@ def cmd_commit(
     add_ability: str = "",
     add_milestone: str = "",
     add_item: str = "",
+    prose: str = "",
+    prose_file: str = "",
+    force: bool = False,
 ):
     """Atualiza ficha.md, diario.md e npcs.md atomicamente no fim do turno e roda a auditoria automática do Modo Revisor."""
     if not time_str and time:
@@ -657,6 +715,41 @@ def cmd_commit(
 
     # 1. Atualiza ficha.md dinamicamente para qualquer recurso vital cadastrado
     ficha_data = parse_ficha_md(ficha_path)
+
+    # 0a. Auditoria preventiva da prosa se fornecida (--prose ou --prose-file)
+    prose_to_audit = ""
+    if prose_file:
+        pf = Path(prose_file)
+        if pf.exists():
+            prose_to_audit = pf.read_text(encoding="utf-8")
+    elif prose:
+        prose_to_audit = prose
+
+    if prose_to_audit:
+        all_npcs = parse_npcs_md(npcs_path) if npcs_path.exists() else []
+        known_speakers = set()
+        if ficha_data.get("name"):
+            known_speakers.add(ficha_data["name"].strip())
+            for tok in re.split(r"[\s(),&_-]+", ficha_data["name"]):
+                if len(tok) >= 3 and tok[0].isupper():
+                    known_speakers.add(tok)
+        for npc_obj in all_npcs:
+            n_name = npc_obj.get("name", "").strip()
+            if n_name:
+                known_speakers.add(n_name)
+                for tok in re.split(r"[\s(),&_-]+", n_name):
+                    if len(tok) >= 3 and tok[0].isupper():
+                        known_speakers.add(tok)
+
+        prose_issues = check_prose_lints(prose_to_audit, context_label=prose_file or "--prose", known_speakers=known_speakers)
+        high_issues = [i for i in prose_issues if i.get("severity") in ("HIGH", "CRITICAL")]
+        if high_issues and not force:
+            return {
+                "error": "Commit recusado: a prosa entregue viola regras duras de estilo literário (SCRIPT_FORMAT_DETECTED). Use --force para ignorar.",
+                "prose_status": "REJECTED",
+                "issues": prose_issues,
+            }
+
     deltas, time_advance_mins = parse_cost_string(cost, ficha_data["vitals"])
 
     if deltas and ficha_path.exists():
@@ -856,6 +949,14 @@ def build_cli() -> argparse.ArgumentParser:
     p_com.add_argument("--add-ability", default="", help="Adiciona uma nova Habilidade & Técnica em ficha.md")
     p_com.add_argument("--add-milestone", default="", help="Adiciona um novo Marco de Evolução Pessoal em ficha.md")
     p_com.add_argument("--add-item", default="", help="Adiciona um item ao Equipamento & Inventário em ficha.md")
+    p_com.add_argument("--prose", default="", help="Texto direto da prosa para auditoria preventiva de estilo")
+    p_com.add_argument("--prose-file", "--prose_file", dest="prose_file", default="", help="Arquivo de rascunho de prosa para auditoria preventiva")
+    p_com.add_argument("--force", action="store_true", help="Força a gravação mesmo com violações na prosa")
+
+    p_chk = sub.add_parser("check-prose", help="Audita rascunho de prosa literária contra regras duras de estilo (emojis, formato script, 4ª parede)")
+    p_chk.add_argument("--campaign", default="", help="ID da pasta da campanha para checagem de personagens conhecidos")
+    p_chk.add_argument("--file", default="", help="Caminho do arquivo de rascunho de prosa a auditar")
+    p_chk.add_argument("--text", default="", help="Texto direto da prosa a auditar")
 
     p_rev = sub.add_parser("review", help="Executa auditoria determinística de Cânone e Integridade Referencial (Modo Revisor)")
     p_rev.add_argument("--campaign", required=True, help="ID da pasta da campanha")
@@ -960,8 +1061,22 @@ def main():
             add_ability=args.add_ability,
             add_milestone=args.add_milestone,
             add_item=args.add_item,
+            prose=args.prose,
+            prose_file=args.prose_file,
+            force=args.force,
         )
         print(json.dumps(res, indent=2, ensure_ascii=False))
+        if res.get("prose_status") == "REJECTED":
+            sys.exit(1)
+    elif args.cmd == "check-prose":
+        res = cmd_check_prose(
+            campaign_id=args.campaign,
+            file_path=args.file,
+            text=args.text,
+        )
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        if res.get("has_violations"):
+            sys.exit(1)
     elif args.cmd == "review":
         res = cmd_review(args.campaign)
         print(json.dumps(res, indent=2, ensure_ascii=False))

@@ -126,11 +126,19 @@ Harness (Segurança / Sandbox)
 2. **Higienização de Strings da CLI:**
    * Limpar menções a campanhas específicas nos helps e exemplos da CLI (remover "Plano Kenjaku" e "Tóquio, Shinjuku" de `lazy_turn.py`).
 
-### Fase P3 — Verificação Dura no Reviewer (Lints)
-1. **Adição de Lints no `council/reviewer.py`:**
-   * Checagem de emojis (`EMOJI_DETECTED`).
-   * Checagem de formato teatral (`SCRIPT_FORMAT_DETECTED`).
-   * Checagem de perguntas clichês de encerramento (`FOURTH_WALL_QUESTION`).
+### Fase P3 — Verificação Dura no Reviewer, Overrides Tipados & Testes de Fronteira (Entregue)
+1. **Adição de Lints Determinísticos no `council/reviewer.py`:**
+   * Checagem de emojis (`EMOJI_DETECTED` via faixas Unicode nativas).
+   * Checagem de formato teatral (`SCRIPT_FORMAT_DETECTED` bloqueando `[Nome]:` e `Nome: "..."`).
+   * Checagem de perguntas clichês de encerramento (`FOURTH_WALL_QUESTION` bloqueando `"O que você faz?"`).
+2. **Overrides Mecânicos Legíveis por Máquina (`regras.md`):**
+   * Padronização do bloco `overrides:` em formato tipado (`id`, `type`, `target`, `value`, `condition`).
+   * Parser integrado ao motor em `council/helpers.py` e injeção automática em `step_1_gm_arbitration.overrides`.
+   * Atualização de `templates/regras.template.md` e das 3 campanhas ativas.
+3. **Suíte Permanente de Testes de Fronteira (`tests/test_boundary_contracts.py`):**
+   * Teste de vazamento diegético: garante zero substantivos de campanhas presentes nas skills universais.
+   * Teste de contrato de CLI: valida comandos documentados contra `build_cli()`.
+   * Teste de snapshot de payload: congela a estrutura do JSON gerado por `lazy_turn.py prepare`.
 
 ---
 

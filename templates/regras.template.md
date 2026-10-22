@@ -10,7 +10,12 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 
 ```yaml
 system: d20_3gates
-overrides: []
+overrides:
+  - id: exemplo_modificador
+    type: cost_multiplier
+    target: stamina
+    value: 1.0
+    condition: "Condição diegética de ativação do modificador"
 ```
 
 ---

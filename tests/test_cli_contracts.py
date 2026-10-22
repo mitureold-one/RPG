@@ -340,6 +340,146 @@ class TestCLIContracts(unittest.TestCase):
                     for term in forbidden_terms:
                         self.assertNotIn(term, sub_help, f"Termo proibido '{term}' encontrado no help de '{sub_name}'")
 
+    def test_p3_prose_lints_in_reviewer(self):
+        """P3: Garante que check_prose_lints detecta emojis, formato teatral e perguntas de 4ª parede com zero falsos positivos."""
+        from council.reviewer import check_prose_lints, cmd_review
+
+        # 1. Prosa literária canônica limpa com travessão e diálogo integrado -> 0 issues
+        clean_text = (
+            "Aemon ergueu o cálice sob a penumbra da lareira e encarou Vespera.\n"
+            "— Se os cavaleiros de ferro cruzarem o fosso — murmurou ele —, não haverá conselho que os salve."
+        )
+        self.assertEqual(check_prose_lints(clean_text), [])
+
+        # 2. Detecção de Emojis
+        emoji_samples = [
+            "O golpe acertou em cheio no escudo! 🔥",
+            "A espada de aço brilhou na escuridão ⚔️.",
+            "Um brilho misterioso surgiu na sala ✨",
+        ]
+        for sample in emoji_samples:
+            issues = check_prose_lints(sample)
+            issue_types = [i["type"] for i in issues]
+            self.assertIn("EMOJI_DETECTED", issue_types, f"Emoji não detectado em: {sample}")
+
+        # 3. Detecção de Formato Teatral ([Nome]: ou Nome: "fala")
+        script_samples = [
+            "[Aemon]: Não recue agora!",
+            "Vespera: \"O castelo cairá antes da meia-noite.\"",
+            "   [Cavaleiro Negro]: Às armas!",
+            "Sylvia: “O vinho está pronto.”",
+            "Vespera: O trono é meu por direito de sangue.",  # Sem aspas (R3) com known_speakers
+        ]
+        for sample in script_samples:
+            issues = check_prose_lints(sample, known_speakers={"Vespera", "Aemon", "Sylvia"})
+            issue_types = [i["type"] for i in issues]
+            self.assertIn("SCRIPT_FORMAT_DETECTED", issue_types, f"Formato script não detectado em: {sample}")
+
+        # 3b. Imunidade a Falsos Positivos em metadados e cláusulas de diálogo (R2)
+        valid_prose_and_metadata = [
+            "Ela disse: 'não devia estar aqui'.",
+            "Vanya respondeu: \"o trono é meu\".",
+            "Atitude: \"fria e calculista\"",
+            "Relação: \"distante e cautelosa\"",
+            "Local: \"Fortaleza de Cinzas\"",
+            "Resumo: \"o herói venceu a guarda\"",
+            "Custo: \"HP -2, Stamina -3\"",
+            "Item: \"espada longa de aço\"",
+            "Tempo: \"+2h\"",
+        ]
+        for sample in valid_prose_and_metadata:
+            issues = check_prose_lints(sample, known_speakers={"Vespera", "Aemon", "Sylvia"})
+            self.assertEqual(issues, [], f"Falso positivo incorretamente disparado em: {sample}")
+
+        # 4. Detecção de Perguntas Clichês de Quarta Parede
+        cliche_samples = [
+            "A fumaça cobre o pátio. O que você faz?",
+            "Os guardas cercam a torre. O que fará a seguir?",
+            "A lâmina está a centímetros da garganta. Qual a sua ação?",
+            "As portas foram trancadas. Como você reage?",
+        ]
+        for sample in cliche_samples:
+            issues = check_prose_lints(sample)
+            issue_types = [i["type"] for i in issues]
+            self.assertIn("FOURTH_WALL_QUESTION", issue_types, f"Pergunta de 4ª parede não detectada em: {sample}")
+
+        # 5. Sanidade das campanhas canônicas reais no review
+        for cid in ["dinastia_cinzas", "imperio_valiria", "perpetuos_terra_incognita"]:
+            rev = cmd_review(cid)
+            prose_issues = [i for i in rev.get("issues", []) if i["type"] in ("EMOJI_DETECTED", "SCRIPT_FORMAT_DETECTED", "FOURTH_WALL_QUESTION")]
+            self.assertEqual(prose_issues, [], f"Campanha canônica {cid} possui violação de prosa: {prose_issues}")
+
+    def test_p3_machine_readable_overrides(self):
+        """P3: Garante que o bloco overrides em regras.md é parseado como lista de dicionários tipados e exposto no prepare."""
+        from council.helpers import parse_regras_manifest, get_campaign_overrides, find_campaign
+
+        for cid in ["dinastia_cinzas", "imperio_valiria", "perpetuos_terra_incognita"]:
+            info = find_campaign(cid)
+            self.assertIn("overrides", info, f"overrides ausente no retorno de find_campaign para {cid}")
+            self.assertIsInstance(info["overrides"], list)
+            self.assertGreater(len(info["overrides"]), 0, f"{cid} deve possuir ao menos 1 override tipado")
+
+            for ov in info["overrides"]:
+                self.assertIn("id", ov)
+                self.assertIn("type", ov)
+                self.assertIn("target", ov)
+                self.assertIn("value", ov)
+                self.assertIn("condition", ov)
+                self.assertIsInstance(ov["id"], str)
+                self.assertIsInstance(ov["type"], str)
+
+            # Verifica exposição em prepare
+            prep = lazy_turn.cmd_prepare(cid, "Ação de teste", no_roll=True)
+            prep_overrides = prep.get("step_1_gm_arbitration", {}).get("overrides")
+            self.assertIsNotNone(prep_overrides, f"overrides ausente em step_1_gm_arbitration para {cid}")
+            self.assertEqual(prep_overrides, info["overrides"])
+
+
+    def test_p3_check_prose_cli_and_commit_enforcement(self):
+        """P3: Garante que check-prose e commit --prose auditam a prosa e recusam violações (R1)."""
+        import tempfile
+        import shutil
+        from unittest.mock import patch
+        import council.helpers as helpers
+        from lazy_turn import cmd_check_prose, cmd_commit
+
+        # 1. check-prose em texto limpo -> CLEAN
+        clean_res = cmd_check_prose(text="Aemon sacou a espada de ferro.\n— Recuem — ordenou ele.")
+        self.assertEqual(clean_res["status"], "CLEAN")
+        self.assertFalse(clean_res["has_violations"])
+
+        # 2. check-prose em texto com violação -> FAILED
+        bad_res = cmd_check_prose(text="[Aemon]: Vamos avançar! 🔥 O que você faz?")
+        self.assertTrue(bad_res["has_violations"])
+        bad_types = [i["type"] for i in bad_res["issues"]]
+        self.assertIn("EMOJI_DETECTED", bad_types)
+        self.assertIn("SCRIPT_FORMAT_DETECTED", bad_types)
+        self.assertIn("FOURTH_WALL_QUESTION", bad_types)
+
+        # 3 e 4 em diretório temporário para não mutar as campanhas canônicas reais
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            temp_path = Path(tmp_dir)
+            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                # commit com prosa violando estilo é recusado sem --force
+                reject_res = cmd_commit(
+                    campaign_id="dinastia_cinzas",
+                    summary="Aemon inspeciona a câmara.",
+                    prose="Vespera: 'Não confie nos mensageiros.'",
+                    force=False,
+                )
+                self.assertEqual(reject_res.get("prose_status"), "REJECTED")
+                self.assertIn("SCRIPT_FORMAT_DETECTED", [i["type"] for i in reject_res.get("issues", [])])
+
+                # commit com --force passa com sucesso
+                force_res = cmd_commit(
+                    campaign_id="dinastia_cinzas",
+                    summary="Aemon inspeciona a câmara sob vigília.",
+                    prose="Vespera: 'Não confie nos mensageiros.'",
+                    force=True,
+                )
+                self.assertEqual(force_res.get("status"), "ok")
+
 
 if __name__ == "__main__":
     unittest.main()

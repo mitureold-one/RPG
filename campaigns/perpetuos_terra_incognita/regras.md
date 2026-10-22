@@ -12,9 +12,15 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 system: d20_3gates
 overrides:
   - id: observer_decay
-    effect: "Quanto mais um alvo compreende o Desconhecido, maior o custo de autoridade para dobrá-lo."
+    type: cost_multiplier
+    target: ce
+    value: 1.5
+    condition: "Quanto mais um alvo compreende o Desconhecido, maior o custo de autoridade para dobrá-lo"
   - id: sovereign_realm_authority
-    effect: "Dentro de Terra Incognita a autoridade do Desconhecido é absoluta; fora dela leis do hospedeiro aplicam-se."
+    type: threshold_shift
+    target: all_actions
+    value: +5
+    condition: "Dentro de Terra Incognita a autoridade do Desconhecido é absoluta; fora dela leis do hospedeiro aplicam-se"
 ```
 
 ---

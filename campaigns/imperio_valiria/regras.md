@@ -12,9 +12,15 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 system: d20_3gates
 overrides:
   - id: mana_sensor_immunity
-    effect: "Artefatos de medição mágica leem Kon-El como valor zero (ausência de mana)."
+    type: immunity
+    target: mana_detection
+    value: true
+    condition: "Artefatos de medição mágica leem Kon-El como valor zero (ausência de mana)"
   - id: torquasm_vo_defense
-    effect: "Imunidade inata a encantos de submissão e feromônios de domínio via disciplina mental kryptoniana."
+    type: resistance
+    target: mental_influence
+    value: immune
+    condition: "Imunidade inata a encantos de submissão e feromônios de domínio via disciplina mental kryptoniana"
 ```
 
 ---
