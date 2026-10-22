@@ -10,6 +10,21 @@ A escala mecânica de resolução adota o padrão universal do framework (Grau 1
 
 ```yaml
 system: d20_3gates
+calendar:
+  months:
+    - Ventania
+    - Geada
+    - Desgelo
+    - Alvorada
+    - Sol-Branco
+    - Éter
+    - Brasa
+    - Colheita
+    - Névoa
+    - Crepúsculo
+    - Noite-Longa
+    - Solstício
+  days_per_month: 30
 overrides:
   - id: mana_sensor_immunity
     type: immunity

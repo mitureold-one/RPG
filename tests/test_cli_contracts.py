@@ -459,6 +459,10 @@ class TestCLIContracts(unittest.TestCase):
         self.assertEqual(clean_res["status"], "CLEAN")
         self.assertFalse(clean_res["has_violations"])
 
+        # 1b. check-prose com arquivo inexistente -> FILE_NOT_FOUND
+        missing_res = cmd_check_prose(file_path="arquivo_inexistente_rascunho.md")
+        self.assertEqual(missing_res.get("status"), "FILE_NOT_FOUND")
+
         # 2. check-prose em texto com violação -> FAILED
         bad_res = cmd_check_prose(text="[Aemon]: Vamos avançar! 🔥 O que você faz?")
         self.assertTrue(bad_res["has_violations"])
@@ -472,6 +476,14 @@ class TestCLIContracts(unittest.TestCase):
         try:
             shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                # commit com prose_file inexistente falha alto sem mutar SSOT
+                missing_file_res = cmd_commit(
+                    campaign_id="dinastia_cinzas",
+                    summary="Aemon inspeciona a câmara.",
+                    prose_file=str(temp_path / "prosa_fantasma.md"),
+                )
+                self.assertEqual(missing_file_res.get("status"), "FILE_NOT_FOUND")
+
                 # commit com prosa violando estilo é recusado sem --force
                 reject_res = cmd_commit(
                     campaign_id="dinastia_cinzas",
@@ -490,6 +502,18 @@ class TestCLIContracts(unittest.TestCase):
                     force=True,
                 )
                 self.assertEqual(force_res.get("status"), "ok")
+                self.assertEqual(force_res.get("prose_status"), "PASSED")
+
+                # commit com arquivo de prosa válido passa com status PASSED
+                valid_prose_file = temp_path / "boa_prosa.md"
+                valid_prose_file.write_text("Aemon manteve a espada embainhada.\n— Mantenham a guarda — sussurrou ele.", encoding="utf-8")
+                pass_file_res = cmd_commit(
+                    campaign_id="dinastia_cinzas",
+                    summary="Aemon organiza a sentinela dos portões.",
+                    prose_file=str(valid_prose_file),
+                )
+                self.assertEqual(pass_file_res.get("status"), "ok")
+                self.assertEqual(pass_file_res.get("prose_status"), "PASSED")
         finally:
             shutil.rmtree(temp_path, ignore_errors=True)
 
@@ -828,6 +852,51 @@ class TestCLIContracts(unittest.TestCase):
                     desc="Inquisidores devotos",
                 )
                 self.assertEqual(add_res["action_result"].get("action"), "faction_added")
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
+
+    def test_fase_01_5_valiria_calendar_and_strict_faction_rep(self):
+        """Fase 01.5: Calendário completo de Valíria (+30d avança mês) e faction --rep estrito com --create."""
+        from unittest.mock import patch
+        import council.helpers as helpers
+        from lazy_turn import cmd_faction, cmd_commit
+        from council.factions import parse_reputation_from_ficha
+
+        temp_path = make_workspace_temp_dir()
+        try:
+            # 1. Calendário de Valíria com avanço de +30d atravessando de Ventania para Geada
+            shutil.copytree(self.root_dir / "campaigns" / "imperio_valiria", temp_path / "imperio_valiria")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                res_time = cmd_commit(
+                    campaign_id="imperio_valiria",
+                    summary="Kon-El realiza patrulha estendida durante trinta dias.",
+                    time_str="+30d",
+                    force=True,
+                )
+                self.assertEqual(res_time.get("status"), "ok")
+                # 04 de Ventania + 30 dias -> 4 de Geada de 304
+                self.assertIn("4 de Geada de 304", res_time["canonical_header_for_response"])
+
+            # 2. faction --rep estrito em dinastia_cinzas
+            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                # Facção conhecida em mundo.md (Conselho dos Lordes de Cinzas) -> passa sem --create
+                res_known = cmd_faction("dinastia_cinzas", rep="Conselho dos Lordes de Cinzas:+1")
+                self.assertEqual(res_known.get("action_result", {}).get("action"), "reputation_updated")
+
+                # Typo / facção desconhecida sem --create -> erro estrito e não altera ficha
+                res_typo = cmd_faction("dinastia_cinzas", rep="Conselhoo:+1")
+                self.assertIn("error", res_typo)
+                self.assertIn("não encontrada em mundo.md", res_typo["error"])
+
+                ficha_reps = parse_reputation_from_ficha(temp_path / "dinastia_cinzas" / "ficha.md")
+                self.assertNotIn("conselhoo", ficha_reps)
+
+                # Com --create explícito -> permite cadastro intencional avulso
+                res_create = cmd_faction("dinastia_cinzas", rep="Conselhoo:+1", create=True)
+                self.assertEqual(res_create.get("action_result", {}).get("action"), "reputation_updated")
+                ficha_reps_after = parse_reputation_from_ficha(temp_path / "dinastia_cinzas" / "ficha.md")
+                self.assertIn("conselhoo", ficha_reps_after)
         finally:
             shutil.rmtree(temp_path, ignore_errors=True)
 

@@ -15,7 +15,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 
 if sys.stdout.encoding != "utf-8":
     try:
@@ -924,6 +924,7 @@ def cmd_faction(
     favor: str = "",
     debt: str = "",
     tick: bool = False,
+    create: bool = False,
 ) -> dict:
     """Gerencia facções, reputação numérica (-3 a +3), favores/débitos e turno off-screen (Fase 3)."""
     try:
@@ -940,14 +941,17 @@ def cmd_faction(
 
     action_res = None
 
-    def _warn_if_unknown(fn_name: str) -> Optional[str]:
+    def _check_faction_known(fn_name: str) -> Tuple[bool, Optional[str]]:
         factions_in_mundo = parse_factions_from_mundo(mundo_path)
         known = any(f["name"].lower() == fn_name.lower() or f["tag"].lower() == fn_name.lower() for f in factions_in_mundo)
         if not known:
-            w = f"Facção '{fn_name}' não encontrada em mundo.md. Registre-a previamente com 'faction --add' para garantir consistência política."
+            if not create:
+                err = f"Facção '{fn_name}' não encontrada em mundo.md. Registre-a previamente com 'faction --add' ou passe '--create' para permitir o cadastro na ficha."
+                return False, err
+            w = f"Facção '{fn_name}' não encontrada em mundo.md, mas cadastrada na ficha via --create."
             sys.stderr.write(f"[AVISO] {w}\n")
-            return w
-        return None
+            return True, w
+        return True, None
 
     if add_name:
         action_res = upsert_faction_in_mundo(
@@ -963,35 +967,41 @@ def cmd_faction(
         parts = rep.rsplit(":", 1)
         fn = parts[0].strip()
         delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
-        w_msg = _warn_if_unknown(fn)
+        is_ok, msg = _check_faction_known(fn)
+        if not is_ok:
+            return {"error": msg}
         res = update_reputation_in_ficha(ficha_path, fn, score_delta=delta)
         cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
         append_faction_ledger_entry(diario_path, fn, delta_rep=delta, new_score=res["new_score"], reason=reason or "Ajuste avulso de reputação", turn=cur_turn)
         action_res = {"action": "reputation_updated", **res}
-        if w_msg:
-            action_res["warning"] = w_msg
+        if msg:
+            action_res["warning"] = msg
     elif favor:
         parts = favor.rsplit(":", 1)
         fn = parts[0].strip()
         delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
-        w_msg = _warn_if_unknown(fn)
+        is_ok, msg = _check_faction_known(fn)
+        if not is_ok:
+            return {"error": msg}
         res = update_reputation_in_ficha(ficha_path, fn, favors_delta=delta)
         cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
         append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=reason or "Ajuste de favores", turn=cur_turn, delta_favors=delta)
         action_res = {"action": "favors_updated", **res}
-        if w_msg:
-            action_res["warning"] = w_msg
+        if msg:
+            action_res["warning"] = msg
     elif debt:
         parts = debt.rsplit(":", 1)
         fn = parts[0].strip()
         delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
-        w_msg = _warn_if_unknown(fn)
+        is_ok, msg = _check_faction_known(fn)
+        if not is_ok:
+            return {"error": msg}
         res = update_reputation_in_ficha(ficha_path, fn, debts_delta=delta)
         cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
         append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=reason or "Ajuste de débitos", turn=cur_turn, delta_debts=delta)
         action_res = {"action": "debts_updated", **res}
-        if w_msg:
-            action_res["warning"] = w_msg
+        if msg:
+            action_res["warning"] = msg
     elif tick:
         action_res = simulate_faction_tick(info)
 
@@ -1309,10 +1319,12 @@ def cmd_commit(
 
     # 0a. Auditoria preventiva da prosa se fornecida (--prose ou --prose-file)
     prose_to_audit = ""
+    prose_issues = []
     if prose_file:
         pf = Path(prose_file)
-        if pf.exists():
-            prose_to_audit = pf.read_text(encoding="utf-8")
+        if not pf.exists():
+            return {"error": f"Arquivo de prosa '{prose_file}' não encontrado.", "status": "FILE_NOT_FOUND"}
+        prose_to_audit = pf.read_text(encoding="utf-8")
     elif prose:
         prose_to_audit = prose
 
@@ -1644,7 +1656,7 @@ def cmd_commit(
     # 5. Fase 5 do Conselho: Auditoria Automática Pós-Commit (Modo Revisor)
     post_audit = cmd_review(campaign_id)
     final_header = f" [{new_dt}] |  [{new_loc}] |  [{new_pres}]"
-    return {
+    commit_res = {
         "status": "ok",
         "turn_committed": next_turn,
         "canonical_header_for_response": final_header,
@@ -1655,6 +1667,11 @@ def cmd_commit(
             "issues": post_audit["issues"],
         },
     }
+    if prose_to_audit:
+        commit_res["prose_status"] = "PASSED"
+        if prose_issues:
+            commit_res["prose_issues"] = prose_issues
+    return commit_res
 
 
 def build_cli() -> argparse.ArgumentParser:
@@ -1816,6 +1833,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_fac.add_argument("--reason", default="", help="Justificativa diegética para o ajuste de reputação, favores ou débitos")
     p_fac.add_argument("--favor", default="", help="Ajusta contagem de favores com facção (ex: 'ordem_guardioes:+1' ou '-1')")
     p_fac.add_argument("--debt", default="", help="Ajusta contagem de débitos com facção (ex: 'ordem_guardioes:+1' ou '-1')")
+    p_fac.add_argument("--create", action="store_true", help="Permite registrar reputação/favores/débitos para uma facção ainda não cadastrada em mundo.md")
     p_fac.add_argument("--tick", action="store_true", help="Executa o avanço autônomo off-screen de relógios de facções ativas")
     p_fac.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
@@ -2071,9 +2089,12 @@ def main():
             favor=args.favor,
             debt=args.debt,
             tick=args.tick,
+            create=args.create,
         )
         if args.json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
+        elif res.get("error"):
+            print(f"[ERRO]: {res['error']}")
         else:
             print(f"\nFacções & Reputação — Campanha '{args.campaign}':")
             if not res.get("factions"):

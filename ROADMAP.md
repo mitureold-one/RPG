@@ -48,10 +48,18 @@ Entregue:
 Limites conhecidos:
 
 - o rollback cobre exceções; não é uma transação ACID multiarquivo;
-- `imperio_valiria` ainda não tem calendário completo declarado (só “Ventania” é conhecido);
-- `faction --rep` continua sendo caminho administrativo permissivo com aviso; o `commit` é estrito.
+- persistência de `--prose` original por turno deferida para o event store da Fase 02.
 
-### 2.2 O que ainda não existe
+### 2.2 Fase 01.5 — Fechamento da fundação: concluída neste ciclo
+
+Entregue:
+
+- calendário completo de Valíria declarado em `regras.md` (12 meses boreais de 30 dias, ciclo de 360 dias);
+- `faction --rep` (e favores/débitos) estrito por padrão: typos barram mutação na ficha e ledger; flag `--create` explícita para cadastros avulsos intencionais;
+- revisão e blindagem dos caminhos de prosa (`check-prose` e `commit --prose-file`/`--prose`) com checagem de existência de arquivo e emissão de `prose_status: PASSED`;
+- 69 testes automatizados verdes sob sandbox.
+
+### 2.3 O que ainda não existe
 
 - log de eventos imutável e projeções;
 - correções com reavaliação de dependências;
@@ -78,6 +86,7 @@ Limites conhecidos:
 ### Fase 01.5 — Fechamento da fundação
 
 **Objetivo:** eliminar as últimas pontas antes da história causal.
+**Status:** concluída.
 
 **Entregáveis:**
 

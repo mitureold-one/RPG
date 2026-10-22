@@ -759,9 +759,15 @@ class TestPhase3QAFindingsRemediation(unittest.TestCase):
         self.assertEqual(issues["FACTION_UNKNOWN"]["severity"], "HIGH")
 
     def test_p2_findings_remediation(self):
-        # P2-1: Aviso ao ajustar reputação de facção que não consta em mundo.md
-        res_warn = lazy_turn.cmd_faction("qa_camp", rep="Faccao Fantasma:+1")
-        self.assertIn("warning", res_warn.get("action_result", {}))
+        # P2-1: Sem --create, tentativa de ajustar facção desconhecida falha estritamente sem tocar na ficha
+        res_err = lazy_turn.cmd_faction("qa_camp", rep="Faccao Fantasma:+1")
+        self.assertIn("error", res_err)
+        self.assertIn("não encontrada em mundo.md", res_err["error"])
+
+        # P2-1b: Com --create, ajuste é permitido e emite aviso
+        res_create = lazy_turn.cmd_faction("qa_camp", rep="Faccao Fantasma:+1", create=True)
+        self.assertEqual(res_create.get("action_result", {}).get("action"), "reputation_updated")
+        self.assertIn("warning", res_create.get("action_result", {}))
 
         # P2-2 & P2-3: Tick off-screen grava no diário e retorna campaign id
         res_tick = lazy_turn.cmd_faction("qa_camp", tick=True)

@@ -248,6 +248,17 @@ def parse_regras_manifest(regras_path: Path) -> dict:
         if m_sys:
             manifest["system"] = m_sys.group(1).strip()
             manifest["ruleset"] = m_sys.group(1).strip()
+        m_cal = re.search(r"calendar:\s*\n(.*?)(?=\n[a-z_]+:|\Z)", yaml_content, re.DOTALL)
+        if m_cal:
+            cal_body = m_cal.group(1)
+            m_months = re.search(r"months:\s*\[(.*?)\]", cal_body)
+            if m_months:
+                months_list = [m.strip().strip('"\'') for m in m_months.group(1).split(",") if m.strip()]
+            else:
+                months_list = [m.strip().strip('"\'') for m in re.findall(r"-\s*([^\n]+)", cal_body)]
+            m_days = re.search(r"days_per_month:\s*(\d+)", cal_body)
+            days_val = int(m_days.group(1)) if m_days else 30
+            manifest["calendar"] = _normalize_calendar({"months": months_list, "days_per_month": days_val})
         override_blocks = re.findall(r"-\s*id:\s*([^\n]+)(.*?)(?=\n\s*-\s*id:|\Z)", yaml_content, re.DOTALL)
         for ov_id, ov_body in override_blocks:
             def _extract_field(field_name, default=""):

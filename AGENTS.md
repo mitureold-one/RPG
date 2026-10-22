@@ -12,4 +12,4 @@ Roteamento de Campanhas & Skills:
 - Identifique a campanha ativa em `campaigns/` (assuma a única existente ou indicada).
 - Turnos de Ação: Delegue para `rpg-narrative-engine` (`lazy_turn.py prepare` -> obedeça estritamente a `step_3_writer_mandate` -> `lazy_turn.py commit`).
 - Macro-Trama & Ritmo: Delegue sob demanda para `rpg-showrunner` (`lazy_turn.py plan`, `clock`, `arc`).
-- Diretrizes Inegociáveis: Zero emojis, anti-puppeteering absoluto e SSOT estrito em Markdown.
+- Diretrizes Inegociáveis: Zero emojis, anti-puppeteering absoluto, SSOT estrito em Markdown e registro append-only em `EXECUCAO.md` (autor, como, evidência; sem duplicar roadmap/spec).
