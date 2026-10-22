@@ -12,7 +12,7 @@ schema_version: 1
 * **[{{NOME_DO_RELOGIO}}]:** 0/4 (Gatilho: {{EVENTO_DE_RUPTURA_AO_COMPLETAR}}) [ACTIVE]
 
 ### Missões & Objetivos
-* **[MAIN] {{NOME_MISSAO_PRINCIPAL}}** | Fase: Início | Status: ACTIVE | Contratante: {{CONTRATANTE_OU_FACCAO}} | Relógio: {{NOME_DO_RELOGIO}} | Recompensa: 150 XP
+* **[Q1] [MAIN] {{NOME_MISSAO_PRINCIPAL}}** | Fase: Início | Status: ACTIVE | Contratante: {{CONTRATANTE_OU_FACCAO}} | Relógio: {{NOME_DO_RELOGIO}} | Recompensa: 150 XP
   * [ ] {{PRIMEIRO_OBJETIVO_DA_MISSAO}}
   * [ ] {{SEGUNDO_OBJETIVO_DA_MISSAO}}
 

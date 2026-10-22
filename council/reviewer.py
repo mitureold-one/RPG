@@ -5,7 +5,7 @@ from pathlib import Path
 from council.helpers import find_campaign, CAMPAIGN_DIRS
 from council.ssot import parse_ficha_md, parse_diario_md, extract_turns_from_diario, parse_progression_from_ficha
 from council.narrator import parse_npcs_md
-from council.quests import parse_quests_from_diario
+from council.quests import parse_quests_from_diario, parse_xp_ledger_from_diario
 
 # --- Constantes e Padrões de Lints de Prosa Literária (P3) ---
 EMOJI_PATTERN = re.compile(
@@ -220,11 +220,34 @@ def cmd_review(campaign_id: str) -> dict:
     m_vit = re.search(r"Vitais:\s*([^\n.]+)", diario["last_turn_summary"])
     diario_snapshot = m_vit.group(1).strip() if m_vit else ""
     if diario_snapshot and diario_snapshot != ficha_snapshot:
-        issues.append({
-            "type": "VITALS_DESYNC",
-            "severity": "HIGH",
-            "detail": f"Dessincronia entre ficha.md ('{ficha_snapshot}') e o último turno do diario.md ('{diario_snapshot}').",
-        })
+        is_level_up_expansion = False
+        prog = parse_progression_from_ficha(info["ficha"])
+        level = prog.get("level", 1)
+        if level > 1:
+            vit_pairs = re.findall(r"([A-Za-zÀ-Ú/ ]+?)\s*(\d+)\s*/\s*(\d+)", diario_snapshot)
+            f_vitals = ficha["vitals"]
+            bonus_hp = (level - 1) * 2
+            bonus_sta = (level - 1) * 1
+            bonus_ce = (level - 1) * 1
+            matches = 0
+            for lbl, cur, mx in vit_pairs:
+                clean_lbl = lbl.strip().lower()
+                cur_i, mx_i = int(cur), int(mx)
+                for k, v in f_vitals.items():
+                    k_clean = v["label"].split("(")[0].strip().lower()
+                    if clean_lbl in k_clean or k_clean in clean_lbl:
+                        exp_max = mx_i + (bonus_hp if "hp" in clean_lbl or "vida" in clean_lbl else (bonus_sta if "sta" in clean_lbl or "fôlego" in clean_lbl else bonus_ce))
+                        if v["max"] == exp_max:
+                            matches += 1
+            if matches >= 2 and matches == len(vit_pairs):
+                is_level_up_expansion = True
+
+        if not is_level_up_expansion:
+            issues.append({
+                "type": "VITALS_DESYNC",
+                "severity": "HIGH",
+                "detail": f"Dessincronia entre ficha.md ('{ficha_snapshot}') e o último turno do diario.md ('{diario_snapshot}').",
+            })
 
     # 2. Integridade Referencial e Profundidade dos NPCs Presentes em Cena
     protag_full_low = ficha["name"].lower().strip()
@@ -503,14 +526,28 @@ def cmd_review(campaign_id: str) -> dict:
                 "detail": f"Duplicidade de pagamento detectada na missão '{q['title']}' ({q['id']}): mais de um carimbo de 'XP Pago' presente na linha.",
             })
 
+    # Auditoria de tentativas duplicadas registradas no histórico
+    for t_item in diario.get("turns", []):
+        t_text = t_item.get("text", "")
+        if "Tentativa de pagamento duplicado de XP barrada" in t_text:
+            issues.append({
+                "type": "QUEST_REWARD_PAID_TWICE",
+                "severity": "CRITICAL",
+                "detail": f"Tentativa de pagamento duplicado de XP detectada no histórico (Turno {t_item['turn']}).",
+            })
+
     # 15. Auditoria de Progressão & Coerência de XP (XP_MISMATCH)
     prog = parse_progression_from_ficha(info["ficha"])
-    total_xp_paid = sum(q.get("xp_paid") or 0 for q in quests)
-    if total_xp_paid > 0 and prog["xp"] < total_xp_paid:
+    ledger = parse_xp_ledger_from_diario(info["diario"])
+    total_xp_paid_quests = sum(q.get("xp_paid") or 0 for q in quests)
+    total_xp_ledger = sum(e.get("amount") or 0 for e in ledger)
+    total_auditable_xp = total_xp_paid_quests + total_xp_ledger
+
+    if total_auditable_xp > 0 and prog["xp"] != total_auditable_xp:
         issues.append({
             "type": "XP_MISMATCH",
             "severity": "HIGH",
-            "detail": f"Divergência de XP: A soma de XP pago nas missões do diário ({total_xp_paid} XP) é superior ao total acumulado na ficha ({prog['xp']} XP).",
+            "detail": f"Divergência de XP: O total acumulado na ficha ({prog['xp']} XP) difere da soma dos créditos auditáveis no diário ({total_auditable_xp} XP = {total_xp_paid_quests} de missões + {total_xp_ledger} do registro).",
         })
 
     return {

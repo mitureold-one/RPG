@@ -1,152 +1,169 @@
 # QA Review — 007 quest-and-progression
 
-**Papel:** analista de qualidade do código (revisão independente).
-**Status:** pré-implementação — nenhum código da spec foi escrito ainda.
+**Revisão:** pós-implementação do commit `6cfac1c` ("feat(p4): implement quest lifecycle and progression xp engine").
+**Escopo auditado:** Fases 1 e 2 (`council/quests.py`, `rulesets/progression.py`, `council/ssot.py`, `council/reviewer.py`, `lazy_turn.py`, templates, `tests/`).
 **Data:** 22 de Outubro de 2026.
-**Referências:** `specs/007-quest-and-progression/spec.md`, `checklists/requirements.md`, `DECISOES_ARQUITETURA.md`, código atual em `council/`, `rulesets/`, `lazy_turn.py`.
+**Método:** leitura do diff completo + execução do gate de 8 passos em campanha descartável (`_qa_scratch`, removida ao final) + regressão nas 3 campanhas reais.
 
 ---
 
-## 1. Estado verificado do repositório
+## 1. Veredito
 
-| Item | Situação |
-| :--- | :--- |
-| `specs/007-quest-and-progression/spec.md` | Existe (271 linhas), `.specify/feature.json` aponta para a pasta |
-| `checklists/requirements.md` | Existe, todos os itens marcados |
-| `plan.md` / `tasks.md` | **Ausentes** — a spec está em "Ready for Planning", sem plano técnico |
-| `council/quests.py` | **Ausente** |
-| `rulesets/progression.py` | **Ausente** |
-| Subcomandos `quest` / `progress` em `lazy_turn.py` | **Ausentes** (grep sem ocorrências) |
-| Seções `### Missões & Objetivos` / `### Progressão` nos templates | **Ausentes** |
-| `git status` | Apenas `.specify/feature.json` modificado e `specs/007-.../` não rastreado |
+**Reprovado para aprovação da Fase 3.** As Fases 1 e 2 têm boa fundação de domínio (parser, curva, escopo de seções, payload aditivo, retrocompatibilidade), mas o caminho de integração mais importante — `commit --quest-complete` — **não executa**: levanta `UnboundLocalError` em 100% das chamadas. Somam-se a isso a identificação posicional de missões (que fecha a missão errada) e quatro requisitos funcionais parcialmente cumpridos.
 
-Conclusão: não há o que auditar em código. Esta revisão antecipa os defeitos que fariam a implementação falhar no gate de aceite.
+| Gravidade | Qtd | Bloqueia Fase 3 |
+| :--- | :-: | :--- |
+| P0 (quebra funcional) | 2 | Sim |
+| P1 (requisito não cumprido) | 5 | Sim |
+| P2 (defeito de integração) | 7 | Recomendado |
+| P3 (higiene/processo) | 3 | Não |
 
 ---
 
-## 2. Baseline da suíte (antes de qualquer mudança)
+## 2. Gate de aceite — resultado
+
+| # | Passo | Resultado |
+| :-: | :--- | :--- |
+| 1 | Suíte completa | **Parcial** — 27/27 OK com acesso total; 10 erros sob o sandbox (ACL de `tempfile.mkdtemp`, 8 deles nos testes novos) |
+| 2 | `quest --add` + `--list --json` | **Falha** — `--add` devolve `Q2`, a missão é gravada como `Q1` |
+| 3 | `quest --check "Q1:1"` | **Passa** — checkbox `[x]` correto, `Último Progresso` atualizado |
+| 4 | `commit --quest-complete` + idempotência | **Falha** — `UnboundLocalError`; idempotência não testável |
+| 5 | Payload de `prepare` | **Passa** — `step_1_quest_context` e `protagonist.progression`, sem `step_2_engine_state` |
+| 6 | Regressão `vitals`/`stats` | **Passa** — escopo por seção implementado na Fase 2 e coberto por teste |
+| 7 | `review` nas 3 campanhas | **Passa** — 2 CLEAN; 1 lint pré-existente (`STALE_NPC_ATTITUDE` em Lucien), sem relação com a 007 |
+| 8 | Retrocompatibilidade sem seções | **Passa** — `dinastia_cinzas` opera com nível 1 / XP 0 por default |
+
+---
+
+## 3. P0 — Bloqueantes
+
+### P0-1 `commit --quest-*` quebra em toda chamada
+
+`next_turn` é usado nas linhas [1023](lazy_turn.py#L1023), [1042](lazy_turn.py#L1042), [1045](lazy_turn.py#L1045) e [1056](lazy_turn.py#L1056), mas só é atribuído na [1061](lazy_turn.py#L1061).
 
 ```text
-python -m unittest discover -s tests   →  Ran 19 tests — OK  (com acesso total)
-python -m unittest discover -s tests   →  Ran 19 tests — 2 errors (under sandbox)
+UnboundLocalError: cannot access local variable 'next_turn' where it is not associated with a value
+  at lazy_turn.py:1045 in cmd_commit
 ```
 
-Os 2 erros são ambientais, não regressões: `tempfile.mkdtemp` cria diretórios com ACL restritiva e o sandbox do harness nega a criação de subdiretórios dentro deles (`PermissionError` em `test_p2_schema_version_and_loud_failures` e `test_p3_check_prose_cli_and_commit_enforcement`). Redirecionar `TEMP`/`TMP` para o workspace não resolve — a ACL é herdada do `mkdtemp`. O gate da spec 007 precisa rodar a suíte com acesso elevado ou os testes novos não podem depender de `tempfile`.
+**Impacto:** o critério de aceite central da US2 ("`commit --quest-complete` credita XP e estampa `XP Pago`") é inalcançável. O `--quest-progress` e o `--quest-fail` quebram igualmente. Pior: a exceção ocorre **depois** de vitais e relógios já terem sido gravados, então o commit aborta com o SSOT em estado parcial (relógio avançado, sem turno registrado e sem auditoria pós-commit).
 
-Observação: o comando termina com exit code 1 no PowerShell mesmo em caso `OK`, porque o unittest escreve em stderr. O gate deve olhar a linha `OK`/`FAILED`, não o exit code.
+**Correção:** mover o bloco inteiro de "3b" ([1017-1057](lazy_turn.py#L1017-L1057)) para depois da linha [1061](lazy_turn.py#L1061) e antes de [1072](lazy_turn.py#L1072) (`ficha_after`), de modo que o `vitals_snapshot` do turno já reflita a expansão de vitais do level-up.
 
----
+### P0-2 Identidade de missão é posicional — `--add` aponta para a missão errada
 
-## 3. Achados — spec versus código real
+`format_quest_header` ([quests.py:148-169](council/quests.py#L148-L169)) não grava o ID. O parse reconstrói o ID pela ordem (`Q1`, `Q2`, … em [quests.py:72](council/quests.py#L72)). O `add` calcula `Q{len+1}` ([quests.py:236](council/quests.py#L236)) mas insere no **topo** da seção ([quests.py:254-260](council/quests.py#L254-L260)).
 
-### QA-01 — P1 — FR-14 referencia um bloco de payload que não existe
-
-A spec manda injetar em `step_2_engine_state.protagonist` ([spec.md:81](spec.md#L81), [spec.md:174](spec.md#L174)). O payload real não tem `step_2_engine_state`: ele expõe `protagonist` no topo e `step_2_narrator_briefing` ([lazy_turn.py:412](lazy_turn.py#L412), [lazy_turn.py:425](lazy_turn.py#L425)). O teste de contrato também afirma `step_2_narrator_briefing` ([test_boundary_contracts.py:219](tests/test_boundary_contracts.py#L219)).
-
-A deriva é anterior à 007: a spec 006 já cita `step_2_engine_state` ([spec 006:96](../006-rule-verification-p3/spec.md#L96)) enquanto o código entrega `step_2_narrator_briefing`.
-
-**Impacto:** o implementador vai criar uma chave nova (`step_2_engine_state`) e duplicar o protagonista, ou gravar no lugar errado. Qualquer teste que congele o payload depois disso ratifica a duplicata.
-**Recomendação:** emendar a spec para `protagonist.progression` (topo) e corrigir também a spec 006; adicionar teste que falhe se `step_2_engine_state` aparecer.
-
-### QA-02 — P1 — ID de missão derivado de ordem é instável
-
-[spec.md:101](spec.md#L101) admite "Q1, Q2 baseado na ordem ou hash curto". Se o ID nascer da posição, cadastrar uma missão no topo renumera todas as seguintes e quebra `quest --check "Q2:1"` e o histórico `XP Pago`.
-
-**Recomendação:** ID monotônico (`max(existentes) + 1`), nunca reutilizado, gravado na linha; nunca recalculado a partir da ordem. Teste: inserir `Q0` no topo e verificar que `Q1` continua sendo `Q1`.
-
-### QA-03 — P1 — Duplo crédito objetivo + missão sem regra explícita
-
-A tabela dá `obj_main` 40 e `quest_main` 150 ([spec.md:174-186](spec.md#L174-L186)). A máquina de estados permite `--complete` com evidência mesmo com objetivos abertos ([spec.md](spec.md#L113)). Não está definido se objetivos abertos são auto-marcados nem se rendem XP na conclusão.
-
-**Impacto:** o total de XP passa a depender da ordem das chamadas (marcar tudo e depois concluir ≠ concluir direto), e `XP_MISMATCH` fica impossível de satisfazer.
-**Recomendação:** regra única — XP de objetivo só existe em `--check`; `--complete` credita exclusivamente `quest_*`; objetivos abertos no fechamento são listados como pendências, não auto-marcados. Cobrir com teste de duas sequências que devem produzir o mesmo total.
-
-### QA-04 — P1 — `XP_MISMATCH` não tem ledger onde se apoiar
-
-O lint compara a soma dos créditos históricos "no diário" com o total da ficha ([spec.md:188](spec.md#L188)), mas nenhum formato de registro de XP é definido — o `commit` grava apenas resumo, vitais e mudança de estado ([lazy_turn.py:888-893](lazy_turn.py#L888-L893)).
-
-**Recomendação:** definir ledger explícito (seção `### Ledger de XP` no diário com `Turno | código | valor | total`, ou linha por turno), ou rebaixar o lint para "soma de `XP Pago` ≤ XP da ficha". Sem isso o requisito é inatestável.
-
-### QA-05 — P2 — `progress --award` é ambíguo e contorna a validação
-
-`--award "<codigo_fonte>[:quantidade]"` ([spec.md:195](spec.md#L195), [spec.md:60](spec.md#L60)) mistura duas semânticas: multiplicador da tabela (`obj_main:1` = 40) ou valor absoluto. Como é "administrativo/retroativo", também não há barreira contra creditar XP sem estado de missão correspondente.
-
-**Recomendação:** fixar `código:quantidade` com quantidade inteira ≥ 1 multiplicando a tabela; exigir `--reason` obrigatório; registrar no ledger e no diário; lint quando o total creditado exceder o justificável.
-
-### QA-06 — P2 — A "blindagem de regex" da Fase 1 é convenção, não enforcement
-
-[spec.md:141](spec.md#L141) prescreve gravar `Experiência (XP)` sem barra, mas nada no código impede que o modelo escreva `**XP:** 410` (casa com o regex de atributos, [ssot.py:64](council/ssot.py#L64)) ou `XP: 410 / 500` (casa com o de vitais, [ssot.py:43](council/ssot.py#L43)). Isso contraria a regra soberana do projeto ("o que não possui enforcement é guideline").
-
-**Recomendação:** antecipar para a Fase 1 ao menos um lint `PROGRESSION_FORMAT_VIOLATION` no reviewer (detectar rótulos de XP/Nível/Pontos fora da seção `### Progressão`) ou escopar os parsers já na Fase 1. A convenção sozinha não passa no gate.
-
-### QA-07 — P2 — Ganho de Ponto de Habilidade ambíguo
-
-"+1 Ponto de Habilidade a cada 2 níveis pares (Nível 2, 4, 6...)" ([spec.md:169](spec.md#L169)) admite duas leituras: todo nível par, ou um ponto a cada dois níveis (4, 8, 12). A lista de exemplo sugere todo par, mas o texto não fecha.
-
-**Recomendação:** "1 Ponto de Habilidade em todo nível par" e teste de tabela para níveis 1 a 10.
-
-### QA-08 — P2 — `quest --objective "<ID>: <texto>"` quebra em texto com dois-pontos
-
-Objetivos reais contêm `:` ("Obter a lealdade: guarnição norte"). O split ingênuo corrompe o registro.
-**Recomendação:** dividir no primeiro `:` apenas, validando que o prefixo casa com `^[A-Z]\d+$`.
-
-### QA-09 — P2 — Esquema de `quest --list --json` não está congelado
-
-O critério de aceite fala em "representação estruturada válida" sem definir chaves. Sem snapshot, o contrato não é verificável e a spec 007 repetirá o problema que a 006 resolveu com esquema congelado.
-**Recomendação:** declarar o JSON canônico (missão: `id`, `type`, `title`, `status`, `phase`, `contractor`, `clock`, `reward`, `objectives[{index,text,done}]`, `xp_paid`, `last_progress_turn`) e congelá-lo em teste.
-
-### QA-10 — P3 — Defaults de progressão para campanhas legadas
-
-As 3 campanhas não têm `### Progressão`. O parser precisa devolver nível 1 / XP 0 / próximo limiar 250 **sem escrever na ficha** (leitura pura) e sem dividir por zero na curva.
-**Recomendação:** `parse_progression_from_ficha` com defaults e sinalizador `present: false`; teste em campanha sem a seção.
-
-### QA-11 — P3 — Fase 1 acumula pontos não gastáveis
-
-A Fase 1 credita nível e pontos, mas o gasto só chega na Fase 2. É aceitável, desde que documentado no `quickstart` e que a UI deixe claro que os pontos ficam retidos.
-**Recomendação:** nota explícita no plano e no help do comando.
-
-### QA-12 — P3 — `spec.md` afirma "sem detalhes de implementação", mas a spec é toda de implementação
-
-O checklist marca "No implementation details leaking" ([requirements.md:9](checklists/requirements.md#L9)), enquanto a spec fixa módulos, funções e nomes de arquivo. Não é um defeito funcional, mas o checklist está inflado e perde valor como controle. Recomendação: ajustar o checklist ou assumir que a 007 é uma spec técnica (como as 002–006) e não de produto.
-
----
-
-## 4. Gate de aceite proposto (Fase 1)
-
-Executar após a implementação, nesta ordem:
+Reproduzido em `_qa_scratch`:
 
 ```text
-1. python -m unittest discover -s tests
-   → OK. Se houver erro de ACL em tempfile, rodar com acesso elevado e registrar (não mascarar).
-
-2. python lazy_turn.py quest --campaign <cid> --add "Teste QA" --type side --objective "A" --objective "B"
-   python lazy_turn.py quest --campaign <cid> --list --json
-   → JSON com id estável, objetivos íntegros, status ACTIVE.
-
-3. python lazy_turn.py quest --campaign <cid> --check "Q1:1"
-   → checkbox [x], Último Progresso atualizado, XP de obj_side creditado uma única vez.
-
-4. python lazy_turn.py commit --campaign <cid> --summary "..." --quest-complete "Q1" --evidence "..."
-   → estado COMPLETED, XP Pago crava 60, nível recalculado.
-   Reexecutar o MESMO commit → no-op, XP inalterado, lint QUEST_REWARD_PAID_TWICE.
-
-5. python lazy_turn.py prepare --campaign <cid> --mode gm
-   → payload com protagonist.progression e step_1_quest_context; ausência de step_2_engine_state.
-
-6. python -c "from council.ssot import parse_ficha_md; ..."
-   → 'xp' e 'experiência' ausentes de ficha['vitals'] e ficha['stats'] (teste de regressão).
-
-7. python lazy_turn.py review --campaign <cid> (nas 3 campanhas)
-   → sem lint CRITICAL novo; lints de missão só quando realmente aplicáveis.
-
-8. python lazy_turn.py prepare/commit/review em campanha sem as seções novas
-   → sem exceção, defaults nível 1 / lista vazia.
+quest --add "O Trono de Pedra-Negra"     -> quest_id "Q2"
+quest --list                             -> Q1 = O Trono de Pedra-Negra
+quest --complete "Q2"                    -> concluiu "{{NOME_MISSAO_PRINCIPAL}}"
 ```
 
-**Critério de reprovação automática:** qualquer um dos 8 itens falhando, ou qualquer alteração que quebre `tests/test_boundary_contracts.py` sem atualização explícita do contrato.
+**Impacto:** toda referência por ID após o primeiro `--add` mira outra missão; `XP Pago` e `Último Progresso` são gravados na linha errada. Ordenar, inserir ou remover missões renomeia todas as seguintes, e o carimbo `XP Pago` viaja junto com a linha — uma missão diferente herda o pagamento e fica permanentemente inelegível a XP.
+
+**Correção:** ID monotônico persistido no cabeçalho (`[Q3]`, já suportado no regex de parse em [quests.py:53](council/quests.py#L53), mas nunca emitido), calculado como `max(existentes)+1` e nunca reutilizado; `add` passa a inserir no fim do bloco de missões. Teste obrigatório: inserir no topo e verificar que os IDs anteriores se mantêm.
 
 ---
 
-## 5. Próximo passo
+## 4. P1 — Requisitos não cumpridos
 
-Aguardar o código da Fase 1 e substituir este documento pela revisão pós-implementação (mesmo arquivo, seção "Revisão de código"), cobrindo: legibilidade, coesão dos módulos, duplicação com `ssot.py`/`reviewer.py`, atomicidade de escrita, e aderência à regra "um dono textual, um ponto de enforcement".
+### P1-3 FR-05 incompleto: `--unblock` e `--abandon` inexistentes; evidência descartada
+
+* `VALID_QUEST_STATUSES` inclui `ABANDONED`, mas nenhuma ação/flag o alcança (`--abandon` → `unrecognized arguments`).
+* `BLOCKED → ACTIVE` só ocorre via `--reopen`, que é a reversão de estado terminal; o `--unblock` do FR-05 não existe.
+* `upsert_quest_in_diario(..., evidence="")` aceita o parâmetro e **nunca o utiliza** ([quests.py:185](council/quests.py#L185)). `quest --complete --evidence "Prova documental"` descarta a evidência silenciosamente, e a conclusão é aceita com 0/N objetivos sem registro do porquê.
+
+### P1-4 Metade da tabela de XP é código morto
+
+`clock_resolved`, `clock_breached`, `arc_milestone`, `discovery`, `adversity`, `quest_personal` só existem em `XP_GRANT_TABLE` ([progression.py:10-22](rulesets/progression.py#L10-L22)); nenhum ponto do motor os emite. Só `obj_main`, `obj_side` e o par `quest_*` (via texto de recompensa) são creditados. A afirmação em `DECISOES_ARQUITETURA.md` de "prevenção de double-dipping na resolução de missão e desarme de relógio simultâneo" descreve um fluxo que não existe: nada credita XP por relógio.
+
+### P1-5 O valor do XP tem dois donos
+
+A regra "quanto vale uma missão" vive em dois lugares que divergem:
+
+* `XP_GRANT_TABLE` → `quest_personal: 50`.
+* Texto de recompensa padrão em [quests.py:245](council/quests.py#L245) → `"60 XP"` para qualquer tipo não-MAIN, e fallback de parse em [quests.py:97](council/quests.py#L97) → 50 para PERSONAL/FACTION. O commit credita `reward_xp`, não a tabela ([lazy_turn.py:1044](lazy_turn.py#L1044)).
+
+**Impacto:** uma missão PERSONAL cadastrada pela CLI credita 60, enquanto a tabela canônica diz 50. Isso viola diretamente a regra soberana do projeto ("uma regra, um único dono textual").
+
+### P1-6 `XP_MISMATCH` não detecta o que promete, e não há ledger
+
+O lint compara apenas `soma(xp_paid) > ficha.xp` ([reviewer.py:506-513](council/reviewer.py#L506-L513)). Como objetivos e `--award` também somam XP, a relação real é `ficha.xp >= soma(xp_paid)`, tornando o teste unidirecional: supercrédito é invisível. E o `--award` não grava nada no diário (verificado: nenhuma linha de XP no `diario.md` após conceder 250 XP), contrariando o FR-17 ("registrado no diário") e mantendo aberto o QA-04 do pré-review. Sem ledger, o lint continua inatestável.
+
+### P1-7 `QUEST_REWARD_PAID_TWICE` é inalcançável pelo fluxo real
+
+O lint dispara só se a própria linha contiver "xp pago" duas vezes ([reviewer.py:499-505](council/reviewer.py#L499-L505)) — o que o formatador nunca produz. A tentativa real de duplo pagamento é barrada em [lazy_turn.py:1040-1042](lazy_turn.py#L1040-L1042) com um `applied.append("Aviso de Idempotência...")`, que não é lint nem entra na auditoria. O requisito pedia que a tentativa **disparasse** o lint.
+
+---
+
+## 5. P2 — Defeitos de integração
+
+**P2-8 — Override de curva ignorado no `commit`.** `progress --award` passa `base_step` ([lazy_turn.py:787](lazy_turn.py#L787)); os dois créditos do commit não ([1029](lazy_turn.py#L1029), [1046](lazy_turn.py#L1046)). Demonstrado: com `xp_curve: 500` e 400 XP, o caminho do commit recalcula para nível 2 (`level_up: True`) enquanto o caminho correto mantém nível 1.
+
+**P2-9 — Level-up fora de turno gera `VITALS_DESYNC` HIGH.** `progress --award`/`--spend-*` não registram turno; o aumento de vitais máximos deixa a ficha à frente do último turno do diário. Reproduzido na campanha de teste (lint HIGH imediato). A auditoria não tem noção de evolução fora de cena.
+
+**P2-10 — `init-campaign` cria missão-fantasma.** `templates/diario.template.md` traz `{{NOME_MISSAO_PRINCIPAL}}` e `init_campaign_from_templates` não interpola as novas chaves. A campanha nasce com uma missão `MAIN` ACTIVE de 150 XP, objetivos literais `{{...}}`, que entra no `step_1_quest_context`, no mandato de pressão e no hint de commit. Placeholders em prosa são scaffold; placeholder em **estado** vira dado.
+
+**P2-11 — O hint de commit ensina um comando inválido.** [lazy_turn.py:459](lazy_turn.py#L459) emite `[--quest-progress "Q1:1" | --quest-complete "Q1"]`. Colchetes e pipe não são sintaxe da CLI; um modelo que copie o template recebe `unrecognized arguments`. O padrão do restante do payload usa placeholders angulares (`""<HP -X>""`).
+
+**P2-12 — Laço infinito com `base_step <= 0`.** `calculate_level_from_xp` faz `while total_xp >= threshold(lvl+1)` ([progression.py:78](rulesets/progression.py#L78)). Com `xp_curve: 0` ou negativo vindo de `regras.md` (arquivo editável), o limiar é sempre 0 e o `commit`/`--award` trava o processo. Falta validação `base_step > 0`.
+
+**P2-13 — `text.replace` sem escopo.** [quests.py:349](council/quests.py#L349) substitui **todas** as ocorrências do cabeçalho bruto; duas missões com título e campos idênticos são reescritas juntas.
+
+**P2-14 — Escrita não atômica.** `upsert_quest_in_diario` grava o arquivo até três vezes por chamada (ex.: [228](council/quests.py#L228) e [264](council/quests.py#L264)), apesar do docstring "gravação atômica". Uma falha no meio deixa o diário truncado. O padrão herdado do projeto já é `write_text`, então é dívida preexistente — mas a 007 introduziu mais um ponto de escrita por operação.
+
+---
+
+## 6. P3 — Higiene e processo
+
+**P3-15 — Suíte não roda sob o sandbox.** 10 erros, todos por ACL de `tempfile.mkdtemp` (os 8 testes novos usam `mkdtemp()` direto). O gate exige execução elevada; sem isso, qualquer agente futuro confunde ambiente com regressão. Fix: `TemporaryDirectory(dir=...)` sob o workspace com permissão relaxada, ou um helper de fixture próprio.
+
+**P3-16 — Cobertura de integração inexistente.** Nenhum teste chama `cmd_quest` nem `cmd_progress`; `cmd_commit` só é exercitado no teste de prosa, sem flags de missão. Foi por isso que o P0-1 passou: o teste unitário cobre `upsert_quest_in_diario`, não o caminho que o jogador usa.
+
+**P3-17 — Documentação desatualizada.** `plan.md:69` ainda manda injetar em `step_2_engine_state`; `DECISOES_ARQUITETURA.md` afirma "27 testes 100% verdes" (verdadeiro só com acesso total) e "prevenção de double-dipping" (não implementada); as caixas de tarefa do `plan.md` seguem desmarcadas apesar da entrega.
+
+---
+
+## 7. Qualidade de código — o que está bom
+
+* **Escopo por seção** em `parse_ficha_md` ([ssot.py:48-80](council/ssot.py#L48-L80)) foi feito na Fase 2 e resolve de vez a colisão de regex (QA-06 do pré-review). Coberto por teste dedicado.
+* **Payload aditivo e correto**: `step_1_quest_context` + `protagonist.progression`, sem `step_2_engine_state` — o QA-01 foi corrigido no código (só a documentação ficou para trás).
+* **Retrocompatibilidade real**: campanhas sem as seções retornam defaults sem escrita e passam no `review`.
+* **Curva e bônus** em módulo de ruleset, com funções puras e testáveis; `evaluate_xp_gain` aceita overrides.
+* **Gating de habilidade** por `--training` funciona e é testado.
+* **Separação de camadas**: `council/quests.py` não importa nada de `council/`; sem ciclo de importação.
+
+Ponto arquitetural a corrigir: `council/ssot.py` importa `rulesets.progression` ([ssot.py:5-10](council/ssot.py#L5-L10)) — o SSOT (L1) passa a depender da matemática do ruleset (L1b), e é justamente por isso que ele usa a curva default em vez da curva da campanha (P2-8). A decisão de nível deveria vir de quem resolve o `system:` da campanha, não do parser de ficha.
+
+---
+
+## 8. Recomendação sobre a Fase 3
+
+**Não aprovar ainda.** A Fase 3 (reputação numérica, turno de facções off-screen, ferimentos/descanso) amplia exatamente as áreas onde a fundação está frágil: estado derivado de texto e eventos sem ledger. Construir reputação sobre um motor de missões que fecha a missão errada multiplicaria o defeito.
+
+Ordem mínima sugerida antes de liberar a Fase 3:
+
+1. P0-1 (mover bloco) + P0-2 (IDs persistidos) — com testes de integração via CLI cobrindo `commit --quest-complete` e idempotência.
+2. P1-5 (uma única fonte para valor de XP) e P1-6/P1-7 (ledger de XP no diário, lints que de fato disparam).
+3. P1-3 (`--unblock`, `--abandon`, evidência persistida).
+4. P2-8/P2-9 (base_step no commit e reconciliação de vitais fora de turno), P2-10 (template sem missão-fantasma), P2-11 (hint válido).
+5. P3-15/P3-16 (suíte rodando no sandbox e cobertura de CLI).
+
+Só depois disso a Fase 3 deveria começar por **reputação numérica**, que é a que mais se beneficia de um ledger já confiável. Ferimentos/descanso deve vir antes do turno de facções: sem condição persistente, o turno off-screen não tem o que aplicar ao protagonista.
+
+---
+
+## 9. Reprodução
+
+```text
+python -m unittest discover -s tests                      # OK com acesso total; 10 erros sob sandbox
+python lazy_turn.py init-campaign --campaign _qa_scratch --title "QA" --protagonist "Alistair"
+python lazy_turn.py quest --campaign _qa_scratch --add "O Trono" --type main --objective "X" --json
+python lazy_turn.py quest --campaign _qa_scratch --complete "Q2" --evidence "prova" --json
+python lazy_turn.py commit --campaign _qa_scratch --summary "teste" --quest-complete "Q1"
+```
+
+A campanha `_qa_scratch` e o diretório `.tmp` usados na auditoria foram removidos; a árvore de trabalho ficou limpa (`git status` vazio).

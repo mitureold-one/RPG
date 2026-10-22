@@ -15,6 +15,16 @@ import shutil
 import re
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+SCRATCH_ROOT = PROJECT_ROOT / ".tmp" / "test_scratch"
+
+
+def make_test_temp_dir(prefix: str = "test_") -> str:
+    """Cria diretório temporário dentro do workspace local (.tmp) para isolamento seguro em sandbox."""
+    SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+    return tempfile.mkdtemp(dir=str(SCRATCH_ROOT), prefix=prefix)
+
+
 from council.quests import (
     parse_quests_from_diario,
     upsert_quest_in_diario,
@@ -42,7 +52,7 @@ class TestQuestLifecycle(unittest.TestCase):
     """Testes para o ciclo de vida e parsing de missões em diario.md (US1)."""
 
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
+        self.temp_dir = make_test_temp_dir()
         self.diario_path = Path(self.temp_dir) / "diario.md"
         self.diario_path.write_text(
             "# Diário da Crônica\n\n"
@@ -144,7 +154,7 @@ class TestProgressionAndXPEngine(unittest.TestCase):
     """Testes para curva de nível, cálculo de XP e isolamento de vitais (US2, US3)."""
 
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
+        self.temp_dir = make_test_temp_dir()
         self.ficha_path = Path(self.temp_dir) / "ficha.md"
         self.ficha_path.write_text(
             "# Ficha do Protagonista: Alistair\n\n"
@@ -254,7 +264,7 @@ class TestClockInteractionAndLints(unittest.TestCase):
     """Testes de interação com relógios de ameaça e lints do reviewer (US5, US6)."""
 
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
+        self.temp_dir = make_test_temp_dir()
         self.campaign_dir = Path(self.temp_dir) / "test_camp"
         self.campaign_dir.mkdir()
         self.diario_path = self.campaign_dir / "diario.md"
@@ -308,6 +318,64 @@ class TestClockInteractionAndLints(unittest.TestCase):
             self.assertEqual(quests[0]["status"], "ACTIVE")
         finally:
             rev.find_campaign = orig_find
+
+    def test_monotonic_id_generation_and_end_insertion(self):
+        """Valida que IDs são monotônicos Q{max+1} e inseridos no final do bloco (T012)."""
+        res1 = upsert_quest_in_diario(self.diario_path, action="add", title="Primeira Missão", quest_type="main")
+        res2 = upsert_quest_in_diario(self.diario_path, action="add", title="Segunda Missão", quest_type="side")
+        self.assertEqual(res1["quest_id"], "Q2")
+        self.assertEqual(res2["quest_id"], "Q3")
+
+        quests = parse_quests_from_diario(self.diario_path)
+        self.assertEqual(len(quests), 3) # Inclui a 'Defender o Forte' (Q1 legada convertida), res1 (Q2) e res2 (Q3)
+        self.assertEqual(quests[-2]["title"], "Primeira Missão")
+        self.assertEqual(quests[-1]["title"], "Segunda Missão")
+
+        # Adiciona uma terceira missão e garante que seu ID é maior que todos os anteriores
+        res3 = upsert_quest_in_diario(self.diario_path, action="add", title="Terceira Missão", quest_type="personal")
+        quests_after = parse_quests_from_diario(self.diario_path)
+        self.assertEqual(quests_after[-1]["id"], res3["quest_id"])
+        self.assertEqual(quests_after[-1]["title"], "Terceira Missão")
+
+    def test_state_machine_unblock_abandon_evidence(self):
+        """Valida transições --unblock, --abandon e persistência de evidência (T022)."""
+        upsert_quest_in_diario(self.diario_path, action="add", title="Investigação Real", quest_type="main", objective="Rastrear espião")
+        q_list = parse_quests_from_diario(self.diario_path)
+        target_id = q_list[-1]["id"]
+
+        # Bloquear
+        res_blk = upsert_quest_in_diario(self.diario_path, action="block", quest_id=target_id, reason="Guarda reforçada")
+        self.assertEqual(res_blk["new_status"], "BLOCKED")
+
+        # Desbloquear
+        res_unblk = upsert_quest_in_diario(self.diario_path, action="unblock", quest_id=target_id)
+        self.assertEqual(res_unblk["new_status"], "ACTIVE")
+
+        # Abandonar
+        res_abn = upsert_quest_in_diario(self.diario_path, action="abandon", quest_id=target_id, reason="Missão obsoleta")
+        self.assertEqual(res_abn["new_status"], "ABANDONED")
+
+        # Concluir com evidência
+        res_cmp = upsert_quest_in_diario(self.diario_path, action="complete", quest_id=target_id, evidence="Confissão assinada pelo espião")
+        self.assertEqual(res_cmp["new_status"], "COMPLETED")
+        self.assertEqual(res_cmp["evidence"], "Confissão assinada pelo espião")
+
+        text = self.diario_path.read_text(encoding="utf-8")
+        self.assertIn("**Evidência:** Confissão assinada pelo espião", text)
+
+    def test_ssot_reward_defaults_and_xp_ledger(self):
+        """Valida SSOT de recompensas, registro permanente no ledger e reconciliação (T018)."""
+        from council.quests import parse_xp_ledger_from_diario, append_xp_ledger_entry
+        append_xp_ledger_entry(self.diario_path, amount=50, reason="Emboscada superada", turn=2)
+        ledger = parse_xp_ledger_from_diario(self.diario_path)
+        self.assertEqual(len(ledger), 1)
+        self.assertEqual(ledger[0]["amount"], 50)
+        self.assertEqual(ledger[0]["reason"], "Emboscada superada")
+        self.assertEqual(ledger[0]["turn"], 2)
+
+        # Valida que calcular nível com base_step <= 0 é protegido
+        lvl, thresh = calculate_level_from_xp(100, base_step=0)
+        self.assertGreaterEqual(lvl, 1)
 
 
 if __name__ == "__main__":

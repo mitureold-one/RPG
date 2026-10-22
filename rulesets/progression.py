@@ -21,6 +21,13 @@ XP_GRANT_TABLE: Dict[str, int] = {
     "turn": 0,
 }
 
+DEFAULT_QUEST_REWARDS: Dict[str, int] = {
+    "MAIN": 150,
+    "SIDE": 60,
+    "PERSONAL": 50,
+    "FACTION": 50,
+}
+
 DEFAULT_BASE_STEP: int = 250
 DEFAULT_STAT_CEILING: int = 20
 
@@ -72,6 +79,7 @@ def calculate_level_from_xp(total_xp: int, base_step: int = DEFAULT_BASE_STEP) -
     
     Retorna: (current_level, next_threshold)
     """
+    base_step = max(1, base_step)
     if total_xp < 0:
         total_xp = 0
     lvl = 1

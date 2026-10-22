@@ -269,7 +269,9 @@ class TestCLIContracts(unittest.TestCase):
         import council.helpers as helpers
         from council.helpers import find_campaign, CURRENT_SCHEMA_VERSION
 
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        SCRATCH_ROOT = Path(__file__).resolve().parent.parent / ".tmp" / "test_scratch"
+        SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=str(SCRATCH_ROOT)) as tmp_dir:
             temp_path = Path(tmp_dir)
             temp_camp = temp_path / "_test_p2_fail_loud"
             temp_camp.mkdir(parents=True, exist_ok=True)
@@ -457,7 +459,9 @@ class TestCLIContracts(unittest.TestCase):
         self.assertIn("FOURTH_WALL_QUESTION", bad_types)
 
         # 3 e 4 em diretório temporário para não mutar as campanhas canônicas reais
-        with tempfile.TemporaryDirectory() as tmp_dir:
+        SCRATCH_ROOT = Path(__file__).resolve().parent.parent / ".tmp" / "test_scratch"
+        SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=str(SCRATCH_ROOT)) as tmp_dir:
             temp_path = Path(tmp_dir)
             shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
@@ -479,6 +483,44 @@ class TestCLIContracts(unittest.TestCase):
                     force=True,
                 )
                 self.assertEqual(force_res.get("status"), "ok")
+
+    def test_cmd_commit_quest_flags_execution(self):
+        """P0-1: Garante que cmd_commit com --quest-complete, --quest-progress e --quest-fail roda sem UnboundLocalError."""
+        import tempfile
+        import shutil
+        from unittest.mock import patch
+        import council.helpers as helpers
+        from lazy_turn import cmd_commit, cmd_quest
+
+        SCRATCH_ROOT = Path(__file__).resolve().parent.parent / ".tmp" / "test_scratch"
+        SCRATCH_ROOT.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=str(SCRATCH_ROOT)) as tmp_dir:
+            temp_path = Path(tmp_dir)
+            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
+                cmd_quest(
+                    campaign_id="dinastia_cinzas",
+                    add_title="Proteger o Conselho",
+                    quest_type="main",
+                    objective="Vigiar os portões",
+                )
+
+                prg_res = cmd_commit(
+                    campaign_id="dinastia_cinzas",
+                    summary="Aemon reforça os portões da fortaleza.",
+                    quest_progress="Q1:1",
+                    force=True,
+                )
+                self.assertEqual(prg_res.get("status"), "ok")
+
+                cmp_res = cmd_commit(
+                    campaign_id="dinastia_cinzas",
+                    summary="Aemon assegura a integridade do conselho.",
+                    quest_complete="Q1",
+                    force=True,
+                )
+                self.assertEqual(cmp_res.get("status"), "ok")
+                self.assertTrue(any("Missão Concluída" in up for up in cmp_res.get("updates", [])))
 
 
 if __name__ == "__main__":

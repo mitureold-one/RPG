@@ -52,6 +52,9 @@ from council.quests import (
     upsert_quest_in_diario,
     format_quest_header,
     parse_reward_xp,
+    append_xp_ledger_entry,
+    parse_xp_ledger_from_diario,
+    parse_xp_ledger_from_text,
 )
 
 from council.gm import (

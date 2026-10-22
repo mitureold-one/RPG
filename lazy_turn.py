@@ -60,6 +60,7 @@ from council import (
     STRUCTURAL_SCENE_MANDATES,
     parse_quests_from_diario,
     upsert_quest_in_diario,
+    append_xp_ledger_entry,
     parse_progression_from_ficha,
     update_progression_in_ficha,
     spend_attribute_point_in_ficha,
@@ -69,6 +70,7 @@ from rulesets.progression import (
     evaluate_xp_gain,
     get_base_step_from_overrides,
     get_stat_ceiling_from_overrides,
+    DEFAULT_QUEST_REWARDS,
 )
 
 
@@ -456,7 +458,7 @@ def cmd_prepare(
     if scene_type != "standard":
         commit_hint += f' --scene-type {scene_type}'
     if active_quests_summary:
-        commit_hint += f' [--quest-progress "{active_quests_summary[0]["id"]}:1" | --quest-complete "{active_quests_summary[0]["id"]}"]'
+        commit_hint += f' --quest-progress "{active_quests_summary[0]["id"]}:1"'
 
     mandates_by_type = STRUCTURAL_SCENE_MANDATES
 
@@ -685,6 +687,8 @@ def cmd_quest(
     complete_id: str = "",
     fail_id: str = "",
     block_id: str = "",
+    unblock_id: str = "",
+    abandon_id: str = "",
     reopen_id: str = "",
     reason: str = "",
     evidence: str = "",
@@ -733,6 +737,10 @@ def cmd_quest(
         res = upsert_quest_in_diario(diario_path, action="fail", quest_id=fail_id.strip().upper(), reason=reason)
     elif block_id:
         res = upsert_quest_in_diario(diario_path, action="block", quest_id=block_id.strip().upper(), reason=reason)
+    elif unblock_id:
+        res = upsert_quest_in_diario(diario_path, action="unblock", quest_id=unblock_id.strip().upper())
+    elif abandon_id:
+        res = upsert_quest_in_diario(diario_path, action="abandon", quest_id=abandon_id.strip().upper(), reason=reason)
     elif reopen_id:
         res = upsert_quest_in_diario(diario_path, action="reopen", quest_id=reopen_id.strip().upper(), reason=reason)
 
@@ -756,6 +764,7 @@ def cmd_progress(
     spend_ability: str = "",
     training: str = "",
     award: str = "",
+    reason: str = "",
 ) -> dict:
     """Gerencia consulta de progresso, gasto de pontos de atributo/habilidade e concessão de XP em ficha.md."""
     try:
@@ -787,6 +796,11 @@ def cmd_progress(
         res = update_progression_in_ficha(ficha_path, xp_add=xp_gain, base_step=base_step)
         res["source"] = code
         res["xp_granted"] = xp_gain
+
+        diario_path = info["diario"]
+        diario_ctx = parse_diario_md(diario_path)
+        cur_turn = diario_ctx.get("last_turn_num")
+        append_xp_ledger_entry(diario_path, xp_gain, reason=reason or f"Concessão avulsa: {code}", turn=cur_turn)
 
     progression = parse_progression_from_ficha(ficha_path)
     return {
@@ -997,6 +1011,7 @@ def cmd_commit(
             applied.append(f"ALERTA_SSOT: Nenhum --npc-updates fornecido no commit para os NPCs ativos em cena ({', '.join(npc_names_in_scene)}).")
 
     # 3. Avança relógios de facções ou prazos especificados em --clock-advance ou auto-detectados
+    resolved_clocks = []
     if clock_advance and diario_path.exists():
         for item in clock_advance.split("|"):
             parts = item.split(":")
@@ -1004,6 +1019,8 @@ def cmd_commit(
             c_steps = int(parts[1].strip()) if len(parts) > 1 and parts[1].strip().isdigit() else 1
             ups_res = upsert_clock_in_diario(diario_path, c_name, advance=c_steps)
             applied.append(f"Relógio '{c_name}' avançado em +{c_steps} -> {ups_res.get('current', '?')}/{ups_res.get('max', '?')} [{ups_res.get('status', 'ACTIVE')}].")
+            if ups_res.get("status") == "RESOLVED":
+                resolved_clocks.append(c_name)
     elif diario_path.exists():
         cur_clocks = parse_clocks_from_diario(diario_path)
         for c in cur_clocks:
@@ -1013,6 +1030,28 @@ def cmd_commit(
                 if matches >= 2:
                     ups_res = upsert_clock_in_diario(diario_path, c["name"], advance=1)
                     applied.append(f"Auto-avanço: Relógio '{c['name']}' avançado em +1 ({ups_res.get('current')}/{ups_res.get('max')} [{ups_res.get('status')}]).")
+                    if ups_res.get("status") == "RESOLVED":
+                        resolved_clocks.append(c["name"])
+
+    # 4a. Determina o número do próximo turno antes do processamento de missões e XP (P0-1)
+    diario_ctx = parse_diario_md(diario_path)
+    next_turn = diario_ctx["last_turn_num"] + 1
+
+    camp_overrides = get_campaign_overrides(campaign_id)
+    base_step = get_base_step_from_overrides(camp_overrides)
+
+    # Concede XP para relógios de ameaça resolvidos não vinculados a missões ativas (T014)
+    if resolved_clocks:
+        all_active_quests = parse_quests_from_diario(diario_path)
+        linked_clock_names = {q["clock"].strip().lower() for q in all_active_quests if q.get("clock")}
+        for c_name in resolved_clocks:
+            if c_name.strip().lower() not in linked_clock_names:
+                clock_xp = evaluate_xp_gain("clock_resolved", overrides=camp_overrides)
+                prog_res = update_progression_in_ficha(ficha_path, xp_add=clock_xp, base_step=base_step)
+                append_xp_ledger_entry(diario_path, clock_xp, reason=f"Relógio '{c_name}' resolvido", turn=next_turn)
+                applied.append(f"Relógio Resolvido: '{c_name}' concluído com sucesso (+{clock_xp} XP concedido).")
+                if prog_res.get("level_up"):
+                    applied.append(f"EVOLUÇÃO DE NÍVEL: O protagonista atingiu o Nível {prog_res['new_level']}! (+{prog_res['bonuses']['attribute_points']} Ponto(s) de Atributo, vitais expandidos).")
 
     # 3b. Atualiza Missões & Concessão de XP (--quest-progress, --quest-complete, --quest-fail)
     if quest_progress and diario_path.exists():
@@ -1025,8 +1064,9 @@ def cmd_commit(
                 all_q = parse_quests_from_diario(diario_path)
                 q_match = next((q for q in all_q if q["id"].upper() == qid), None)
                 code = "obj_main" if (q_match and q_match.get("type") == "MAIN") else "obj_side"
-                xp_gain = evaluate_xp_gain(code, overrides=get_campaign_overrides(campaign_id))
-                prog_res = update_progression_in_ficha(ficha_path, xp_add=xp_gain)
+                xp_gain = evaluate_xp_gain(code, overrides=camp_overrides)
+                prog_res = update_progression_in_ficha(ficha_path, xp_add=xp_gain, base_step=base_step)
+                append_xp_ledger_entry(diario_path, xp_gain, reason=f"Objetivo {qid}:{idx} concluído", turn=next_turn)
                 applied.append(f"Progresso de Missão: Objetivo {qid}:{idx} marcado como concluído (+{xp_gain} XP).")
                 if prog_res.get("level_up"):
                     applied.append(f"EVOLUÇÃO DE NÍVEL: O protagonista atingiu o Nível {prog_res['new_level']}! (+{prog_res['bonuses']['attribute_points']} Ponto(s) de Atributo, vitais expandidos).")
@@ -1039,11 +1079,12 @@ def cmd_commit(
             if q_match:
                 if q_match.get("xp_paid") is not None and q_match.get("xp_paid") > 0:
                     applied.append(f"Aviso de Idempotência: Missão '{q_match['title']}' ({qid}) já teve recompensa de XP concedida ({q_match['xp_paid']} XP).")
+                    applied.append(f"ALERTA_CRITICO: Tentativa de pagamento duplicado de XP barrada para missão '{q_match['title']}' ({qid}).")
                     upsert_quest_in_diario(diario_path, "complete", quest_id=qid, current_turn=next_turn)
                 else:
-                    reward_xp = q_match.get("reward_xp") or (150 if q_match.get("type") == "MAIN" else 60)
+                    reward_xp = q_match.get("reward_xp") or DEFAULT_QUEST_REWARDS.get(q_match.get("type", "MAIN").upper(), 150)
                     upsert_quest_in_diario(diario_path, "complete", quest_id=qid, xp_paid=reward_xp, current_turn=next_turn)
-                    prog_res = update_progression_in_ficha(ficha_path, xp_add=reward_xp)
+                    prog_res = update_progression_in_ficha(ficha_path, xp_add=reward_xp, base_step=base_step)
                     applied.append(f"Missão Concluída: '{q_match['title']}' ({qid}) finalizada com sucesso (+{reward_xp} XP concedido).")
                     if prog_res.get("level_up"):
                         applied.append(f"EVOLUÇÃO DE NÍVEL: O protagonista atingiu o Nível {prog_res['new_level']}! (+{prog_res['bonuses']['attribute_points']} Ponto(s) de Atributo, vitais expandidos).")
@@ -1056,9 +1097,7 @@ def cmd_commit(
             upsert_quest_in_diario(diario_path, "fail", quest_id=qid, reason=reason_text, current_turn=next_turn)
             applied.append(f"Missão Fracassada: '{qid}' encerrada com status FAILED ({reason_text or 'Sem justificativa'}).")
 
-    # 4. Atualiza diario.md (Data/Hora, Local, Presentes, Mudança de Estado e anexa Turno N)
-    diario_ctx = parse_diario_md(diario_path)
-    next_turn = diario_ctx["last_turn_num"] + 1
+    # 4b. Atualiza diario.md (Data/Hora, Local, Presentes, Mudança de Estado e anexa Turno N)
 
     # Auto-baixa de cena agendada caso executada
     plan_data = diario_ctx.get("plot_plan", {})
@@ -1279,6 +1318,8 @@ def build_cli() -> argparse.ArgumentParser:
     p_qst.add_argument("--complete", default="", help="Conclui a missão como COMPLETED (ex: 'Q1')")
     p_qst.add_argument("--fail", default="", help="Marca a missão como FAILED (ex: 'Q1')")
     p_qst.add_argument("--block", default="", help="Bloqueia a missão como BLOCKED (ex: 'Q1')")
+    p_qst.add_argument("--unblock", default="", help="Desbloqueia a missão como ACTIVE (ex: 'Q1')")
+    p_qst.add_argument("--abandon", default="", help="Abandona a missão como ABANDONED (ex: 'Q1')")
     p_qst.add_argument("--reopen", default="", help="Reabre missão terminal como ACTIVE com justificativa auditada")
     p_qst.add_argument("--reason", default="", help="Justificativa para falha, bloqueio ou reabertura")
     p_qst.add_argument("--evidence", default="", help="Evidência diegética de cumprimento da missão")
@@ -1291,6 +1332,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_prg.add_argument("--spend-ability", default="", help="Gasta 1 Ponto de Habilidade para adquirir nova técnica (ex: 'Golpe: efeito')")
     p_prg.add_argument("--training", default="", help="Justificativa diegética ou cena de treino necessária para gastar Ponto de Habilidade")
     p_prg.add_argument("--award", default="", help="Concede XP administrativo/retroativo (ex: 'quest_main:150', 'obj_main', '100')")
+    p_prg.add_argument("--reason", default="", help="Justificativa diegética para concessão avulsa de XP")
     p_prg.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
     return parser
@@ -1483,6 +1525,8 @@ def main():
             complete_id=args.complete,
             fail_id=args.fail,
             block_id=args.block,
+            unblock_id=args.unblock,
+            abandon_id=args.abandon,
             reopen_id=args.reopen,
             reason=args.reason,
             evidence=args.evidence,
@@ -1510,6 +1554,7 @@ def main():
             spend_ability=args.spend_ability,
             training=args.training,
             award=args.award,
+            reason=args.reason,
         )
         if args.json:
             print(json.dumps(res, indent=2, ensure_ascii=False))
