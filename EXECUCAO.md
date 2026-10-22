@@ -94,7 +94,7 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Autor:** agente de código Antigravity, a pedido do usuário.
 - **Tipo:** implementação + teste + documentação.
 - **Status:** concluído.
-- **Commit:** pendente de hash pós-commit.
+- **Commit:** `7d7f598` (`feat(phase-01.5): complete Valiria calendar, strict faction rep with --create, and prose path review`).
 - **Escopo:** Fase 01.5 — Fechamento da fundação.
 - **O que foi feito:** declaração do calendário completo de Valíria em `regras.md` (12 meses boreais de 30 dias); `faction --rep` estrito por padrão impedindo cadastro acidental de facções desconhecidas (exigindo `--create`); revisão e blindagem dos caminhos de prosa (`check-prose` e `commit --prose`/`--prose-file`).
 - **Como:**
