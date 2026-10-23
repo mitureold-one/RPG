@@ -162,6 +162,30 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
   - R0d: extração de persistência, `temporal/` e `campanha/`.
   - R0.5: fixtures e remoção das campanhas vivas.
 
+## EX-0005 — 2026-10-23 — Kernel R0b: registry, runtime, schema e bootstrap
+
+- **Autor:** agente de código Antigravity, a pedido do usuário.
+- **Tipo:** implementação + teste.
+- **Status:** concluído (escopo R0b; R0c–R0d pendentes).
+- **Commit:** `783824d` (`feat(kernel): add registry, runtime, schema validation and bootstrap (R0b)`).
+- **Escopo:** etapa R0b do kernel (composição, validação de schema, registry congelável, runtime imutável e composition root).
+- **O que foi feito:** criação de `kernel/schema.py` com validação de subconjunto de JSON Schema sem dependências externas; `kernel/registry.py` com `PluginManifest`, registro explícito, verificação de dependências cruzadas e congelamento; `kernel/runtime.py` com `Runtime` imutável e resolução de serviços; `bootstrap.py` como único composition root; suíte completa de testes de contrato e integração.
+- **Como:**
+  - `kernel/schema.py`: `validate_schema` e `is_valid_schema` cobrindo tipos primitivos, objetos com `properties`/`required`/`additionalProperties`, arrays com `items`/bounds, enums, regex `pattern` e limites numéricos.
+  - `kernel/registry.py`: `PluginManifest` com validação de manifesto e `Registry` com `register`, `get`, `get_manifest`, `has`, `all`, `all_names`, `points` e `freeze` com verificação de dependências declaradas (`MissingRequirementError`).
+  - `kernel/runtime.py`: `@dataclass(frozen=True)` com validação de plugins configurados, auto-freeze de registry e resolução de serviços (`service`, `services`, `has_service`).
+  - `bootstrap.py`: `build_runtime(campaign_id, config, registry)` devolvendo runtime imutável com registry congelado.
+  - `tests/test_kernel_schema.py`, `tests/test_kernel_registry.py`, `tests/test_kernel_runtime.py`, `tests/test_bootstrap.py`: 25 novos testes cobrindo todos os contratos e cenários de borda.
+- **Evidência:**
+  - `python -m unittest discover -s tests` → **135 testes, OK** (110 existentes + 25 novos).
+  - `tests/test_architecture_boundaries.py` → 2 testes, OK (confirma zero imports proibidos e zero `open()` em `contracts/` e `kernel/`).
+  - `schema.py` (209 linhas), `registry.py` (164 linhas), `runtime.py` (84 linhas), `bootstrap.py` (42 linhas); nenhum arquivo de produção acima de 300 linhas.
+- **Relações:** [`ARCHITECTURE.md`](ARCHITECTURE.md) §5.0 e §5.3; [`ROADMAP.md`](ROADMAP.md) §6.4; EX-0004.
+- **Pendências:**
+  - R0c: extração de `interfaces/cli/` e `application/`, com `lazy_turn.py` < 200 linhas.
+  - R0d: extração de persistência, `temporal/` e `campanha/`.
+  - R0.5: fixtures e remoção das campanhas vivas.
+
 ---
 
 ## 5. Como registrar uma nova execução
