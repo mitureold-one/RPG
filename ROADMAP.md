@@ -1,8 +1,8 @@
 # RPGPRO — Roadmap de Evolução
 
 **Status:** documento de direção técnica e narrativa; não é uma especificação final aprovada.
-**Snapshot:** commit `3cea804` + Fase 01 (este commit).
-**Fontes:** [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md), [`DECISOES_ARQUITETURA.md`](DECISOES_ARQUITETURA.md), [`AGENTS.md`](AGENTS.md), auditoria arquitetural de 22/10/2026.
+**Snapshot:** commit `cefe5ea` (Fases 01 e 01.5).
+**Fontes:** [`ARCHITECTURE.md`](ARCHITECTURE.md), [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md), [`DECISOES_ARQUITETURA.md`](DECISOES_ARQUITETURA.md), [`AGENTS.md`](AGENTS.md), auditoria arquitetural de 22/10/2026.
 
 > **Regra de leitura:** este roadmap separa **decisões de comportamento confirmadas** de **decisões técnicas pendentes**. Não trate um gate pendente como requisito já resolvido. A ordem das fases segue dependências causais, não preferência estética.
 
@@ -43,7 +43,7 @@ Entregue:
 - idempotência de conclusão de missão feita pela CLI e depois pelo commit;
 - `check-prose --file` e `commit --prose-file` funcionais;
 - calendário declarativo (`calendar:` em `regras.md`) e fallback conservador para avanços dentro do mês;
-- 68 testes automatizados verdes, incluindo 12 testes de estabilidade.
+- 68 testes automatizados verdes na Fase 01 (69 com a Fase 01.5), incluindo 12 testes de estabilidade.
 
 Limites conhecidos:
 
@@ -236,7 +236,7 @@ Entregue:
 | §10.1 Contexto em três camadas | 04 | Payload sem arco/planos |
 | §10.2 Memória em três camadas | 02/07 | Resumo de uma linha |
 | §11 Fluxo integrado | 04–06 | `prepare` → prosa → `commit` |
-| §13 Cenários obrigatórios | 08 | 68 testes de contrato |
+| §13 Cenários obrigatórios | 08 | 69 testes de contrato |
 
 ---
 
@@ -246,13 +246,15 @@ Não iniciar a fase inteira antes de resolver o gate correspondente.
 
 | Gate | Decisão necessária | Bloqueia |
 |---|---|---|
-| **G1** | Formato do event store, IDs, versão, relações, retenção | Fase 02 |
-| **G2** | Correções, dependências, irreversibilidade, reconstrução | Fase 02 |
+| **G1** | Ratificar envelope e IDs; fechar payloads, serialização/versionamento e retenção | Fase 02 |
+| **G2** | Correções, dependências, reconstrução e efeitos sobre a história persistida | Fase 02 |
 | **G3** | Schema de conhecimento, proveniência, confiança, crença falsa | Fase 03 |
 | **G4** | Limites de orçamento, prioridade, retry, retomada | Fase 05 |
 | **G5** | Modelo de arco, critérios do diretor, revelação | Fase 06 |
 | **G6** | Armazenamento da prosa, indexação, reconstrução de resumos | Fase 02/07 |
 | **G7** | Harness de cenários e critérios objetivos | Fase 08 |
+
+G1 não reabre o que o [`ARCHITECTURE.md`](ARCHITECTURE.md) já fixou: JSONL canônico, `evt_<ulid>` e o envelope do evento. Ele ratifica essas escolhas e fecha o que ainda está aberto. G2 é o dono exclusivo da política de correção e reconstrução; nenhum dos dois invade o escopo do outro.
 
 Enquanto um gate estiver aberto, a fase correspondente pode ter protótipo e testes de contrato, mas não deve ser declarada concluída.
 
@@ -264,61 +266,24 @@ Enquanto um gate estiver aberto, a fase correspondente pode ter protótipo e tes
 
 | Arquivo | Linhas | Responsabilidades | Alvo |
 |---|---:|---|---|
-| [`lazy_turn.py`](lazy_turn.py) | 2.101 | CLI, argparse, comandos, payload, validação, tempo | < 200 linhas; comandos em `council/cli/commands/` |
-| [`council/ssot.py`](council/ssot.py) | 797 | ficha, diário, relógios, arco, fila, progressão | `council/state/` |
-| [`council/factions.py`](council/factions.py) | 853 | parse, reputação, ledger, tick, contexto | `council/agents/factions/` |
-| [`council/reviewer.py`](council/reviewer.py) | 688 | prosa, integridade, tempo, facções, missões, XP | `council/review/` |
-| [`council/narrator.py`](council/narrator.py) | 600 | NPC, vínculos, iniciativa, barreira, updates | `council/agents/npc/` |
-| [`council/quests.py`](council/quests.py) | 506 | parser, ciclo de vida, ledger | `council/quests/` |
-| [`council/helpers.py`](council/helpers.py) | 637 | paths, manifest, templates, tempo, atomic, lock | `council/persistence/`, `council/time/`, `council/campaign/` |
+| [`lazy_turn.py`](lazy_turn.py) | 2.101 | CLI, argparse, comandos, payload, validação, tempo | `interfaces/cli/` + `application/`; entry point < 200 linhas |
+| [`council/ssot.py`](council/ssot.py) | 797 | ficha, diário, relógios, arco, fila, progressão | `resources/` (estado) + projeções |
+| [`council/factions.py`](council/factions.py) | 853 | parse, reputação, ledger, tick, contexto | `resources/factions/` |
+| [`council/reviewer.py`](council/reviewer.py) | 688 | prosa, integridade, tempo, facções, missões, XP | `review/` |
+| [`council/narrator.py`](council/narrator.py) | 600 | NPC, vínculos, iniciativa, barreira, updates | `resources/npcs/` |
+| [`council/quests.py`](council/quests.py) | 506 | parser, ciclo de vida, ledger | `resources/quests/` |
+| [`council/helpers.py`](council/helpers.py) | 637 | paths, manifest, templates, tempo, atomic, lock | `kernel/`, `persistence/`, `temporal/`, `campaign/` |
 
 ### 6.2 Estrutura-alvo
 
-```text
-lazy_turn.py                      # 80-120 linhas: entry point + reexports
-council/
-  cli/
-    parser.py                     # argparse
-    app.py                        # dispatch
-    commands/
-      prepare.py  commit.py  clock.py  arc.py  quest.py
-      progress.py faction.py npc.py review.py campaign.py prose.py
-  persistence/
-    atomic.py  lock.py  transaction.py
-  time/
-    increment.py  calendar.py  advance.py
-  campaign/
-    locator.py  manifest.py  templates.py
-  state/
-    ficha.py  diario.py  clocks.py  arc.py  plot.py  progression.py
-  events/
-    schema.py  store.py  projector.py  dependencies.py
-    corrections.py  queue.py  budget.py
-  agents/
-    npc/      parser.py updates.py relations.py agency.py epistemic.py
-    factions/ model.py parser.py reputation.py tick.py context.py
-  quests/
-    model.py parser.py lifecycle.py ledger.py
-  context/
-    payload.py narrative_state.py scene.py memory.py
-  world/
-    simulation.py budget.py director.py stagnation.py
-  knowledge/
-    facts.py beliefs.py revelation.py retrieval.py
-  memory/
-    prose.py summaries.py index.py
-  review/
-    prose.py integrity.py temporal.py factions.py quests.py report.py
-  __init__.py                     # fachada de compatibilidade
-rulesets/                         # permanece
-```
+A árvore canônica, as portas de extensão, as regras de dependência e o kernel vivem em [`ARCHITECTURE.md`](ARCHITECTURE.md). Este roadmap não duplica a árvore para evitar duas versões contraditórias.
 
 ### 6.3 Regras de desenho
 
 - 150–300 linhas por arquivo como alvo; 400 como alerta; 600 como falha de revisão.
 - Uma razão para mudar por arquivo; nada de `utils.py`.
-- Direção de dependência: `cli → commands → state/agents/world → persistence/rulesets`.
-- Domínio não importa CLI.
+- Direção de dependência e proibições: ver [`ARCHITECTURE.md`](ARCHITECTURE.md) §4.
+- Domínio não importa CLI; plugin não faz I/O; aplicação é dona da transação.
 - `council/__init__.py` só reexporta; sem lógica.
 - `lazy_turn.cmd_*` continua existindo como alias para não quebrar testes e chamadas externas.
 - Não fragmentar funções de 20 linhas em arquivos separados; agrupar por caso de uso.
@@ -327,11 +292,12 @@ rulesets/                         # permanece
 
 | Etapa | Quando | O que move | Critério de aceite |
 |---|---|---|---|
-| **R0** | Antes da Fase 02 | `atomic/lock` → `persistence/`; tempo/calendário → `time/`; `find_campaign`/manifest/templates → `campaign/`; argparse/dispatch/comandos → `cli/`; `lazy_turn.py` vira entry point | 68 testes verdes; `lazy_turn.py` < 200 linhas; comportamento idêntico |
-| **R1** | Com a Fase 02 | `ssot.py` → `state/`; criação de `events/`; projeção Markdown | Nenhum arquivo > 300; evento ida-e-volta; rebuild de projeção |
-| **R2** | Com a Fase 03/04 | `narrator.py` → `agents/npc/`; `factions.py` → `agents/factions/`; `quests.py` → `quests/`; `context/` | Módulos < 300; sem ciclos; contexto causal testado |
-| **R3** | Com a Fase 05/06 | `reviewer.py` → `review/`; `world/` (simulação, budget, diretor, estagnação) | Lints independentes; diretor determinístico |
-| **R4** | Com a Fase 07 | `memory/` e `knowledge/` | Proveniência rastreável; resumos reconstruíveis |
+| **R0** | Antes da Fase 02 | criar `contracts/` + `kernel/` + `bootstrap.py` + suíte de contrato com fakes; extrair CLI, persistência, `temporal/` e campanha de `lazy_turn.py`/`helpers.py`; sem emissão de eventos | 69 testes existentes verdes + suíte de contrato; `lazy_turn.py` < 200 linhas; Markdown idêntico; contratos exercitados com fakes |
+| **R0.5** | Antes da Fase 02 | arquivar campanhas, criar fixtures, atualizar testes, apagar `campaigns/*` | suíte verde sem campanhas reais; `init-campaign` funciona |
+| **R1** | Com a Fase 02 | `ssot.py` → `resources/`; `EventStore` JSONL + índice; `Projector`s; `EventType`s e upcasters | nenhum arquivo > 300; evento ida-e-volta; rebuild de projeção; implementações aprovadas na suíte de contrato |
+| **R2** | Com a Fase 03/04 | `narrator.py` → `resources/npcs/`; `factions.py` → `resources/factions/`; `quests.py` → `resources/quests/`; `context/` | módulos < 300; sem ciclos; `BehaviorPolicy`/`FactionPolicy`/`ContextProvider` testados |
+| **R3** | Com a Fase 05/06 | `reviewer.py` → `review/`; `world/` com simulação, budget, diretor e estagnação | lints independentes; diretor determinístico; orçamento testado |
+| **R4** | Com a Fase 07 | `memory/` e `knowledge/` | proveniência rastreável; resumos reconstruíveis |
 
 **R0 é a única refatoração que pode ser feita já**, porque é behavior-preserving e não depende dos gates. As demais acompanham as fases.
 
@@ -341,6 +307,9 @@ rulesets/                         # permanece
 - Manter os nomes públicos (`cmd_prepare`, `parse_ficha_md`, etc.) reexportados; os testes atuais são o contrato.
 - Atualizar `patch(...)` de testes que apontam para `lazy_turn.cmd_review` se o comando for movido.
 - Uma etapa por vez, suíte verde; não mover dezenas de arquivos em um commit.
+- Contratos antes de adaptadores: nenhum store real entra antes da suíte de contrato com fakes.
+- `temporal/` substitui `time/` para não colidir com o módulo padrão `time`.
+- Teste que copia campanha viva deve pinar os campos que assume; caso contrário o resultado depende do estado de jogo.
 - Medir linhas por arquivo, ciclos de import, tempo da suíte e duplicação de escrita.
 
 ---
@@ -349,7 +318,7 @@ rulesets/                         # permanece
 
 ### 7.1 Estado atual
 
-- 68 testes automatizados verdes.
+- 69 testes automatizados verdes.
 - 12 testes novos de estabilidade: atomicidade, rollback, validação de entidades, parsing de NPC, idempotência, prosa por arquivo, calendário.
 - Nenhum teste de comportamento narrativo ainda.
 
@@ -372,11 +341,13 @@ Cada cenário deve ter estado inicial, ação/tempo, comportamento esperado e as
 
 ## 8. Próximos passos imediatos
 
-1. **Commitar a Fase 01** (código + testes + este roadmap).
-2. **Fase 01.5:** calendário de Valíria, `faction --rep` estrito, revisão de prosa.
-3. **Escrever a spec da Fase 02** (G1/G2): schema de evento, projeção, correções, dependências, fila esqueleto.
-4. **Executar R0** em paralelo: extração behavior-preserving do CLI e da infraestrutura.
-5. **Iniciar a Fase 02** somente depois de G1/G2.
+1. **Aprovar e commitar** [`ARCHITECTURE.md`](ARCHITECTURE.md) e [`ROADMAP.md`](ROADMAP.md) com a base do kernel consolidada.
+2. **Revisar a especificação consolidada** da base antes de abrir os commits do R0.
+3. **Executar R0:** contratos + kernel de composição + extração behavior-preserving de CLI, persistência, `temporal/` e campanha.
+4. **Executar R0.5:** arquivar campanhas, criar fixtures, apagar `campaigns/*`.
+5. **Escrever a spec da Fase 02** (G1/G2): payloads, serialização/versionamento, retenção, projeção, correções, dependências, fila esqueleto.
+6. **Executar R1 + Fase 02.**
+7. Seguir para R2–R4 conforme as fases.
 
 ---
 
