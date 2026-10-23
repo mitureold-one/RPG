@@ -1,7 +1,7 @@
-"""Fronteira arquitetural de ``contracts/`` e ``kernel/``.
+"""Fronteira arquitetural de ``contracts/``, ``kernel/``, ``application/``, etc.
 
-Nenhum dos dois pode importar camadas de domínio, adaptadores ou CLI, e o
-kernel não faz I/O. O teste é estrutural (AST), não depende de execução.
+Verifica restrições de importação entre camadas e limites de tamanho por arquivo.
+O teste é estrutural (AST), não depende de execução.
 """
 
 from __future__ import annotations
@@ -82,10 +82,32 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                     f"{path.relative_to(ROOT)} importa a camada de entrada '{module}'",
                 )
 
+    def test_temporal_has_no_io_and_no_domain_imports(self) -> None:
+        for path in (ROOT / "temporal").rglob("*.py"):
+            for module in _imported_roots(path):
+                self.assertNotIn(
+                    module,
+                    {"council", "interfaces", "lazy_turn", "rulesets", "adapters", "os", "subprocess", "socket"},
+                    f"{path.relative_to(ROOT)} importa camada proibida '{module}'",
+                )
+
+    def test_adapters_persistence_has_no_domain_imports(self) -> None:
+        for path in (ROOT / "adapters" / "persistence").rglob("*.py"):
+            for module in _imported_roots(path):
+                self.assertNotIn(
+                    module,
+                    {"council", "interfaces", "lazy_turn", "rulesets"},
+                    f"{path.relative_to(ROOT)} importa módulo de domínio proibido '{module}'",
+                )
+
     def test_entry_point_and_file_size_limits(self) -> None:
         entry = len((ROOT / "lazy_turn.py").read_text(encoding="utf-8").splitlines())
         self.assertLess(entry, 200, "lazy_turn.py deve ter menos de 200 linhas")
-        for package in ("application", "interfaces", "contracts", "kernel"):
+
+        helpers_len = len((ROOT / "council" / "helpers.py").read_text(encoding="utf-8").splitlines())
+        self.assertLess(helpers_len, 100, f"council/helpers.py deve ter menos de 100 linhas (tem {helpers_len})")
+
+        for package in ("application", "interfaces", "contracts", "kernel", "adapters", "temporal", "campaign"):
             for path in (ROOT / package).rglob("*.py"):
                 size = len(path.read_text(encoding="utf-8").splitlines())
                 self.assertLess(size, 600, f"{path.relative_to(ROOT)} tem {size} linhas (limite de falha: 600)")
