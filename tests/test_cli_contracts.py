@@ -866,6 +866,17 @@ class TestCLIContracts(unittest.TestCase):
         try:
             # 1. Calendário de Valíria com avanço de +30d atravessando de Ventania para Geada
             shutil.copytree(self.root_dir / "campaigns" / "imperio_valiria", temp_path / "imperio_valiria")
+            # Pina a data inicial na cópia: o teste não pode depender do estado mutável da campanha viva.
+            diario_path = temp_path / "imperio_valiria" / "diario.md"
+            diario_text = diario_path.read_text(encoding="utf-8")
+            pinned_text, pinned_count = re.subn(
+                r"(\*\*Data & Local:\*\*\s*)[^—\n]*",
+                r"\g<1>04 de Ventania de 304, 21:15 ",
+                diario_text,
+                count=1,
+            )
+            self.assertEqual(pinned_count, 1, "data inicial não encontrada em diario.md")
+            diario_path.write_text(pinned_text, encoding="utf-8")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 res_time = cmd_commit(
                     campaign_id="imperio_valiria",
