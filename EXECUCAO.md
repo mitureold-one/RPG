@@ -233,6 +233,26 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Pendências:**
   - R0.5: fixtures e remoção das campanhas vivas.
 
+## EX-0008 — 2026-10-23 — Etapa R0.5: fixtures de teste, arquivamento e reset de `campaigns/`
+
+- **Autor:** agente de código Antigravity, a pedido do usuário.
+- **Tipo:** migração + teste + manutenção.
+- **Status:** concluído (R0 e R0.5 100% concluídos; baseline pronto para Fase 02).
+- **Commit:** `cb60a83` (`chore(campaigns): archive live campaigns, create test fixtures and clear campaigns/ (R0.5)`).
+- **Escopo:** etapa R0.5 — arquivamento das campanhas legadas, criação de fixtures desacopladas em `tests/fixtures/campaigns/` e esvaziamento de `campaigns/`.
+- **O que foi feito:** preservação integral das 3 campanhas vivas (`dinastia_cinzas`, `imperio_valiria`, `perpetuos_terra_incognita`) em `archive/campaigns/`; instanciação de fixtures canônicas em `tests/fixtures/campaigns/`; atualização de `tests/test_boundary_contracts.py` e `tests/test_cli_contracts.py` para apontar para as fixtures; esvaziamento completo de `campaigns/` (mantendo apenas `campaigns/.gitkeep`); teste de `init-campaign` em ambiente limpo comprovando criação e validação de nova campanha.
+- **Como:**
+  - `archive/campaigns/`: cópia de segurança preservando o estado vivo completo de todas as campanhas.
+  - `tests/fixtures/campaigns/`: fixtures isoladas para a suíte de testes.
+  - `tests/test_boundary_contracts.py` e `tests/test_cli_contracts.py`: `setUp` e `tearDown` agora apontam `helpers.CAMPAIGN_DIRS` e `self.fixtures_dir` para `tests/fixtures/campaigns`.
+  - `tests/test_campaign_locator.py`: adicionado teste automatizado `test_init_campaign_from_templates` validando o fluxo de criação e descoberta de nova campanha.
+  - `campaigns/`: diretório limpo contendo apenas `.gitkeep`, pronto para receber novas campanhas na Fase 02.
+- **Evidência:**
+  - `python -m unittest discover -s tests` → **149 testes, OK** com `campaigns/` completamente vazio.
+  - `python lazy_turn.py init-campaign --campaign teste_nova_campanha --title "Teste Nova"` cria com sucesso os 5 arquivos canônicos e passa em `lazy_turn.py review` com `ssot_status: CLEAN`.
+- **Relações:** [`ARCHITECTURE.md`](ARCHITECTURE.md) §1, §12 (R0.5); [`ROADMAP.md`](ROADMAP.md) §6.4; EX-0007.
+- **Pendências:** nenhuma pendência de refatoração prévia; baseline pronto para a Fase 02 / R1 (EventStore e projeções).
+
 ---
 
 ## 5. Como registrar uma nova execução
