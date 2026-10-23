@@ -73,6 +73,23 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                     ):
                         self.fail(f"{path.relative_to(ROOT)} chama open() no kernel")
 
+    def test_application_does_not_import_cli(self) -> None:
+        for path in (ROOT / "application").rglob("*.py"):
+            for module in _imported_roots(path):
+                self.assertNotIn(
+                    module,
+                    {"interfaces", "lazy_turn"},
+                    f"{path.relative_to(ROOT)} importa a camada de entrada '{module}'",
+                )
+
+    def test_entry_point_and_file_size_limits(self) -> None:
+        entry = len((ROOT / "lazy_turn.py").read_text(encoding="utf-8").splitlines())
+        self.assertLess(entry, 200, "lazy_turn.py deve ter menos de 200 linhas")
+        for package in ("application", "interfaces", "contracts", "kernel"):
+            for path in (ROOT / package).rglob("*.py"):
+                size = len(path.read_text(encoding="utf-8").splitlines())
+                self.assertLess(size, 600, f"{path.relative_to(ROOT)} tem {size} linhas (limite de falha: 600)")
+
 
 if __name__ == "__main__":
     unittest.main()

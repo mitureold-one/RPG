@@ -252,7 +252,7 @@ class TestCommitRollback(StabilityFixture):
 
         before_diario = self.diario.read_text(encoding="utf-8")
         before_ficha = self.ficha.read_text(encoding="utf-8")
-        with patch("lazy_turn.cmd_review", side_effect=RuntimeError("falha simulada")):
+        with patch("application.commit.cmd_review", side_effect=RuntimeError("falha simulada")):
             with self.assertRaises(RuntimeError):
                 cmd_commit(
                     campaign_id="test_camp",
