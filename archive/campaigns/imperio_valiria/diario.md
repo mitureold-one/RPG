@@ -4,12 +4,22 @@ schema_version: 1
 # Diário da Crônica: Crônicas de Valíria: O Filho de Krypton
 
 ## Cena 1: O Despertar da Cápsula em Sköll
-* **Data & Local:** 04 de Ventania de 304, 21:15 — Terraço Imperial do Senado, Sol-Branco.
-* **Presentes:** Kon-El, Grã-Matriarca Vanya, Inquisitora Selene, Imperatriz Aurelia.
+* **Data & Local:** 5 de Ventania de 304, 08:06 — Grande Salão Comunal das Presas em Sköll.
+* **Presentes:** Fenra Presa-de-Aço, Rainha Demônio Lilith, Imperatriz Aurelia, Inquisitora Selene.
 * **Fatos:** A cápsula criogênica de evacuação de Krypton rasgou a atmosfera e abriu uma trincheira incandescente na neve da floresta boreal. Com a escotilha despedaçada, Kon-El desperta banhado pela luz solar e pelo oxigênio do novo mundo, diante de Fenra e Ylva, que cercam a cratera com armas desembainhadas.
 
 ### Relógios de Ameaça & Prazos
-* **[Invasão das Legiões da Rainha Demônio]:** 3/4 (Gatilho: Sol-Branco cai sob dominio abissal e a Rainha Demonio clama posse total do continente e de Kon-El) [ACTIVE]
+* **[O Conclave da Nova Era em Sköll]:** 1/4 (Gatilho: A Imperatriz de Valíria, a Rainha do Abismo e as Alfas de Sköll formalizam o novo pacto continental perante Kon-El) [ACTIVE]
+
+* **[A Reentrada Atmosférica e o Resgate da Anomalia]:** 4/4 (Gatilho: Kon-El atinge o solo planetário e seu corpo é encontrado pelas facções em vigília) [RESOLVED]
+
+* **[Detonação do Núcleo no Vácuo Orbital]:** 4/4 (Gatilho: A nau atinge a alta órbita e o reator detona no vácuo espacial determinando o destino de Lilith e Kon-El) [RESOLVED]
+
+* **[Colapso do Núcleo Ancestral de Krypton]:** 4/4 (Gatilho: O reator da nave ancestral entra em colapso termonuclear destruindo a ponte ou consagrando a vitória definitiva sobre o Abismo) [RESOLVED]
+
+* **[Ofensiva Continental da Rainha Demônio]:** 4/4 (Gatilho: As legiões do Norte Abissal rompem as defesas boreais e cercam Valíria em pinça de extermínio total) [RESOLVED]
+
+* **[Invasão das Legiões da Rainha Demônio]:** 4/4 (Gatilho: Sol-Branco cai sob dominio abissal e a Rainha Demonio clama posse total do continente e de Kon-El) [RESOLVED]
 
 * **[Bombardeio & Cerco Total da Frota Imperial]:** 2/4 (Gatilho: Os tres galeoes ativam o protocolo de bombardeio continuo e aniquilam o vale de Skoll se nao forem neutralizados) [RESOLVED]
 
@@ -38,6 +48,12 @@ schema_version: 1
 * **Marco 2:** [01 de Ventania de 304, 09:07]: Rompimento do cerco das Lâminas de Éter, resgate de Fenra e Ylva e voo triunfal até o Refúgio das Presas de Sköll.
 * **Marco 3:** [04 de Ventania de 304, 12:00]: Despertar no Pavilhão das Rosas da capital Sol-Branco após transe celular de estase na Gaiola Diamantina.
 * **Marco 4:** [04 de Ventania de 304, 21:05]: Batalha dos Céus de Sol-Branco, destruição do leviatã abissal líder e consagração perante a corte imperial.
+
+### Registro de Experiência
+* **[XP] +40 XP** (Relógio 'Detonação do Núcleo no Vácuo Orbital' resolvido) | Turno 49
+* **[XP] +40 XP** (Relógio 'Detonação do Núcleo no Vácuo Orbital' resolvido) | Turno 49
+* **[XP] +40 XP** (Relógio 'A Reentrada Atmosférica e o Resgate da Anomalia' resolvido) | Turno 53
+* **[XP] +40 XP** (Relógio 'A Reentrada Atmosférica e o Resgate da Anomalia' resolvido) | Turno 53
 
 ### Histórico de Turnos
 * **Turno 1:** Despertar nos destroços da câmara criogênica e primeiro contato visual com as batedoras da matilha boreal. Vitais: HP 35/35, Stamina 30/30, Bioenergia Solar 40/40.
@@ -116,3 +132,35 @@ schema_version: 1
   * **Mudança de Estado:** Status completo da cápsula e mistério da Rainha Demônio revelados; Véu Abissal bloqueando a órbita; Selene comanda Sol-Branco em nome de Kon-El; Império pronto para a guerra sob liderança do herói.
 * **Turno 38:** Kon-El desce ao terraco confrontando a hipocrisia de Selene e questionando a prisao de Vanya; a Falha Critica deflagra um racha armado no Senado entre lealistas de Vanya e inquisitoras de Selene. Vanya clama absolvicao, tiroteio de eter irrompe no terraco e Selene corta a propria mao no Juramento de Sangue confessando sua ambicao e rendendo-se a ele como Deus da Guerra. Kon-El absorve estilhacos de granada para salvar a Imperatriz. Vitais: HP 28/35, Stamina 12/30, Bioenergia Solar 34/40.
   * **Mudança de Estado:** Guerra civil deflagrada no Senado de Sol-Branco; Selene vinculada a Kon-El pelo Juramento de Sangue; Kon-El atinge a posicao central do poder; Imperatriz sob sua guarda direta.
+* **Turno 39 [SALTO TEMPORAL]:** Sucesso com Custo: Kon-El despede-se com um casual 'falou aí' e decola em velocidade supersônica deixando a corte estupefata; ao rasgar o domo instável de éter de Sol-Branco, o atrito arcano exige esforço, mas ele cruza o continente em direção às montanhas de Sköll, enquanto Selene prepara sua nau para seguir seu rastro estelar. Vitais: HP 28/35, Stamina 10/30, Bioenergia Solar 32/40.
+  * **Mudança de Estado:** Kon-El abandona Sol-Branco rumo a Sköll em voo livre; autoridade do Senado reduzida a escombros; Inquisitora Selene em perseguição leal aos céus.
+* **Turno 40:** Dádiva Crítica: Kon-El anula seu campo gravitacional e pousa suavemente na neve de Sköll, caminhando a pé até a Fenda Antiga. As sentinelas kryptonianas reconhecem sua presença e desativam a camuflagem. Fenra e Ylva o avistam entre os pinheiros e correm ao seu encontro tomadas por alívio e devoção, enquanto Vorn e as cinco matilhas celebram o retorno do salvador celeste ileso. Vitais: HP 28/35, Stamina 12/30, Bioenergia Solar 32/40.
+  * **Mudança de Estado:** Kon-El reunido com Fenra, Ylva e as tribos de Sköll na Fenda Antiga; moral das cinco matilhas unificadas atinge o ápice; liderança de Kon-El selada no Norte Boreal.
+* **Turno 41:** Dádiva Crítica: Kon-El explica casualmente que escapou voando e que vai ao Norte caçar a Rainha Demônio, perguntando com carinho se todos chegaram bem. O cuidado comove as alfas; Fenra e Vorn confirmam que as cinco tribos estão a salvo graças às sentinelas e juram lealdade absoluta, oferecendo a vanguarda das matilhas e revelando o caminho para o primeiro Monólito do Véu Abissal. Vitais: HP 28/35, Stamina 12/30, Bioenergia Solar 32/40.
+  * **Mudança de Estado:** Aliança militar das cinco matilhas de Sköll selada sob comando de Kon-El; rota da marcha boreal traçada; coordenadas do primeiro Monólito do Véu Abissal obtidas.
+* **Turno 42:** Sucesso Pleno: Kon-El comanda que as matilhas vivam em paz e recusa que marchem para a morte, concedendo sua protecao pessoal a Skoll contra qualquer investida do Imperio e deixando as duas sentinelas para resguardar as cavernas. Despede-se com serenidade e decola rumo ao Norte sob o uivo solene e reverente das cinco tribos. Vitais: HP 28/35, Stamina 12/30, Bioenergia Solar 32/40.
+  * **Mudança de Estado:** Skoll protegida pelo decreto e pelas sentinelas de Kon-El; povo-fera em paz sob aliança unificada; Kon-El em voo solo na direção do Monolito da Geada Negra.
+* **Turno 43 [CENA PARALELA]:** Dádiva Crítica: Kon-El dispara visão de calor calibrada no núcleo do Monólito da Geada Negra; a temperatura estelar vaporiza o obelisco de cem metros e desintegra a guarnição demoníaca em uma detonação cósmica. O primeiro quadrante do Véu Abissal colapsa em órbita, restaurando a comunicação com a cápsula e expondo a cratera ancestral onde repousam os destroços da nave de Krypton caída há 300 anos. Vitais: HP 28/35, Stamina 11/30, Bioenergia Solar 28/40.
+  * **Mudança de Estado:** Monólito da Geada Negra vaporizado; primeiro quadrante do Véu Abissal colapsado; canal de órbita limpo para a cápsula; acesso à nave ancestral de Krypton exposto no gelo.
+* **Turno 44:** Sucesso com Custo: Kon-El desce até a cratera e aproxima-se da nave ancestral de Krypton; uma armadilha de éter da Zona Fantasma o atinge na eclusa drenando vitalidade. Das sombras da ponte destruída, a Rainha Demônio Lilith surge envolta em armadura biológica corrompida, saudando Kon-El como seu irmão cósmico e consorte supremo predestinado. Vitais: HP 26/35, Stamina 9/30, Bioenergia Solar 28/40.
+  * **Mudança de Estado:** Kon-El face a face com a Rainha Demônio Lilith na nave ancestral; revelação da linhagem compartilhada de Krypton; clímax da guerra boreal aberto.
+* **Turno 45:** Kon-El comanda a IA em kandoriano antigo e desconstrói a alegação de parentesco de Lilith; a Falha Crítica faz o computador corrompido reconhecer ambos e disparar o Protocolo de Recombinação da Espécie de Krypton. Travas nanotecnológicas prendem Kon-El na ponte de comando, enquanto Lilith avança com tentáculos de bio-armadura para consumar o acasalamento forçado. Vitais: HP 24/35, Stamina 6/30, Bioenergia Solar 28/40.
+  * **Mudança de Estado:** Origem da nave revelada como matriz biológica de terraformação de Krypton; ponte selada em protocolo de repovoamento; Lilith e Kon-El em combate íntimo e violento de vida ou morte.
+* **Turno 46:** Kon-El evocou em kandoriano a diretriz x90-b-43g do Conselho de Krypton com triunfo crítico (d20=20). A IA da nau rompeu o domínio de Lilith, reclassificou-a como aberração biomecânica e disparou campos de contenção de luz sólida e o expurgo do núcleo, enquanto Lilith avançou enfurecida em combate corpo a corpo brutal. Vitais: HP 24/35, Stamina 5/30, Bioenergia Solar 28/40.
+  * **Mudança de Estado:** A IA da nau virou as defesas contra Lilith; protocolo de expurgo e contagem regressiva ativados na ponte.
+* **Turno 47:** Kon-El tentou esquivar e desmascarar a corrupção mental de Lilith pela matriz defeituosa, mas sofreu uma falha crítica na esquiva. Lilith antecipou o arco com uma chicotada de gavinhas de éter negro e o prensou contra a antepara de liga estelar, em negação histérica ao ouvir que sua ambição era apenas um erro de sistema. Vitais: HP 21/35, Stamina 3/30, Bioenergia Solar 28/40.
+  * **Mudança de Estado:** Kon-El foi atingido e prensado contra o console; Lilith está em frenesi de negação enquanto o reator atinge nível crítico de expurgo.
+* **Turno 48:** Kon-El apelou à sobrevivência do reino de Lilith e à aniquilação mútua, obtendo sucesso com custo. Abalada pela ameaça de extinção do seu domínio, Lilith cedeu à cooperação forçada, unindo seu éter negro ao campo gravitacional de Kon-El para reativar os propulsores e erguer a nau em direção à órbita sob severo estresse bioenergético. Vitais: HP 21/35, Stamina 1/30, Bioenergia Solar 24/40.
+  * **Mudança de Estado:** Lilith e Kon-El sincronizam éter e gravidade; a nau rompe o gelo e dispara verticalmente rumo à exosfera com o núcleo em detonação iminente.
+* **Turno 49:** Kon-El transferiu sua armadura cerimonial para Lilith e a lançou para fora da nau em segurança no vácuo orbital. Sozinho e desprotegido, empurrou a nau para o espaço profundo; a falha crítica acelerou a detonação do reator a queima-roupa. A explosão termonuclear engolfou seu corpo desarmado, infligindo dano severo e lançando-o em transe de Torquasm rumo à reentrada planetária, enquanto Lilith sobreviveu em choque absoluto. Vitais: HP 11/35, Stamina 0/30, Bioenergia Solar 24/40.
+  * **Mudança de Estado:** A nau ancestral de Krypton detonou no vácuo orbital poupando o continente; Kon-El cai inconsciente pela atmosfera sem armadura; Lilith desce ao norte selada na couraça de El com dívida eterna.
+* **Turno 50 [INTERLÚDIO]:** Interlúdio: Lilith aterrissou na tundra boreal envolta na armadura cerimonial de Kon-El e revogou a invasão continental perante suas generais abissais, ordenando a busca imediata e a proteção absoluta do salvador caído; em Sol-Branco, Selene e Aurelia mobilizaram esquadrões de busca para resgatá-lo antes do Senado. Vitais: HP 11/35, Stamina 0/30, Bioenergia Solar 24/40.
+  * **Mudança de Estado:** A guerra entre o Abismo e Valíria foi suspensa; todas as facções agora competem para localizar o corpo de Kon-El caído no norte boreal.
+* **Turno 51:** Kon-El despertou do transe sob a alvorada boreal na Fenda de Sköll com sucesso pleno de Constituição (19 vs DC 15). Protegido pelos dois drones e encontrado por Fenra e Ylva, ele absorveu os raios solares regenerando parte dos vitais, enquanto a Rainha Lilith e a nau imperial de Aurelia e Selene convergiram em reverência pacífica. Vitais: HP 16/35, Stamina 10/30, Bioenergia Solar 32/40.
+  * **Mudança de Estado:** Kon-El desperta revigorado no solo de Sköll; as três potências do mundo (Matilhas, Abismo e Império) convergem desarmadas perante sua autoridade incontestada.
+* **Turno 52:** Kon-El arrancou da nuca um estilhaço incrustado de kryptonita verde e superou a onda imediata de envenenamento com sucesso pleno em Constituição (17 vs DC 15). O brilho esmeralda tóxico alarmou Fenra, que saltou para a cratera, e Lilith, que reconheceu o veneno estelar proibido e correu para isolar o fragmento. Vitais: HP 14/35, Stamina 8/30, Bioenergia Solar 32/40.
+  * **Mudança de Estado:** Estilhaço de kryptonita verde extraído do corpo de Kon-El; o veneno celular foi contido antes de paralisá-lo, mas deixou sequelas imediatas de náusea e queimação.
+* **Turno 53:** Kon-El identificou três outros estilhaços de kryptonita verde alojados na coxa, nas costelas e no braço. Em sucesso com custo de Constituição (12 vs DC 15), ele removeu o do braço e foi auxiliado cirurgicamente por Lilith e Fenra para extrair os demais, sofrendo severo desgaste celular e estresse traumático, mas neutralizando a fonte ativa do veneno. Vitais: HP 11/35, Stamina 5/30, Bioenergia Solar 28/40.
+  * **Mudança de Estado:** Todos os fragmentos de kryptonita verde foram extraídos do corpo de Kon-El; Fenra e Lilith uniram forças para estabilizá-lo na cratera, encerrando a crise da reentrada.
+* **Turno 54:** Kon-El murmurou suas últimas palavras antes de perder a consciência e obteve Triunfo Crítico em Constituição (20 vs DC 15). Seu organismo ativou o transe celular definitivo de Torquasm-Vo, purificando as toxinas residuais em um casulo dourado de bioenergia. Diante de sua vulnerabilidade sagrada, Fenra, Lilith e a Imperatriz Aurelia selaram uma trégua imediata, transportando-o em cortejo sagrado ao Grande Salão Comunal de Sköll. Vitais: HP 21/35, Stamina 20/30, Bioenergia Solar 32/40.
+  * **Mudança de Estado:** Kon-El entra em transe regenerativo estável; o conflito milenar entre Valíria, Sköll e o Abismo é oficialmente suspenso sob uma trégua sagrada em torno de seu leito.

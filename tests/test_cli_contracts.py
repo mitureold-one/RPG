@@ -28,6 +28,14 @@ class TestCLIContracts(unittest.TestCase):
     def setUp(self):
         self.parser = lazy_turn.build_cli()
         self.root_dir = Path(__file__).resolve().parent.parent
+        self.fixtures_dir = self.root_dir / "tests" / "fixtures"
+        import council.helpers as helpers
+        self._orig_campaign_dirs = list(helpers.CAMPAIGN_DIRS)
+        helpers.CAMPAIGN_DIRS = [self.fixtures_dir / "campaigns"]
+
+    def tearDown(self):
+        import council.helpers as helpers
+        helpers.CAMPAIGN_DIRS = self._orig_campaign_dirs
 
     def get_skill_roots(self):
         """Retorna as raízes de skills a auditar (raiz local do workspace e raiz global da máquina)."""
@@ -221,7 +229,7 @@ class TestCLIContracts(unittest.TestCase):
 
     def test_p1_campaigns_no_generic_dc_ladder(self):
         """P1: Garante que nenhuma campanha ativa ou template repete a escada genérica universal de DC e contém yaml:mechanics."""
-        regras_files = list((self.root_dir / "campaigns").glob("*/regras.md"))
+        regras_files = list((self.fixtures_dir / "campaigns").glob("*/regras.md"))
         regras_files.append(self.root_dir / "templates" / "regras.template.md")
 
         self.assertGreater(len(regras_files), 1, "Nenhum arquivo de regras de campanha encontrado")
@@ -330,7 +338,7 @@ class TestCLIContracts(unittest.TestCase):
         self.assertIn("system: d20_3gates", regras_template.read_text(encoding="utf-8"))
 
         for cid in ["dinastia_cinzas", "imperio_valiria", "perpetuos_terra_incognita"]:
-            camp_dir = self.root_dir / "campaigns" / cid
+            camp_dir = self.fixtures_dir / "campaigns" / cid
             regras_text = (camp_dir / "regras.md").read_text(encoding="utf-8")
             diario_text = (camp_dir / "diario.md").read_text(encoding="utf-8")
             self.assertIn("system: d20_3gates", regras_text, f"system: d20_3gates ausente em {cid}/regras.md")
@@ -474,7 +482,7 @@ class TestCLIContracts(unittest.TestCase):
         # 3 e 4 em diretório temporário para não mutar as campanhas canônicas reais
         temp_path = make_workspace_temp_dir()
         try:
-            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 # commit com prose_file inexistente falha alto sem mutar SSOT
                 missing_file_res = cmd_commit(
@@ -525,7 +533,7 @@ class TestCLIContracts(unittest.TestCase):
 
         temp_path = make_workspace_temp_dir()
         try:
-            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 cmd_quest(
                     campaign_id="dinastia_cinzas",
@@ -561,7 +569,7 @@ class TestCLIContracts(unittest.TestCase):
 
         temp_path = make_workspace_temp_dir()
         try:
-            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 # 1. Add quest com objetivo
                 add_res = cmd_quest(
@@ -638,7 +646,7 @@ class TestCLIContracts(unittest.TestCase):
 
         temp_path = make_workspace_temp_dir()
         try:
-            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 # 1. Concede XP para viabilizar level up e pontos (award code/amount)
                 award_res = cmd_progress(
@@ -691,7 +699,7 @@ class TestCLIContracts(unittest.TestCase):
 
         temp_path = make_workspace_temp_dir()
         try:
-            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 cmd_quest(
                     campaign_id="dinastia_cinzas",
@@ -740,7 +748,7 @@ class TestCLIContracts(unittest.TestCase):
 
         temp_path = make_workspace_temp_dir()
         try:
-            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 # Adiciona relógio desvinculado
                 cmd_clock(campaign_id="dinastia_cinzas", add_name="Cerco dos Rebeldes", max_steps=4)
@@ -781,7 +789,7 @@ class TestCLIContracts(unittest.TestCase):
 
         temp_path = make_workspace_temp_dir()
         try:
-            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 arc_res = cmd_arc(
                     campaign_id="dinastia_cinzas",
@@ -838,7 +846,7 @@ class TestCLIContracts(unittest.TestCase):
         # Executa em sandbox isolado
         temp_path = make_workspace_temp_dir()
         try:
-            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 res = cmd_faction(campaign_id="dinastia_cinzas", list_factions=True)
                 self.assertEqual(res["campaign"], "dinastia_cinzas")
@@ -865,7 +873,7 @@ class TestCLIContracts(unittest.TestCase):
         temp_path = make_workspace_temp_dir()
         try:
             # 1. Calendário de Valíria com avanço de +30d atravessando de Ventania para Geada
-            shutil.copytree(self.root_dir / "campaigns" / "imperio_valiria", temp_path / "imperio_valiria")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "imperio_valiria", temp_path / "imperio_valiria")
             # Pina a data inicial na cópia: o teste não pode depender do estado mutável da campanha viva.
             diario_path = temp_path / "imperio_valiria" / "diario.md"
             diario_text = diario_path.read_text(encoding="utf-8")
@@ -889,7 +897,7 @@ class TestCLIContracts(unittest.TestCase):
                 self.assertIn("4 de Geada de 304", res_time["canonical_header_for_response"])
 
             # 2. faction --rep estrito em dinastia_cinzas
-            shutil.copytree(self.root_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
+            shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", temp_path / "dinastia_cinzas")
             with patch.object(helpers, "CAMPAIGN_DIRS", [temp_path]):
                 # Facção conhecida em mundo.md (Conselho dos Lordes de Cinzas) -> passa sem --create
                 res_known = cmd_faction("dinastia_cinzas", rep="Conselho dos Lordes de Cinzas:+1")

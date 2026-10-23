@@ -16,6 +16,8 @@ from campaign.locator import (
     load_ruleset,
     parse_regras_manifest,
 )
+from campaign.templates import init_campaign_from_templates
+import council.helpers as helpers
 
 
 class CampaignLocatorTests(unittest.TestCase):
@@ -36,6 +38,24 @@ class CampaignLocatorTests(unittest.TestCase):
         self.assertEqual(res["system"], DEFAULT_RULESET)
         self.assertEqual(res["overrides"], [])
         self.assertEqual(res["calendar"], {})
+
+    def test_init_campaign_from_templates(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            orig = list(helpers.CAMPAIGN_DIRS)
+            try:
+                helpers.CAMPAIGN_DIRS = [Path(tmp_dir)]
+                res = init_campaign_from_templates("nova_campanha", title="Nova Campanha")
+                self.assertEqual(res["status"], "ok")
+                self.assertEqual(len(res["created_files"]), 5)
+
+                # Verifica que a nova campanha é encontrada e válida
+                info = find_campaign("nova_campanha")
+                self.assertIsNotNone(info)
+                self.assertEqual(info["id"], "nova_campanha")
+                self.assertEqual(info["schema_version"], CURRENT_SCHEMA_VERSION)
+                self.assertEqual(info["system"], DEFAULT_RULESET)
+            finally:
+                helpers.CAMPAIGN_DIRS = orig
 
 
 if __name__ == "__main__":

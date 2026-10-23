@@ -18,8 +18,16 @@ import lazy_turn
 class TestBoundaryContracts(unittest.TestCase):
     def setUp(self):
         self.root_dir = Path(__file__).resolve().parent.parent
+        self.fixtures_dir = self.root_dir / "tests" / "fixtures"
         self.parser = lazy_turn.build_cli()
         self.campaign_ids = ["dinastia_cinzas", "imperio_valiria", "perpetuos_terra_incognita"]
+        import council.helpers as helpers
+        self._orig_campaign_dirs = list(helpers.CAMPAIGN_DIRS)
+        helpers.CAMPAIGN_DIRS = [self.fixtures_dir / "campaigns"]
+
+    def tearDown(self):
+        import council.helpers as helpers
+        helpers.CAMPAIGN_DIRS = self._orig_campaign_dirs
 
     def get_skill_files(self):
         """Retorna todos os arquivos de skills locais e globais."""
