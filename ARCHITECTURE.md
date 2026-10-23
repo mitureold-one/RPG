@@ -219,7 +219,7 @@ Regras:
 | Kernel | `errors`, `ids`, `registry`, `runtime`, `schema` | `events` (upcasters) e `projection` |
 | Fora do kernel | extração de CLI, aplicação, persistência, `temporal/` e campanha | store JSONL, índice SQLite, `Projector`s, `resources/` |
 | Emissão | nenhuma | eventos reais |
-| Aceite | 69 testes existentes verdes + suíte de contrato; `lazy_turn.py` < 200; Markdown idêntico | evento ida-e-volta; rebuild de projeção; idempotência |
+| Aceite | 157 testes automatizados verdes; `lazy_turn.py` com 54 linhas; Markdown idêntico | evento ida-e-volta; rebuild de projeção; idempotência |
 
 No R0 os contratos são exercitados com um fake em memória (`FakeEventStore`) em `tests/contract_support.py` e nos testes `tests/test_contract_*.py`; a suíte de `Projector` acompanha o motor de projeção no R1. Nenhum evento real é emitido e nenhum plugin é registrado; a suíte de contrato é o aceite que as implementações do R1 precisam cumprir. `contracts/` e `kernel/` não fazem I/O e não importam `council`, `rulesets`, `resources`, `adapters` ou `interfaces`; um teste AST garante a fronteira.
 

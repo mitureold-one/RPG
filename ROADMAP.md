@@ -292,7 +292,7 @@ A árvore canônica, as portas de extensão, as regras de dependência e o kerne
 
 | Etapa | Quando | O que move | Critério de aceite |
 |---|---|---|---|
-| **R0** | Antes da Fase 02 | criar `contracts/` + `kernel/` + `bootstrap.py` + suíte de contrato com fakes; extrair CLI, persistência, `temporal/` e campanha de `lazy_turn.py`/`helpers.py`; sem emissão de eventos | 69 testes existentes verdes + suíte de contrato; `lazy_turn.py` < 200 linhas; Markdown idêntico; contratos exercitados com fakes |
+| **R0** | Antes da Fase 02 (Concluído) | criar `contracts/` + `kernel/` + `bootstrap.py` + suíte de contrato com fakes; extrair CLI, persistência, `temporal/` e campanha de `lazy_turn.py`/`helpers.py`; sem emissão de eventos | 157 testes automatizados verdes; `lazy_turn.py` com 54 linhas; Markdown idêntico; contratos exercitados com fakes |
 | **R0.5** | Antes da Fase 02 | arquivar campanhas, criar fixtures, atualizar testes, apagar `campaigns/*` | suíte verde sem campanhas reais; `init-campaign` funciona |
 | **R1** | Com a Fase 02 | `ssot.py` → `resources/`; `EventStore` JSONL + índice; `Projector`s; `EventType`s e upcasters | nenhum arquivo > 300; evento ida-e-volta; rebuild de projeção; implementações aprovadas na suíte de contrato |
 | **R2** | Com a Fase 03/04 | `narrator.py` → `resources/npcs/`; `factions.py` → `resources/factions/`; `quests.py` → `resources/quests/`; `context/` | módulos < 300; sem ciclos; `BehaviorPolicy`/`FactionPolicy`/`ContextProvider` testados |
