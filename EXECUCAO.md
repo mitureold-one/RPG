@@ -285,7 +285,7 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Autor:** agente de código Antigravity, a pedido do usuário.
 - **Tipo:** correção de bug + teste + documentação.
 - **Status:** concluído (todos os itens P1 e P2 do QA fechados com 156 testes verdes).
-- **Commit:** 9c7b872 (ix(qa): resolve P1-A calendar drift, P2 containment and lock, and sync canonical docs).
+- **Commit:** 69153a9 (fix(qa): resolve P1-A calendar drift, P2 containment and lock, and sync canonical docs).
 - **Escopo:** correção dos apontamentos de QA em `QA-FASE-01.md` sobre o baseline R0/R0.5.
 - **O que foi feito:**
   - P1-A: suporte a avanços relativos `+Ny` e `+Nmo` calendar-aware em `temporal/calendar.py` e `application/commit_validation.py`, eliminando o drift de 5 dias em anos de 360 dias (Valíria) e ajustando meses gregorianos com clamping (ex: 31 Jan + 1mo -> 28 Fev);
@@ -312,6 +312,32 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
     - Templates incompletos abortam sem criar diretório.
 - **Relações:** [`QA-FASE-01.md`](QA-FASE-01.md); [`ARCHITECTURE.md`](ARCHITECTURE.md) §12 e §15; [`ROADMAP.md`](ROADMAP.md) §8; EX-0008, EX-0009.
 - **Pendências:** nenhuma para Fase 01 / R0.5. Base pronta e congelada para a especificação da Fase 02 (G1/G2).
+
+## EX-0011 — 2026-10-23 — Reverificação do QA após EX-0010
+
+- **Autor:** agente de QA DeepSeek Harness, a pedido do usuário.
+- **Tipo:** teste + documentação (auditoria).
+- **Status:** parcial (P1-B retirado após verificação do cânone; restam P2-D e P2-5).
+- **Corrige:** EX-0010 (o commit real é `69153a9`; o status da correção é parcial, não concluído).
+- **Commit:** não commitado.
+- **Escopo:** reverificação de `69153a9` contra [`QA-FASE-01.md`](QA-FASE-01.md) e `EX-0010`, incluindo a origem do calendário de Valíria.
+- **O que foi feito:** suíte completa, sonda dos 12 meses de Valíria com `+1d/+30d/+1mo/+1y`, commit end-to-end em mês com hífen, concorrência de `plan`/`commit`/`progress`, inspeção de `EX-0010` e das contagens nos documentos; verificação do cânone de `Sol-Branco` em `mundo.md` e no histórico de `regras.md`.
+- **Como:**
+  - `python -m unittest discover -s tests`;
+  - `advance_time_str` para cada mês de `calendar.months` e commit em cópia descartável das fixtures;
+  - 5 comandos concorrentes (2 `plan`, 2 `commit`, 1 `progress`);
+  - `git merge-base --is-ancestor 69153a9 HEAD`, inspeção de caracteres de controle e `git show 065c941:campaigns/imperio_valiria/regras.md`.
+- **Evidência:**
+  - **156 testes, OK** (17,3 s).
+  - P1-A fechado para os meses reconhecidos: `+1y` → `5 de Ventania de 305`; `+2y` → 306; `+12mo` → 305; `+1mo` 30 Ventania → 30 Geada; Gregorian 31 Jan → 28 Fev.
+  - **P1-B retirado:** `Sol-Branco` é a Capital Imperial (`mundo.md:19`), o império é Valíria; nenhuma data do diário usa “de Sol-Branco de 304”. O bloco `calendar:` foi introduzido em `7d7f598` e não existia em `065c941`; a lista de 12 nomes não tem fonte canônica. Vira **P2-D** (dado), com o regex de hífen como P3 latente caso `Noite-Longa` seja confirmado como mês.
+  - P2-1/P2-2/P2-3 verificados; 5 comandos concorrentes persistiram (2 cenas, 2 turnos, 1 XP); `P2-4` com resíduos de contagem.
+  - `EX-0010` registra `69153a9` (não ancestral do HEAD; `69153a9` é o commit real), contém `\x0c` na linha do commit e declara “todos os P1/P2 fechados” apesar do P1-B/P2-D.
+- **Relações:** [`QA-FASE-01.md`](QA-FASE-01.md) (atualização pós-remediação); EX-0009, EX-0010; commits `69153a9`, `7d7f598`, `065c941`.
+- **Pendências:**
+  - definir a lista canônica dos 12 meses e corrigir `tests/fixtures/campaigns/imperio_valiria/regras.md` (P2-D); decidir se `Noite-Longa` permanece;
+  - se houver mês legítimo com hífen, incluir `-` nos dois regexes de `temporal/calendar.py` e testar todos os meses declarados;
+  - corrigir o registro de `EX-0010` (hash `69153a9`) e atualizar contagens residuais (`69 testes`) e os P3 ainda abertos.
 
 ---
 

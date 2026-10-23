@@ -85,6 +85,13 @@ class TemporalCalendarTests(unittest.TestCase):
         res = advance_time_str("31 de Janeiro de 2026, 12:00", "+1mo")
         self.assertEqual(res, "28 de Fevereiro de 2026, 12:00")
 
+    def test_advance_calendar_with_hyphenated_month(self) -> None:
+        cal = {"months": ["Noite-Longa", "Ventania"], "days_per_month": [30, 30]}
+        res = advance_time_str("15 de Noite-Longa de 304, 12:00", "+1d", calendar=cal)
+        self.assertEqual(res, "16 de Noite-Longa de 304, 12:00")
+        res_mo = advance_time_str("15 de Noite-Longa de 304, 12:00", "+1mo", calendar=cal)
+        self.assertEqual(res_mo, "15 de Ventania de 304, 12:00")
+
 
 if __name__ == "__main__":
     unittest.main()

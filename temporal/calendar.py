@@ -134,7 +134,7 @@ def advance_time_str(dt_str: str, advance: int | str, calendar: dict | None = No
         if is_year or is_month:
             # Padrão A: 'DD de Mês de YYYY, HH:MM' ou 'DD de Mês de YYYY'
             m_full = re.search(
-                r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ]+)\s+de\s+(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?",
+                r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ\-]+)\s+de\s+(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?",
                 dt_str,
                 re.IGNORECASE,
             )
@@ -250,7 +250,7 @@ def advance_time_str(dt_str: str, advance: int | str, calendar: dict | None = No
 
     # Padrão A: 'DD de Mês de YYYY, HH:MM' ou 'DD de Mês de YYYY'
     m_full = re.search(
-        r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ]+)\s+de\s+(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?",
+        r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ\-]+)\s+de\s+(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?",
         dt_str,
         re.IGNORECASE,
     )
