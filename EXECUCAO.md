@@ -186,6 +186,29 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
   - R0d: extração de persistência, `temporal/` e `campanha/`.
   - R0.5: fixtures e remoção das campanhas vivas.
 
+## EX-0006 — 2026-10-23 — Kernel R0c: extração de `interfaces/cli/` e `application/`
+
+- **Autor:** agente de código Antigravity, a pedido do usuário.
+- **Tipo:** refatoração + teste.
+- **Status:** concluído (escopo R0c; R0d e R0.5 pendentes).
+- **Commit:** `b2b05e3` (`refactor(cli): extract interfaces/cli and application from lazy_turn (R0c)`).
+- **Escopo:** etapa R0c — extração behavior-preserving da CLI e dos casos de uso de `lazy_turn.py`.
+- **O que foi feito:** `lazy_turn.py` reduzido de 2.122 para 54 linhas (entry point + reexports `cmd_*`/`build_cli`); casos de uso movidos para `application/` e parser/despacho/formatação para `interfaces/cli/`, sem alterar corpo de função. A extração foi mecânica (fatiamento por AST, imports filtrados por uso).
+- **Como:**
+  - `application/transaction.py` (`_serialized_campaign_mutation`), `prepare.py`, `commit.py`, `commit_validation.py`, `showrunner.py` (clock/plan/arc), `progression.py` (quest/progress), `factions.py`, `prose.py`; `application/__init__.py` reexporta os casos de uso e os quatro nomes de domínio usados pela CLI.
+  - `interfaces/cli/parser.py` (`build_cli`) e `interfaces/cli/main.py` (`main`); a CLI importa só de `application`.
+  - `tests/test_state_stability.py`: `patch` movido de `lazy_turn.cmd_review` para `application.commit.cmd_review` (previsto em [`ROADMAP.md`](ROADMAP.md) §6.5).
+  - `tests/test_architecture_boundaries.py`: `application/` não importa `interfaces`/`lazy_turn`; `lazy_turn.py` < 200 linhas; nenhum arquivo em `application/`, `interfaces/`, `contracts/`, `kernel/` com 600+ linhas.
+- **Evidência:**
+  - `python -m unittest discover -s tests` → **137 testes, OK** (135 + 2 novos de fronteira).
+  - Snapshot de 49 invocações read-only da CLI (`--help` de todos os subcomandos; `review`, `clock`, `plan`, `quest`, `progress`, `faction` em texto e JSON; `prepare --no-roll` em modo gm/director; `check-prose`; campanha inexistente; comando inválido) nas 3 campanhas, antes e depois: **saída e exit code byte-idênticos**; hashes dos Markdown das campanhas inalterados.
+  - Checagem AST de nomes não definidos/imports não usados nos módulos novos: zero ocorrências.
+- **Relações:** [`ARCHITECTURE.md`](ARCHITECTURE.md) §4 e §12; [`ROADMAP.md`](ROADMAP.md) §6.1, §6.3–§6.5; EX-0005.
+- **Pendências:**
+  - `application/prepare.py` (475) e `application/commit.py` (486) estão na faixa de alerta (400–600): `cmd_prepare` e `cmd_commit` são funções únicas de ~450 linhas; quebrá-las exige mudar o corpo e foi deixado para R1/R2.
+  - R0d: extração de persistência, `temporal/` e `campanha/` de `council/helpers.py`.
+  - R0.5: fixtures e remoção das campanhas vivas.
+
 ---
 
 ## 5. Como registrar uma nova execução
