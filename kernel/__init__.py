@@ -20,20 +20,28 @@ from kernel.errors import (
     ValidationError,
 )
 from kernel.ids import new_event_id
+from kernel.registry import PluginManifest, Registry
+from kernel.runtime import Runtime
+from kernel.schema import is_valid_schema, validate_schema
 
 __all__ = [
-    "RpgError",
-    "ValidationError",
     "ConfigurationError",
-    "NotFoundError",
     "ConflictError",
-    "SeqConflictError",
-    "SchemaError",
     "DuplicateRegistrationError",
-    "UnknownPortError",
-    "RegistryFrozenError",
-    "MissingRequirementError",
     "LockTimeoutError",
+    "MissingRequirementError",
+    "NotFoundError",
+    "PluginManifest",
+    "Registry",
+    "RegistryFrozenError",
     "ReplayError",
+    "RpgError",
+    "Runtime",
+    "SchemaError",
+    "SeqConflictError",
+    "UnknownPortError",
+    "ValidationError",
+    "is_valid_schema",
     "new_event_id",
+    "validate_schema",
 ]
