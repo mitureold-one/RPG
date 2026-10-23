@@ -209,6 +209,30 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
   - R0d: extração de persistência, `temporal/` e `campanha/` de `council/helpers.py`.
   - R0.5: fixtures e remoção das campanhas vivas.
 
+## EX-0007 — 2026-10-23 — Kernel R0d: extração de persistência, `temporal/` e `campaign/`
+
+- **Autor:** agente de código Antigravity, a pedido do usuário.
+- **Tipo:** refatoração + teste.
+- **Status:** concluído (escopo R0d concluído; R0.5 pendente).
+- **Commit:** `dad9b30` (`refactor(infra): extract persistence, temporal and campaign from helpers (R0d)`).
+- **Escopo:** etapa R0d — extração de persistência, tempo e gerenciamento de campanhas de `council/helpers.py`.
+- **O que foi feito:** `council/helpers.py` reduzido de 648 para 61 linhas, tornando-se uma fachada de compatibilidade reexportadora; extração de `adapters/persistence/files.py` (escrita atômica e lock cooperativo), `temporal/calendar.py` (cálculo e avanço de datas sem I/O), `campaign/locator.py` (localização, schema_version e manifesto de regras) e `campaign/templates.py` (inicialização de novas campanhas a partir dos templates).
+- **Como:**
+  - `adapters/persistence/files.py`: `atomic_write_text`, `campaign_lock`.
+  - `temporal/calendar.py`: `advance_time_str`, `parse_time_increment`, `_normalize_calendar`, `MONTHS_PT`, `MONTHS_MAP`.
+  - `campaign/locator.py`: `find_campaign`, `parse_regras_manifest`, `get_campaign_overrides`, `get_campaign_system`, `load_ruleset`, `get_available_rulesets`, `_get_campaign_dirs()` (garantindo compatibilidade reversa com mocks e patches em `helpers.CAMPAIGN_DIRS`).
+  - `campaign/templates.py`: `init_campaign_from_templates`.
+  - `council/helpers.py`: reexporta todos os símbolos originais para preservar compatibilidade com callers existentes.
+  - `tests/test_architecture_boundaries.py`: valida limites de tamanho (`helpers.py` < 100 linhas, módulos < 600) e ausência de imports proibidos em `temporal` e `adapters/persistence`.
+  - `tests/test_temporal_calendar.py`, `tests/test_adapters_persistence.py`, `tests/test_campaign_locator.py`: novos testes unitários diretos.
+- **Evidência:**
+  - `python -m unittest discover -s tests` → **148 testes, OK** (137 anteriores + 11 novos).
+  - Snapshot de 49 invocações da CLI nas 3 campanhas: **saída e exit code byte-idênticos** (`diffs: []`).
+  - Todos os arquivos de produção extraídos abaixo de 250 linhas (`files.py`: 98, `calendar.py`: 234, `locator.py`: 204, `templates.py`: 137, `helpers.py`: 61).
+- **Relações:** [`ARCHITECTURE.md`](ARCHITECTURE.md) §4 e §12; [`ROADMAP.md`](ROADMAP.md) §6.1, §6.4; EX-0006.
+- **Pendências:**
+  - R0.5: fixtures e remoção das campanhas vivas.
+
 ---
 
 ## 5. Como registrar uma nova execução
