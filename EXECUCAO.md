@@ -37,7 +37,7 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 6. **Autoria explícita.** Humano ou agente, com identificação suficiente para auditoria.
 7. **Status único:** `concluído`, `parcial`, `revertido`, `bloqueado` ou `não verificado`.
 8. **Commit obrigatório para `concluído`.** Se não houve commit, registre `não commitado` e o motivo.
-9. **Teste nomeado.** “68 testes OK” é evidência; “testado” sem comando não é.
+9. **Teste nomeado.** “69 testes OK” é evidência; “testado” sem comando não é.
 10. **Conflito com código/teste:** o código e o teste vencem. Abra uma entrada de correção; não reescreva a história.
 11. **Sem segredos, tokens, caminhos pessoais ou dados sensíveis.**
 12. **Uma entrada não altera outra.** Se a implementação mudou depois, a entrada antiga permanece e a nova registra a mudança.
@@ -113,6 +113,54 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Relações:** [`ROADMAP.md`](ROADMAP.md) Fase 01.5; EX-0001; [`AGENTS.md`](AGENTS.md).
 - **Pendências:**
   - Persistência de `--prose` original por turno deferida para a Fase 02 (event store append-only).
+
+## EX-0003 — 2026-10-22 — Arquitetura-alvo e kernel de extensão
+
+- **Autor:** agente de código DeepSeek Harness, com aprovação do usuário ("concordo").
+- **Tipo:** documentação + arquitetura.
+- **Status:** parcial (documento criado; commit pendente).
+- **Commit:** não commitado.
+- **Escopo:** baseline arquitetural para as Fases 02–08; kernel de plugins, portas de extensão e mapa R0–R4.
+- **O que foi feito:** decisão por event log como verdade e Markdown como projeção; armazenamento híbrido JSONL canônico + SQLite derivado; monólito modular com kernel de plugins e registro explícito; portas para resolução, comportamento, facção, contexto, direção, memória, projeção, evento, revisão e calendário; sequência de refatoração R0–R4; critérios de aceite arquiteturais.
+- **Como:**
+  - `ARCHITECTURE.md`: documento canônico da árvore, invariantes, contratos e migração.
+  - `ROADMAP.md`: removida a árvore duplicada; seção 6 aponta para `ARCHITECTURE.md`; próximos passos atualizados para R0/R0.5/Fase 02.
+  - `AGENTS.md`: ponteiro para o registro append-only em `EXECUCAO.md` (já commitado no ciclo 01.5).
+- **Evidência:**
+  - `ARCHITECTURE.md` com 616 linhas; `ROADMAP.md` sem árvore duplicada.
+  - `python -m unittest discover -s tests` → **69 testes, OK** antes e depois da documentação; nenhum código de produção alterado.
+- **Relações:** [`ARCHITECTURE.md`](ARCHITECTURE.md); [`ROADMAP.md`](ROADMAP.md); [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md) §3–§11; EX-0001/EX-0002.
+- **Pendências:**
+  - Commitar `ARCHITECTURE.md` e a atualização do `ROADMAP.md`.
+  - Executar R0 (kernel skeleton + extração de CLI/persistência/tempo/campanha).
+  - Executar R0.5 (fixtures + arquivamento + remoção das campanhas antigas).
+
+## EX-0004 — 2026-10-23 — Base do kernel consolidada e R0a
+
+- **Autor:** agente de código DeepSeek Harness, a pedido do usuário.
+- **Tipo:** documentação + refatoração + teste.
+- **Status:** concluído (escopo R0a; R0b–R0d pendentes).
+- **Commits:** `f63fe65` (documentação), `4c368d4` (teste de calendário), `e34649f` (R0a).
+- **Escopo:** base do kernel em `ARCHITECTURE.md` §5.0, delimitação G1/G2 e etapa R0a (contratos, erros, IDs, fakes e suíte de contrato).
+- **O que foi feito:** consolidação da base do kernel e do escopo dos gates; remoção do acoplamento do teste de calendário ao estado da campanha viva; criação de `contracts/` (envelope, portas, configuração, serialização), `kernel/errors.py`, `kernel/ids.py`, `FakeEventStore` e suíte de contrato executável; teste AST de fronteira.
+- **Como:**
+  - `ARCHITECTURE.md`: §1 (G1/G2), §5.0 (definição, cinco responsabilidades, superfície, `EventDraft`/`append`/`last_seq`, R0/R1), §5.1, §5.3, §5.4, §12, §15, §16.
+  - `ROADMAP.md`: tabela de gates, `temporal/`, R0/R0.5/R1, cuidados de migração e próximos passos.
+  - `tests/test_cli_contracts.py`: o teste de Valíria fixa a data inicial na cópia temporária antes de `+30d`.
+  - `contracts/event.py`, `contracts/ports.py`, `contracts/config.py`, `contracts/serialization.py`: tipos e protocolos sem I/O.
+  - `kernel/errors.py`, `kernel/ids.py`: taxonomia com `code` estável e ULID monotônico `evt_<ulid>`.
+  - `tests/contract_support.py`: `FakeEventStore` e mixin `EventStoreContract`; `tests/test_contract_*.py`, `tests/test_kernel_ids.py`, `tests/test_architecture_boundaries.py`.
+- **Evidência:**
+  - `python -m unittest discover -s tests` → **110 testes, OK** (69 existentes + 41 novos).
+  - `contracts/event.py` com 194 linhas; `kernel/errors.py` com 113; nenhum arquivo de produção acima de 300.
+  - Teste AST confirma que `contracts/` e `kernel/` não importam `council`, `rulesets`, `resources`, `adapters`, `interfaces` nem módulos de I/O.
+  - `lazy_turn.py` permanece com 2.122 linhas até R0c/R0d.
+- **Relações:** [`ARCHITECTURE.md`](ARCHITECTURE.md) §5.0; [`ROADMAP.md`](ROADMAP.md) §5 e §6.4; EX-0003 (corrige o status de commit pendente).
+- **Pendências:**
+  - R0b: `kernel/registry.py`, `kernel/runtime.py`, `kernel/schema.py`, `bootstrap.py`.
+  - R0c: extração de `interfaces/cli/` e `application/`, com `lazy_turn.py` < 200 linhas.
+  - R0d: extração de persistência, `temporal/` e `campanha/`.
+  - R0.5: fixtures e remoção das campanhas vivas.
 
 ---
 
