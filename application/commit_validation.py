@@ -35,12 +35,7 @@ def _compute_commit_datetime(
     if time_str:
         clean = time_str.strip()
         if clean.startswith("+"):
-            rel_mins = parse_time_increment(clean)
-            if rel_mins <= 0:
-                raise ValueError(
-                    f"Incremento de tempo inválido: '{time_str}'. Use '+30m', '+6h', '+14d', '+2mo' ou '+1y'."
-                )
-            return advance_time_str(current_dt, rel_mins, calendar=calendar)
+            return advance_time_str(current_dt, clean, calendar=calendar)
         return clean
     if time_advance_mins > 0:
         return advance_time_str(current_dt, time_advance_mins, calendar=calendar)

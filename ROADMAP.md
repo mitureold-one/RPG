@@ -318,8 +318,7 @@ A árvore canônica, as portas de extensão, as regras de dependência e o kerne
 
 ### 7.1 Estado atual
 
-- 69 testes automatizados verdes.
-- 12 testes novos de estabilidade: atomicidade, rollback, validação de entidades, parsing de NPC, idempotência, prosa por arquivo, calendário.
+- 156 testes automatizados verdes (incluindo suíte de estabilidade, suíte de contratos com fakes, validação de schema/registry/runtime e testes de contenção/calendário pós-QA).
 - Nenhum teste de comportamento narrativo ainda.
 
 ### 7.2 Cenários obrigatórios da Fase 08
@@ -341,10 +340,10 @@ Cada cenário deve ter estado inicial, ação/tempo, comportamento esperado e as
 
 ## 8. Próximos passos imediatos
 
-1. **Aprovar e commitar** [`ARCHITECTURE.md`](ARCHITECTURE.md) e [`ROADMAP.md`](ROADMAP.md) com a base do kernel consolidada.
-2. **Revisar a especificação consolidada** da base antes de abrir os commits do R0.
-3. **Executar R0:** contratos + kernel de composição + extração behavior-preserving de CLI, persistência, `temporal/` e campanha.
-4. **Executar R0.5:** arquivar campanhas, criar fixtures, apagar `campaigns/*`.
+1. **Fase 01 e 01.5 concluídas:** fundação de estabilidade, calendário declarativo e blindagem de prosa (`EX-0001`/`EX-0002`).
+2. **R0 concluído:** contratos (`contracts/`), kernel de extensão (`kernel/`), `bootstrap.py` e extração modular de CLI, persistência, `temporal/` e `campaign/` (`EX-0004` a `EX-0007`).
+3. **R0.5 concluído:** arquivamento de campanhas em `archive/campaigns/`, fixtures em `tests/fixtures/campaigns/`, `campaigns/` limpo com `.gitkeep` (`EX-0008`).
+4. **Auditoria QA concluída:** correções de drift de calendário P1-A, contenção de `campaign_id` P2-1, all-or-nothing de templates P2-2, e lock transacional em plan/progress P2-3 (`EX-0009` / `QA-FASE-01.md`).
 5. **Escrever a spec da Fase 02** (G1/G2): payloads, serialização/versionamento, retenção, projeção, correções, dependências, fila esqueleto.
 6. **Executar R1 + Fase 02.**
 7. Seguir para R2–R4 conforme as fases.

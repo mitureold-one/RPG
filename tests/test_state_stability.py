@@ -261,6 +261,45 @@ class TestCommitRollback(StabilityFixture):
         self.assertEqual(self.diario.read_text(encoding="utf-8"), before_diario)
         self.assertEqual(self.ficha.read_text(encoding="utf-8"), before_ficha)
 
+    def test_progress_award_failure_restores_snapshot(self):
+        from unittest.mock import patch
+        from application.progression import cmd_progress
+
+        before_diario = self.diario.read_text(encoding="utf-8")
+        before_ficha = self.ficha.read_text(encoding="utf-8")
+        with patch("application.progression.append_xp_ledger_entry", side_effect=RuntimeError("falha no ledger")):
+            with self.assertRaises(RuntimeError):
+                cmd_progress(
+                    campaign_id="test_camp",
+                    award="quest_main:150",
+                    reason="Missão concluída",
+                )
+        self.assertEqual(self.diario.read_text(encoding="utf-8"), before_diario)
+        self.assertEqual(self.ficha.read_text(encoding="utf-8"), before_ficha)
+
+    def test_plan_and_progress_hold_campaign_lock(self):
+        import os
+        from application.showrunner import cmd_plan
+        from application.progression import cmd_progress
+        from council.helpers import campaign_lock
+
+        orig_timeout = os.environ.get("RPGPRO_LOCK_TIMEOUT")
+        os.environ["RPGPRO_LOCK_TIMEOUT"] = "0.05"
+        try:
+            with campaign_lock(self.camp_dir, timeout=0.5):
+                res_plan = cmd_plan(campaign_id="test_camp", add_beat="Nova cena sob lock")
+                self.assertIn("error", res_plan)
+                self.assertIn("lock", res_plan["error"])
+
+                res_prog = cmd_progress(campaign_id="test_camp", award="100")
+                self.assertIn("error", res_prog)
+                self.assertIn("lock", res_prog["error"])
+        finally:
+            if orig_timeout is not None:
+                os.environ["RPGPRO_LOCK_TIMEOUT"] = orig_timeout
+            else:
+                os.environ.pop("RPGPRO_LOCK_TIMEOUT", None)
+
 
 class TestAtomicWrite(unittest.TestCase):
     def test_atomic_write_replaces_and_leaves_no_temp(self):

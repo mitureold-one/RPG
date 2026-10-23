@@ -11,6 +11,7 @@ from campaign.locator import (
     get_campaign_system,
     load_ruleset,
     parse_regras_manifest,
+    validate_campaign_id,
 )
 from campaign.templates import (
     TEMPLATES_DIR,
@@ -30,4 +31,5 @@ __all__ = [
     "init_campaign_from_templates",
     "load_ruleset",
     "parse_regras_manifest",
+    "validate_campaign_id",
 ]

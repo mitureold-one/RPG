@@ -11,7 +11,7 @@ Framework determinístico e autônomo para conduzir campanhas de RPG de Mesa (TT
 O ecossistema opera sob três graus estritos de prioridade:
 
 1. **Grau 1: O Motor Universal (Framework RPG — Prioridade Máxima)**
-   * **Onde vive:** `AGENTS.md`, `council/`, `lazy_turn.py` e `.agents/skills/`.
+   * **Onde vive:** `AGENTS.md`, `contracts/`, `kernel/`, `application/`, `interfaces/`, `council/`, `lazy_turn.py` e `.agents/skills/`.
    * **Escopo:** 100% agnóstico a gênero ou cenário. Governa o Loop de Turno determinístico, Barreira Epistêmica (anti-metagaming), Proibição de Titiritagem (Anti-Puppeteering), Prosa Clássica com Travessão, Relógios de Facção, Transições de Arco, Auditoria e SSOT único em Markdown.
    * **Grau 1b (Rulesets Plugáveis):** Resolução matemática de testes (ex: d20 3 Portões, modificadores, escada de DC e eixos de NPC).
 2. **Grau 2: As Leis do Cenário & Campanha Ativa (Diegese — Prioridade Alta)**
@@ -31,25 +31,25 @@ RPGPRO/
 │   └── skills/
 │       ├── rpg-narrative-engine/  # Skill de GM, disciplina de prosa e loop de turno
 │       └── rpg-showrunner/        # Skill sob demanda: macro-trama, relógios e ritmo
-├── council/                       # Módulos Python do Motor Universal
-│   ├── gm.py                      # Resolução de dados dos 3 Portões e cálculo de custos
-│   ├── helpers.py                 # Constantes, datas e localização dinâmica de campanhas
-│   ├── narrator.py                # Catálogo de NPCs, psicologia, agência e barreira epistêmica
-│   ├── reviewer.py                # Auditoria de SSOT, paradoxos temporais e integridade
-│   ├── ssot.py                    # Leitura e escrita atômica de ficha.md e diario.md
-│   └── writer.py                  # ai-memory e mandatos estruturais de prosa de cena
-├── campaigns/                     # Campanhas ativas (SSOT do estado do jogo)
-│   ├── dinastia_cinzas/
-│   ├── imperio_valiria/
-│   └── perpetuos_terra_incognita/
+├── contracts/                     # Contratos abstratos (envelope de eventos, portas, config)
+├── kernel/                        # Kernel de composição (registry, runtime, schema)
+├── application/                   # Casos de uso (prepare, commit, transaction, showrunner, progress)
+├── interfaces/cli/                # Parser argparse e despacho de comandos da CLI
+├── adapters/persistence/          # Escrita atômica e locks cooperativos de arquivo
+├── temporal/                      # Calendários declarativos e avanço temporal
+├── campaign/                      # Localização, validação e templates de campanhas
+├── council/                       # Fachada e lógica de domínio (gm, reviewer, narrator, ssot)
+├── campaigns/                     # Campanhas ativas (limpo com .gitkeep; use init-campaign)
+├── archive/campaigns/             # Campanhas legadas arquivadas
 ├── templates/                     # Templates canônicos para novas campanhas
-├── specs/                         # Especificações de desenvolvimento do motor
-├── tests/                         # Testes automatizados de contratos de CLI e mandatos
+├── tests/                         # Testes automatizados (156 testes, sem campanhas vivas)
+│   └── fixtures/campaigns/        # Fixtures isoladas para suíte de testes
 ├── AGENTS.md                      # Regra Soberana de Workspace para Agentes
-├── DECISOES_ARQUITETURA.md        # Registro de decisões arquiteturais do projeto
-├── lazy_turn.py                   # CLI central de orquestração do jogo
-├── sync_daemon.py                 # Sincronização e persistência de memórias
-└── README.md
+├── ARCHITECTURE.md                # Arquitetura canônica, portas de extensão e gates
+├── ROADMAP.md                     # Roadmap estratégico e critérios de aceite
+├── EXECUCAO.md                    # Registro append-only de execuções e auditorias
+├── lazy_turn.py                   # Ponto de entrada CLI (54 linhas)
+└── sync_daemon.py                 # Sincronização e persistência de memórias
 ```
 
 ---

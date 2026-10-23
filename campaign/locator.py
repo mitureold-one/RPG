@@ -14,6 +14,17 @@ CAMPAIGN_DIRS = [
 
 CURRENT_SCHEMA_VERSION = 1
 DEFAULT_RULESET = "d20_3gates"
+CAMPAIGN_ID_REGEX = re.compile(r"^[a-z0-9_][a-z0-9_-]*$")
+
+
+def validate_campaign_id(campaign_id: str) -> str:
+    """Valida o identificador de campanha contra directory traversal e caracteres proibidos."""
+    if not isinstance(campaign_id, str) or not CAMPAIGN_ID_REGEX.match(campaign_id.strip()):
+        raise ValueError(
+            f"ID de campanha inválido: '{campaign_id}'. "
+            f"Deve conter apenas letras minúsculas, dígitos, '_' ou '-', e não pode conter caminhos ou pontos."
+        )
+    return campaign_id.strip()
 
 
 def _get_campaign_dirs() -> list[Path]:
@@ -132,10 +143,14 @@ def parse_regras_manifest(regras_path: Path) -> dict:
 
 def get_campaign_overrides(campaign_id: str) -> list:
     """Retorna a lista de overrides mecânicos tipados de regras.md da campanha."""
+    try:
+        clean_id = validate_campaign_id(campaign_id)
+    except ValueError:
+        return []
     for base in _get_campaign_dirs():
         if not base.exists():
             continue
-        regras_path = base / campaign_id / "regras.md"
+        regras_path = base / clean_id / "regras.md"
         if regras_path.is_file():
             manifest = parse_regras_manifest(regras_path)
             return manifest.get("overrides", [])
@@ -144,10 +159,14 @@ def get_campaign_overrides(campaign_id: str) -> list:
 
 def get_campaign_system(campaign_id: str) -> str:
     """Extrai o identificador de sistema de resolução declarado em regras.md."""
+    try:
+        clean_id = validate_campaign_id(campaign_id)
+    except ValueError:
+        return DEFAULT_RULESET
     for base in _get_campaign_dirs():
         if not base.exists():
             continue
-        regras_path = base / campaign_id / "regras.md"
+        regras_path = base / clean_id / "regras.md"
         if regras_path.is_file():
             manifest = parse_regras_manifest(regras_path)
             return manifest.get("system", DEFAULT_RULESET)
@@ -161,15 +180,19 @@ def find_campaign(campaign_id: str):
     ausente de diario.md, sem schema_version declarado ou com ruleset desconhecido.
     Retorna None se o diretório da campanha não existir.
     """
+    clean_id = validate_campaign_id(campaign_id)
     for base in _get_campaign_dirs():
         if not base.exists():
             continue
-        camp_dir = base / campaign_id
+        base_resolved = base.resolve()
+        camp_dir = (base / clean_id).resolve()
+        if camp_dir.parent != base_resolved:
+            raise ValueError(f"Caminho da campanha fora do diretório permitido: '{campaign_id}'.")
         if camp_dir.is_dir():
             diario_path = camp_dir / "diario.md"
             if not diario_path.is_file():
                 raise FileNotFoundError(
-                    f"Campanha '{campaign_id}' corrompida: 'diario.md' não encontrado em {camp_dir}."
+                    f"Campanha '{clean_id}' corrompida: 'diario.md' não encontrado em {camp_dir}."
                 )
             diario_text = diario_path.read_text(encoding="utf-8")
             m_schema = re.search(r"schema_version:\s*(\d+)", diario_text)
@@ -177,18 +200,18 @@ def find_campaign(campaign_id: str):
                 m_schema = re.search(r"<!--\s*schema_version:\s*(\d+)\s*-->", diario_text)
             if not m_schema:
                 raise ValueError(
-                    f"Campanha '{campaign_id}' inválida: 'diario.md' não declara 'schema_version' (ex: 'schema_version: 1')."
+                    f"Campanha '{clean_id}' inválida: 'diario.md' não declara 'schema_version' (ex: 'schema_version: 1')."
                 )
             version = int(m_schema.group(1))
             if version > CURRENT_SCHEMA_VERSION:
                 raise ValueError(
-                    f"Campanha '{campaign_id}' incompatível: schema_version {version} é superior à versão suportada pelo motor ({CURRENT_SCHEMA_VERSION})."
+                    f"Campanha '{clean_id}' incompatível: schema_version {version} é superior à versão suportada pelo motor ({CURRENT_SCHEMA_VERSION})."
                 )
             manifest = parse_regras_manifest(camp_dir / "regras.md")
             system_name = manifest.get("system", DEFAULT_RULESET)
             load_ruleset(system_name)
             return {
-                "id": campaign_id,
+                "id": clean_id,
                 "type": "markdown",
                 "dir": camp_dir,
                 "ficha": camp_dir / "ficha.md",

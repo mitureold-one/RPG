@@ -17,19 +17,44 @@ def init_campaign_from_templates(
     start_loc: str = "Local Inicial",
 ) -> dict:
     """Inicializa os 5 arquivos canônicos em campaigns/<campaign_id>/ a partir dos templates oficiais."""
+    try:
+        clean_id = locator.validate_campaign_id(campaign_id)
+    except ValueError as exc:
+        return {"error": str(exc)}
+
     dirs = locator._get_campaign_dirs()
     if not dirs or not dirs[0].exists():
         return {"error": "Diretório de campanhas não encontrado."}
 
-    camp_dir = dirs[0] / campaign_id
+    base_resolved = dirs[0].resolve()
+    camp_dir = (dirs[0] / clean_id).resolve()
+    if camp_dir.parent != base_resolved:
+        return {"error": f"Caminho da campanha fora do diretório permitido: '{campaign_id}'."}
+
     if camp_dir.exists():
-        return {"error": f"A campanha '{campaign_id}' já existe em {camp_dir}."}
+        return {"error": f"A campanha '{clean_id}' já existe em {camp_dir}."}
 
     if not TEMPLATES_DIR.exists():
         return {"error": f"Diretório de templates não encontrado em {TEMPLATES_DIR}."}
 
+    files_map = {
+        "ficha.md": TEMPLATES_DIR / "ficha.template.md",
+        "diario.md": TEMPLATES_DIR / "diario.template.md",
+        "npcs.md": TEMPLATES_DIR / "npcs.template.md",
+        "mundo.md": TEMPLATES_DIR / "mundo.template.md",
+        "regras.md": TEMPLATES_DIR / "regras.template.md",
+    }
+
+    # All-or-nothing: verifica os 5 templates antes de criar qualquer diretório ou arquivo
+    missing_templates = [name for name, path in files_map.items() if not path.is_file()]
+    if missing_templates:
+        return {
+            "error": f"Templates ausentes em {TEMPLATES_DIR}: {', '.join(missing_templates)}. "
+                     f"A criação da campanha foi abortada sem criar diretório."
+        }
+
     camp_dir.mkdir(parents=True, exist_ok=True)
-    clean_title = title.strip() or campaign_id.replace("_", " ").title()
+    clean_title = title.strip() or clean_id.replace("_", " ").title()
 
     replacements = {
         "{{TITULO_CAMPANHA}}": clean_title,
@@ -111,26 +136,31 @@ def init_campaign_from_templates(
         "{{PRIMEIRO_MARCO_DECISIVO_DO_ARCO}}": "Consolidação da primeira vitória tática e revelação de segredo oculto",
     }
 
-    files_map = {
-        "ficha.md": TEMPLATES_DIR / "ficha.template.md",
-        "diario.md": TEMPLATES_DIR / "diario.template.md",
-        "npcs.md": TEMPLATES_DIR / "npcs.template.md",
-        "mundo.md": TEMPLATES_DIR / "mundo.template.md",
-        "regras.md": TEMPLATES_DIR / "regras.template.md",
-    }
-
     created = []
-    for target_name, tmpl_path in files_map.items():
-        if tmpl_path.exists():
+    try:
+        for target_name, tmpl_path in files_map.items():
             content = tmpl_path.read_text(encoding="utf-8")
             for placeholder, val in replacements.items():
                 content = content.replace(placeholder, val)
             atomic_write_text(camp_dir / target_name, content)
             created.append(target_name)
+    except Exception as exc:
+        for f in created:
+            p = camp_dir / f
+            if p.is_file():
+                try:
+                    p.unlink()
+                except OSError:
+                    pass
+        try:
+            camp_dir.rmdir()
+        except OSError:
+            pass
+        return {"error": f"Falha na escrita dos arquivos da campanha: {exc}"}
 
     return {
         "status": "ok",
-        "campaign": campaign_id,
+        "campaign": clean_id,
         "path": str(camp_dir),
         "title": clean_title,
         "created_files": created,

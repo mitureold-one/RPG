@@ -2,13 +2,22 @@
 
 import argparse
 
+from campaign.locator import validate_campaign_id
+
+
+def _campaign_arg(val: str) -> str:
+    """Valida o argumento --campaign contra directory traversal."""
+    if not val:
+        return ""
+    return validate_campaign_id(val)
+
 
 def build_cli() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Orquestrador Determinístico Agnóstico de Turno e Modos RPG (Markdown SSOT)")
     sub = parser.add_subparsers(dest="cmd")
 
     p_prep = sub.add_parser("prepare", help="Prepara o contexto conforme o modo (gm, narrator, writer, reviewer, architect, director)")
-    p_prep.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_prep.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
     p_prep.add_argument("--action", default="Inspecionar contexto", help="Ação do jogador ou instrução do modo")
     p_prep.add_argument("--mode", default="gm", choices=["gm", "narrator", "writer", "reviewer", "architect", "director"], help="Modo de operação da skill")
     p_prep.add_argument("--stakes", default="normal", choices=["normal", "high", "climax"], help="Peso dramático da situação avaliada pelo Mestre (normal, high, climax)")
@@ -30,7 +39,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_prep.add_argument("--vs-variant", "--vs_variant", dest="vs_variant", default="normal", choices=["normal", "advantage", "disadvantage", "adv", "disadv"], help="Vantagem ou desvantagem do segundo NPC na rolagem")
 
     p_com = sub.add_parser("commit", help="Registra as consequências do turno em ficha.md, npcs.md e diario.md")
-    p_com.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_com.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
     p_com.add_argument("--summary", "--narrative", dest="summary", required=True, help="Resumo factual e consequências do turno para o diario.md")
     p_com.add_argument("--cost", default="", help="Qualquer recurso da ficha (ex: 'HP -3, Stamina -2, time +5m' ou '+1 HP, Sanidade -4')")
     p_com.add_argument("--time", default="", help="Nova data/hora exata ou incremento relativo (ex: '+15m', '+2h', '+14d', '+2mo', '+1y')")
@@ -48,22 +57,22 @@ def build_cli() -> argparse.ArgumentParser:
     p_com.add_argument("--quest-complete", default="", help="Conclui missão como COMPLETED e credita XP (ex: 'Q1')")
     p_com.add_argument("--quest-fail", default="", help="Marca missão como FAILED com razão opcional (ex: 'Q1:motivo')")
     p_com.add_argument("--faction-rep", "--faction_rep", dest="faction_rep", default="", help="Ajusta reputação com facção no commit (ex: 'Guardiões:+1' ou 'Culto:-1')")
-    p_com.add_argument("--faction-favor", "--faction_favor", dest="faction_favor", default="", help="Concede ou consome favores com facção (ex: 'Guardiões:+1')")
-    p_com.add_argument("--faction-debt", "--faction_debt", dest="faction_debt", default="", help="Registra ou quita débitos com facção (ex: 'Guardiões:+1')")
+    p_com.add_argument("--faction-favor", "--faction_favor", dest="faction_favor", default="", help="Concede ou consome favores com facção (ex: 'Guardiões:+1' ou 'Guardiões:-1')")
+    p_com.add_argument("--faction-debt", "--faction_debt", dest="faction_debt", default="", help="Registra ou quita débitos com facção (ex: 'Guardiões:+1' ou 'Guardiões:-1')")
     p_com.add_argument("--prose", default="", help="Texto direto da prosa para auditoria preventiva de estilo")
     p_com.add_argument("--prose-file", "--prose_file", dest="prose_file", default="", help="Arquivo de rascunho de prosa para auditoria preventiva")
     p_com.add_argument("--force", action="store_true", help="Força a gravação mesmo com violações na prosa")
 
     p_chk = sub.add_parser("check-prose", help="Audita rascunho de prosa literária contra regras duras de estilo (emojis, formato script, 4ª parede)")
-    p_chk.add_argument("--campaign", default="", help="ID da pasta da campanha para checagem de personagens conhecidos")
+    p_chk.add_argument("--campaign", default="", type=_campaign_arg, help="ID da pasta da campanha para checagem de personagens conhecidos")
     p_chk.add_argument("--file", default="", help="Caminho do arquivo de rascunho de prosa a auditar")
     p_chk.add_argument("--text", default="", help="Texto direto da prosa a auditar")
 
     p_rev = sub.add_parser("review", help="Executa auditoria determinística de Cânone e Integridade Referencial (Modo Revisor)")
-    p_rev.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_rev.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
 
     p_clk = sub.add_parser("clock", help="Gerencia relógios narrativos de facções e prazos em diario.md")
-    p_clk.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_clk.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
     p_clk.add_argument("--list", action="store_true", help="Lista todos os relógios ativos e rompidos")
     p_clk.add_argument("--add", default="", help="Nome do novo relógio a ser cadastrado")
     p_clk.add_argument("--max", type=int, default=4, help="Número total de segmentos do relógio (padrão: 4)")
@@ -74,7 +83,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_clk.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
     p_plan = sub.add_parser("plan", help="Gerencia o planejamento de trama, fila de cenas e ritmo dramático em diario.md (Modo Diretor/Showrunner)")
-    p_plan.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_plan.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
     p_plan.add_argument("--list", action="store_true", help="Lista a fila de cenas planejadas, marcos futuros e status do ritmo")
     p_plan.add_argument("--add", "--beat", dest="add", default="", help="Adiciona uma nova batida dramática ou cena à fila de planejamento")
     p_plan.add_argument("--scene-type", "--scene_type", dest="scene_type", default="interlude", choices=["standard", "interlude", "parallel", "timeskip", "dossier", "flashback", "prologue", "epilogue", "post_credits", "fade_to_black"], help="Tipo estrutural da cena a agendar")
@@ -84,7 +93,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_plan.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
     p_arc = sub.add_parser("arc", help="Gerencia a transição de arcos, encerramento de capítulos e novo cabeçalho de cena em diario.md (Modo Showrunner)")
-    p_arc.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_arc.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
     p_arc.add_argument("--title", default="", help="Novo título do arco dramático")
     p_arc.add_argument("--question", default="", help="Nova pergunta central ou conflito do arco")
     p_arc.add_argument("--stage", default="", help="Fase do arco (ex: Preparação, Confrontação, Clímax, Resolução)")
@@ -97,7 +106,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_arc.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
     p_npc = sub.add_parser("upsert-npc", help="Cadastra ou enriquece um NPC com Vontade Própria, Fraquezas e Atritos")
-    p_npc.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_npc.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
     p_npc.add_argument("--name", required=True, help="Nome do NPC")
     p_npc.add_argument("--classification", default="", help="Grau / Classificação do NPC")
     p_npc.add_argument("--role", default="", help="Papel na trama")
@@ -112,14 +121,14 @@ def build_cli() -> argparse.ArgumentParser:
     p_npc.add_argument("--relation", default="", help="Relação com Protagonista")
 
     p_init = sub.add_parser("init-campaign", help="Inicializa uma nova campanha canônica com os 5 arquivos Markdown a partir dos templates oficiais")
-    p_init.add_argument("--campaign", required=True, help="ID da pasta da campanha (ex: 'fantasia_reinos')")
+    p_init.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha (ex: 'fantasia_reinos')")
     p_init.add_argument("--title", default="", help="Título legível da campanha")
     p_init.add_argument("--protagonist", default="Protagonista", help="Nome do protagonista")
     p_init.add_argument("--date", default="01 de Outubro de 2026, 12:00", help="Data/Hora inicial no diário")
     p_init.add_argument("--location", default="Local Inicial", help="Local inicial da cena")
 
     p_qst = sub.add_parser("quest", help="Gerencia missões, objetivos e ciclo de vida teleológico em diario.md")
-    p_qst.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_qst.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
     p_qst.add_argument("--list", action="store_true", help="Lista todas as missões cadastradas")
     p_qst.add_argument("--add", default="", help="Título da nova missão a cadastrar")
     p_qst.add_argument("--type", default="main", choices=["main", "side", "personal", "faction"], help="Tipo de missão (padrão: main)")
@@ -140,7 +149,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_qst.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
     p_prg = sub.add_parser("progress", help="Gerencia consulta de XP, evolução de nível e gastos de build em ficha.md")
-    p_prg.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_prg.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
     p_prg.add_argument("--list", action="store_true", help="Lista nível, XP acumulado e pontos disponíveis")
     p_prg.add_argument("--spend-attr", default="", help="Gasta 1 Ponto de Atributo para aumentar o atributo escolhido (ex: 'FOR')")
     p_prg.add_argument("--spend-ability", default="", help="Gasta 1 Ponto de Habilidade para adquirir nova técnica (ex: 'Golpe: efeito')")
@@ -150,7 +159,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_prg.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
     p_fac = sub.add_parser("faction", help="Gerencia facções, reputação numérica (-3 a +3), favores/débitos e turno off-screen de facções")
-    p_fac.add_argument("--campaign", required=True, help="ID da pasta da campanha")
+    p_fac.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
     p_fac.add_argument("--list", action="store_true", help="Lista todas as facções, poderes, relógios e reputação do protagonista")
     p_fac.add_argument("--add", default="", help="Nome da nova facção a cadastrar em mundo.md")
     p_fac.add_argument("--tag", default="", help="Tag curta identificadora única (ex: 'ordem_guardioes')")
@@ -160,8 +169,8 @@ def build_cli() -> argparse.ArgumentParser:
     p_fac.add_argument("--desc", default="", help="Breve descrição factual da facção e sua agenda")
     p_fac.add_argument("--rep", default="", help="Ajusta reputação com facção (ex: 'ordem_guardioes:+1' ou 'Culto:-1')")
     p_fac.add_argument("--reason", default="", help="Justificativa diegética para o ajuste de reputação, favores ou débitos")
-    p_fac.add_argument("--favor", default="", help="Ajusta contagem de favores com facção (ex: 'ordem_guardioes:+1' ou '-1')")
-    p_fac.add_argument("--debt", default="", help="Ajusta contagem de débitos com facção (ex: 'ordem_guardioes:+1' ou '-1')")
+    p_fac.add_argument("--favor", default="", help="Ajusta contagem de favores com facção (ex: 'ordem_guardioes:+1' ou 'ordem_guardioes:-1')")
+    p_fac.add_argument("--debt", default="", help="Ajusta contagem de débitos com facção (ex: 'ordem_guardioes:+1' ou 'ordem_guardioes:-1')")
     p_fac.add_argument("--create", action="store_true", help="Permite registrar reputação/favores/débitos para uma facção ainda não cadastrada em mundo.md")
     p_fac.add_argument("--tick", action="store_true", help="Executa o avanço autônomo off-screen de relógios de facções ativas")
     p_fac.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")

@@ -3,6 +3,7 @@
 Sem I/O. O bloco ``calendar:`` chega já lido de ``regras.md`` pela camada de campanha.
 """
 
+import calendar as _py_cal
 import datetime
 import re
 
@@ -62,10 +63,11 @@ def _normalize_calendar(raw) -> dict:
     return {"months": months, "days_per_month": days}
 
 
-def parse_time_increment(val_str: str) -> int:
+def parse_time_increment(val_str: str, calendar: dict | None = None) -> int:
     """Converte incrementos como '+60d', '+2mo', '+1y', '+2h' e '+30m' em minutos.
 
     ``m`` é sempre minuto; meses usam ``mo``/``mes``/``meses``.
+    Se ``calendar`` for informado, respeita a duração do ano/mês do calendário declarado.
     """
     clean = val_str.strip().lstrip("+").lower()
     m = re.match(r"^(\d+)\s*([a-zçã]+)?$", clean)
@@ -82,26 +84,169 @@ def parse_time_increment(val_str: str) -> int:
     elif unit in ("w", "sem", "semana", "semanas"):
         return num * 1440 * 7
     elif unit in ("mo", "mes", "mês", "meses"):
+        if calendar:
+            cal = _normalize_calendar(calendar)
+            days = cal.get("days_per_month")
+            if days:
+                return num * 1440 * (sum(days) // len(days))
         return num * 1440 * 30
     elif unit in ("y", "a", "ano", "anos"):
+        if calendar:
+            cal = _normalize_calendar(calendar)
+            days = cal.get("days_per_month")
+            if days:
+                return num * 1440 * sum(days)
         return num * 1440 * 365
     return num
 
 
-def advance_time_str(dt_str: str, minutes: int, calendar: dict | None = None) -> str:
+def advance_time_str(dt_str: str, advance: int | str, calendar: dict | None = None) -> str:
     """Avança data e hora respeitando dias, meses, anos ou horários simples.
 
+    ``advance`` pode ser minutos (int) ou string de incremento relativo (ex: '+1y', '+2mo', '+30m').
     ``calendar`` é o bloco opcional ``calendar:`` de ``regras.md`` com
     ``months`` e ``days_per_month``. Sem calendário, aceita meses gregorianos
     e anos de 1 a 4 dígitos. Datas com mês desconhecido levantam ``ValueError``
     em vez de serem convertidas silenciosamente para Janeiro.
     """
-    if minutes == 0:
+    if advance == 0 or advance == "":
         return dt_str
 
-    cal = calendar or {}
+    cal = _normalize_calendar(calendar) if calendar else {}
     months = cal.get("months") or []
     days_per_month = cal.get("days_per_month") or []
+
+    if isinstance(advance, str):
+        clean_adv = advance.strip().lstrip("+").lower()
+        m_adv = re.match(r"^(\d+)\s*([a-zçã]+)?$", clean_adv)
+        if not m_adv:
+            raise ValueError(
+                f"Incremento de tempo inválido: '{advance}'. Use '+30m', '+6h', '+14d', '+2mo' ou '+1y'."
+            )
+        adv_num = int(m_adv.group(1))
+        adv_unit = (m_adv.group(2) or "m").lower()
+        if adv_num <= 0:
+            return dt_str
+
+        is_year = adv_unit in ("y", "a", "ano", "anos")
+        is_month = adv_unit in ("mo", "mes", "mês", "meses")
+
+        if is_year or is_month:
+            # Padrão A: 'DD de Mês de YYYY, HH:MM' ou 'DD de Mês de YYYY'
+            m_full = re.search(
+                r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ]+)\s+de\s+(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?",
+                dt_str,
+                re.IGNORECASE,
+            )
+            if m_full:
+                day = int(m_full.group(1))
+                m_name = m_full.group(2)
+                year = int(m_full.group(3))
+                h = int(m_full.group(4)) if m_full.group(4) else 12
+                mins = int(m_full.group(5)) if m_full.group(5) else 0
+                has_time = bool(m_full.group(4))
+
+                if months:
+                    month_idx = next(
+                        (i for i, name in enumerate(months) if name.casefold() == m_name.casefold()),
+                        None,
+                    )
+                    if month_idx is None:
+                        raise ValueError(
+                            f"Mês '{m_name}' não consta no calendário da campanha. "
+                            f"Declare 'calendar.months' em regras.md."
+                        )
+                    if is_year:
+                        new_year = year + adv_num
+                        new_idx = month_idx
+                        new_day = min(day, days_per_month[new_idx])
+                    else:  # is_month
+                        total_idx = month_idx + adv_num
+                        year_delta, new_idx = divmod(total_idx, len(months))
+                        new_year = year + year_delta
+                        new_day = min(day, days_per_month[new_idx])
+
+                    formatted = f"{new_day} de {months[new_idx]} de {new_year}"
+                    if has_time:
+                        formatted += f", {h:02d}:{mins:02d}"
+                    return dt_str[:m_full.start()] + formatted + dt_str[m_full.end():]
+
+                month_num = MONTHS_MAP.get(m_name.lower())
+                if not month_num:
+                    raise ValueError(
+                        f"Mês '{m_name}' não é gregoriano e o avanço ultrapassa o mês. "
+                        f"Declare 'calendar.months' em regras.md para atravessar meses."
+                    )
+                if is_year:
+                    new_year = year + adv_num
+                    max_d = _py_cal.monthrange(new_year, month_num)[1]
+                    new_day = min(day, max_d)
+                    new_m_num = month_num
+                else:  # is_month
+                    total_m = (month_num - 1) + adv_num
+                    year_delta, m_zero = divmod(total_m, 12)
+                    new_year = year + year_delta
+                    new_m_num = m_zero + 1
+                    max_d = _py_cal.monthrange(new_year, new_m_num)[1]
+                    new_day = min(day, max_d)
+
+                new_m_name = MONTHS_PT[new_m_num]
+                formatted = f"{new_day} de {new_m_name} de {new_year}"
+                if has_time:
+                    formatted += f", {h:02d}:{mins:02d}"
+                return dt_str[:m_full.start()] + formatted + dt_str[m_full.end():]
+
+            # Padrão B: 'DD/MM/YYYY, HH:MM'
+            m_slash = re.search(r"(\d{1,2})/(\d{1,2})/(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?", dt_str)
+            if m_slash:
+                day, month, year = int(m_slash.group(1)), int(m_slash.group(2)), int(m_slash.group(3))
+                h = int(m_slash.group(4)) if m_slash.group(4) else 12
+                mins = int(m_slash.group(5)) if m_slash.group(5) else 0
+                has_time = bool(m_slash.group(4))
+                if is_year:
+                    new_year = year + adv_num
+                    max_d = _py_cal.monthrange(new_year, month)[1]
+                    new_day = min(day, max_d)
+                    new_month = month
+                else:
+                    total_m = (month - 1) + adv_num
+                    year_delta, m_zero = divmod(total_m, 12)
+                    new_year = year + year_delta
+                    new_month = m_zero + 1
+                    max_d = _py_cal.monthrange(new_year, new_month)[1]
+                    new_day = min(day, max_d)
+                if has_time:
+                    formatted = f"{new_day:02d}/{new_month:02d}/{new_year}, {h:02d}:{mins:02d}"
+                else:
+                    formatted = f"{new_day:02d}/{new_month:02d}/{new_year}"
+                return dt_str[:m_slash.start()] + formatted + dt_str[m_slash.end():]
+
+            # Padrão C: 'Dia X, HH:MM'
+            m_dia = re.search(r"Dia\s+(\d+)(?:,\s*(\d{1,2}):(\d{2}))?", dt_str, re.IGNORECASE)
+            if m_dia:
+                day_num = int(m_dia.group(1))
+                h = int(m_dia.group(2)) if m_dia.group(2) else 12
+                mins = int(m_dia.group(3)) if m_dia.group(3) else 0
+                has_time = bool(m_dia.group(2))
+                days_in_year = sum(days_per_month) if days_per_month else 365
+                days_in_month = (days_in_year // len(days_per_month)) if days_per_month else 30
+                if is_year:
+                    new_day = day_num + adv_num * days_in_year
+                else:
+                    new_day = day_num + adv_num * days_in_month
+                if has_time:
+                    formatted = f"Dia {new_day}, {h:02d}:{mins:02d}"
+                else:
+                    formatted = f"Dia {new_day}"
+                return dt_str[:m_dia.start()] + formatted + dt_str[m_dia.end():]
+
+        # Para unidades m, h, d, w, converte em minutos
+        minutes = parse_time_increment(advance, calendar=calendar)
+    else:
+        minutes = int(advance)
+
+    if minutes == 0:
+        return dt_str
 
     # Padrão A: 'DD de Mês de YYYY, HH:MM' ou 'DD de Mês de YYYY'
     m_full = re.search(
@@ -132,12 +277,7 @@ def advance_time_str(dt_str: str, minutes: int, calendar: dict | None = None) ->
             rem = total % 1440
             new_day = day + day_delta
             new_idx = month_idx
-            if isinstance(days_per_month, int):
-                days = [max(1, days_per_month)] * len(months)
-            else:
-                days = list(days_per_month or [])
-                if len(days) < len(months):
-                    days.extend([30] * (len(months) - len(days)))
+            days = days_per_month
             while new_day > days[new_idx]:
                 new_day -= days[new_idx]
                 new_idx += 1
@@ -152,10 +292,7 @@ def advance_time_str(dt_str: str, minutes: int, calendar: dict | None = None) ->
 
         month_num = MONTHS_MAP.get(m_name.lower())
         if not month_num:
-            # Fallback conservador para calendários diegéticos ainda não
-            # declarados: permite avanços que permaneçam no mesmo mês (30 dias)
-            # sem inventar nomes de meses vizinhos. Qualquer travessia de mês
-            # exige o bloco calendar em regras.md.
+            # Fallback conservador para calendários diegéticos ainda não declarados
             total = h * 60 + mins + minutes
             day_delta = total // 1440
             rem = total % 1440

@@ -1,6 +1,7 @@
 """Fronteira transacional dos casos de uso que mutam o SSOT da campanha."""
 
 import functools
+import os
 from pathlib import Path
 
 from council.helpers import atomic_write_text, campaign_lock
@@ -18,8 +19,9 @@ def _serialized_campaign_mutation(func):
             return {"error": str(exc)}
         if not info:
             return func(campaign_id, *args, **kwargs)
+        timeout = float(os.environ.get("RPGPRO_LOCK_TIMEOUT", "10.0"))
         try:
-            with campaign_lock(info["dir"]):
+            with campaign_lock(info["dir"], timeout=timeout):
                 # Snapshot dos arquivos mutáveis: se uma exceção inesperada
                 # ocorrer no meio de um commit multiarquivo, restaura o estado
                 # anterior em vez de deixar ficha/npcs/diario divergentes.

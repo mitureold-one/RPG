@@ -28,6 +28,7 @@ from council.helpers import (
     init_campaign_from_templates,
     parse_time_increment,
     advance_time_str,
+    validate_campaign_id,
 )
 
 from council.ssot import (

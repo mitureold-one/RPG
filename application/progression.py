@@ -104,6 +104,7 @@ def cmd_quest(
     }
 
 
+@_serialized_campaign_mutation
 def cmd_progress(
     campaign_id: str,
     list_progress: bool = False,

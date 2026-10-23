@@ -3,7 +3,7 @@
 A implementação concreta foi refatorada em R0d:
 - adapters.persistence.files: atomic_write_text, campaign_lock
 - temporal.calendar: advance_time_str, parse_time_increment, calendários
-- campaign.locator: find_campaign, parse_regras_manifest, rulesets
+- campaign.locator: find_campaign, parse_regras_manifest, rulesets, validate_campaign_id
 - campaign.templates: init_campaign_from_templates
 """
 
@@ -26,6 +26,7 @@ from campaign import (
     init_campaign_from_templates,
     load_ruleset,
     parse_regras_manifest,
+    validate_campaign_id,
 )
 from temporal import (
     MONTHS_MAP,
@@ -58,4 +59,5 @@ __all__ = [
     "load_ruleset",
     "parse_regras_manifest",
     "parse_time_increment",
+    "validate_campaign_id",
 ]

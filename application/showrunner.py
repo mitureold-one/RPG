@@ -86,6 +86,7 @@ def cmd_clock(
     }
 
 
+@_serialized_campaign_mutation
 def cmd_plan(
     campaign_id: str,
     list_plan: bool = False,

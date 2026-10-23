@@ -9,7 +9,7 @@ Precedência Soberana:
 - Grau 3 (Psicologia): Análise de pesos dos NPCs (`campaigns/<id>/npcs.md`).
 
 Roteamento de Campanhas & Skills:
-- Identifique a campanha ativa em `campaigns/` (assuma a única existente ou indicada).
+- Identifique a campanha ativa em `campaigns/` (assuma a indicada ou a única existente; se `campaigns/` estiver vazio, crie com `lazy_turn.py init-campaign --campaign <id>` a partir dos templates ou use as fixtures em `tests/fixtures/campaigns/`).
 - Turnos de Ação: Delegue para `rpg-narrative-engine` (`lazy_turn.py prepare` -> obedeça estritamente a `step_3_writer_mandate` -> `lazy_turn.py commit`).
 - Macro-Trama & Ritmo: Delegue sob demanda para `rpg-showrunner` (`lazy_turn.py plan`, `clock`, `arc`).
 - Diretrizes Inegociáveis: Zero emojis, anti-puppeteering absoluto, SSOT estrito em Markdown e registro append-only em `EXECUCAO.md` (autor, como, evidência; sem duplicar roadmap/spec).

@@ -253,6 +253,66 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Relações:** [`ARCHITECTURE.md`](ARCHITECTURE.md) §1, §12 (R0.5); [`ROADMAP.md`](ROADMAP.md) §6.4; EX-0007.
 - **Pendências:** nenhuma pendência de refatoração prévia; baseline pronto para a Fase 02 / R1 (EventStore e projeções).
 
+## EX-0009 — 2026-10-23 — QA da Fase 01 e do baseline R0/R0.5
+
+- **Autor:** agente de QA DeepSeek Harness, a pedido do usuário.
+- **Tipo:** teste + documentação (auditoria de QA).
+- **Status:** parcial (auditoria concluída; relatório e reparos ainda não commitados).
+- **Commit:** não commitado.
+- **Escopo:** HEAD `d2f99bf` — Fase 01/01.5 e baseline R0/R0.5 (`contracts/`, `kernel/`, `application/`, `interfaces/`, `adapters/`, `temporal/`, `campaign/`).
+- **O que foi feito:** auditoria dos critérios de aceite da fase, do código novo do kernel e da preservação de comportamento do R0; suíte, regressão diferencial contra `cefe5ea`, concorrência real e testes adversariais de calendário, schema, registry, runtime, lock e contenção de caminhos.
+- **Como:**
+  - suíte completa duas vezes com `python -m unittest discover -s tests`;
+  - comparação AST das funções extraídas de `lazy_turn.py` e `council/helpers.py` contra `cefe5ea`;
+  - worktree temporário em `cefe5ea` para regressão diferencial da CLI e dos Markdown;
+  - 4 commits concorrentes em cópia descartável das fixtures;
+  - sondas de `advance_time_str`, `campaign_id` com `..`, templates incompletos, `kernel/schema.py`, `kernel/registry.py`, `Runtime`, `campaign_lock` e `atomic_write_text`.
+- **Evidência:**
+  - `python -m unittest discover -s tests` → **149 testes, OK** (17 s), sem `ResourceWarning`.
+  - AST: 15/15 funções de topo de `lazy_turn.py` idênticas; 4 funções de `helpers.py` diferem só pela indireção `_get_campaign_dirs()`; nenhuma mudança de corpo.
+  - Diferencial CLI `cefe5ea` × HEAD: 18 invocações read-only com saída/exit iguais (só o caminho na mensagem de erro difere), 11 comandos mutantes com saída igual e **15/15 Markdown idênticos**.
+  - 4 `commit` concorrentes → turnos 4–7, sem duplicata/perda; relógio/missão/facção fantasmas recusados sem alterar arquivos.
+  - `+30d` em Valíria: `04 de Ventania de 304, 21:15` → `4 de Geada de 304, 21:15`; `init-campaign` cria 5 arquivos e passa em `review` (`CLEAN`).
+  - Achados: **1 P1** (`+1y` = 365 dias em calendário de 360: `05 de Ventania de 304` → `10 de Ventania de 305`), **4 P2** (`campaign_id` com `..` sai de `campaigns/`; `init-campaign` parcial com templates faltando; `plan`/`progress` fora do lock; documentos canônicos desatualizados), **9 P3** agrupados.
+- **Relações:** [`QA-FASE-01.md`](QA-FASE-01.md); [`ROADMAP.md`](ROADMAP.md) §3 e §7; [`ARCHITECTURE.md`](ARCHITECTURE.md) §12 e §15; EX-0001, EX-0002, EX-0008.
+- **Pendências:**
+  - corrigir P1-A (semântica de `+1mo`/`+1y` no calendário declarado) e adicionar os testes;
+  - corrigir P2-1 a P2-4 (validação de `campaign_id`, `init-campaign` atômico, lock em `plan`/`progress`, atualização de `ARCHITECTURE.md`/`ROADMAP.md`/`README.md`/`AGENTS.md`);
+  - commitar o relatório e os reparos; P3 entra no backlog de R1–R3.
+
+## EX-0010 — 2026-10-23 — Resolução dos itens de QA da Fase 01 / R0.5 (P1-A e P2)
+
+- **Autor:** agente de código Antigravity, a pedido do usuário.
+- **Tipo:** correção de bug + teste + documentação.
+- **Status:** concluído (todos os itens P1 e P2 do QA fechados com 156 testes verdes).
+- **Commit:** 9c7b872 (ix(qa): resolve P1-A calendar drift, P2 containment and lock, and sync canonical docs).
+- **Escopo:** correção dos apontamentos de QA em `QA-FASE-01.md` sobre o baseline R0/R0.5.
+- **O que foi feito:**
+  - P1-A: suporte a avanços relativos `+Ny` e `+Nmo` calendar-aware em `temporal/calendar.py` e `application/commit_validation.py`, eliminando o drift de 5 dias em anos de 360 dias (Valíria) e ajustando meses gregorianos com clamping (ex: 31 Jan + 1mo -> 28 Fev);
+  - P2-1: validação estrita de `campaign_id` (`^[a-z0-9_][a-z0-9_-]*$`) e verificação de contenção contra directory traversal em `campaign/locator.py`, `campaign/templates.py` e `interfaces/cli/parser.py`;
+  - P2-2: garantia all-or-nothing na criação de campanhas em `campaign/templates.py`, abortando e não criando pastas se algum dos 5 templates estiver ausente;
+  - P2-3: aplicação do decorator `@_serialized_campaign_mutation` em `cmd_plan` (`application/showrunner.py`) e `cmd_progress` (`application/progression.py`), com snapshot e lock de campanha protegendo contra concorrência e desvios de XP;
+  - P2-4 e P3-5: alinhamento dos documentos canônicos (`ARCHITECTURE.md`, `ROADMAP.md`, `README.md`, `AGENTS.md`) com o estado real pós-R0.5 (156 testes, fixtures em `tests/fixtures/campaigns/`, `campaigns/` limpo) e versionamento de `rpgpro-diretrizes-agentes.md`.
+- **Como:**
+  - `temporal/calendar.py`: `advance_time_str` passa a suportar `int | str` para avançar diretamente unidades de ano e mês preservando calendário diegético e gregoriano; `parse_time_increment` aceita `calendar` para conversão exata; `application/commit_validation.py` delega para `advance_time_str`.
+  - `campaign/locator.py`: adicionado `validate_campaign_id` e checagem `camp_dir.parent == base.resolve()`.
+  - `campaign/templates.py`: verificação prévia de existência dos 5 templates antes do `mkdir`.
+  - `application/showrunner.py` e `application/progression.py`: `@_serialized_campaign_mutation` aplicado a `cmd_plan` e `cmd_progress`.
+  - `tests/test_temporal_calendar.py`: 4 novos testes unitários para Valíria (+1y = 360d, +1mo, 2y exatos) e clamping gregoriano.
+  - `tests/test_campaign_locator.py`: testes de rejeição de traversal e all-or-nothing de templates.
+  - `tests/test_state_stability.py`: testes de rollback do ledger em falha de concessão de XP e timeout de lock em `plan`/`progress`.
+- **Evidência:**
+  - `python -m unittest discover -s tests` → **156 testes, OK** (17,3 s).
+  - Testes manuais do P1:
+    - `05 de Ventania de 304, 08:06` + `+1y` em Valíria → `5 de Ventania de 305, 08:06` (sem drift).
+    - `31 de Janeiro de 2026, 12:00` + `+1mo` → `28 de Fevereiro de 2026, 12:00`.
+  - Testes manuais do P2-1/P2-2:
+    - `find_campaign("../fora")` → `ValueError: ID de campanha inválido`.
+    - `init_campaign_from_templates("../fora")` → `{"error": ...}`.
+    - Templates incompletos abortam sem criar diretório.
+- **Relações:** [`QA-FASE-01.md`](QA-FASE-01.md); [`ARCHITECTURE.md`](ARCHITECTURE.md) §12 e §15; [`ROADMAP.md`](ROADMAP.md) §8; EX-0008, EX-0009.
+- **Pendências:** nenhuma para Fase 01 / R0.5. Base pronta e congelada para a especificação da Fase 02 (G1/G2).
+
 ---
 
 ## 5. Como registrar uma nova execução

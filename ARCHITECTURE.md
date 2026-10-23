@@ -1,6 +1,6 @@
 # RPGPRO — Arquitetura-Alvo e Kernel de Extensão
 
-**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01 e 01.5 concluídas; o próximo passo é R0.
+**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01 e 01.5 concluídas; R0 e R0.5 concluídos (156 testes verdes); o próximo passo é a spec da Fase 02.
 **Dono:** este documento é a fonte canônica da árvore de módulos, das portas de extensão e das regras de dependência.
 **Relação com os demais documentos:** [`ROADMAP.md`](ROADMAP.md) governa fases e gates; [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md) governa comportamento; [`DECISOES_ARQUITETURA.md`](DECISOES_ARQUITETURA.md) guarda o racional histórico; [`EXECUCAO.md`](EXECUCAO.md) registra o que foi feito.
 
@@ -636,8 +636,8 @@ Mesmo padrão: contrato + implementação + registro + config + teste de contrat
 
 | Etapa | Quando | O que move | Aceite |
 |---|---|---|---|
-| **R0** | Antes da Fase 02 | criar `contracts/` (envelope, portas, config), `kernel/` (errors, ids, registry, runtime, schema), `bootstrap.py` e suíte de contrato com fakes; extrair CLI, persistência, `temporal/` e campanha de `lazy_turn.py`/`helpers.py`; nenhum evento emitido | 69 testes existentes verdes + suíte de contrato; `lazy_turn.py` < 200 linhas; Markdown idêntico; contratos exercitados com fakes; nenhum plugin |
-| **R0.5** | Antes da Fase 02 | arquivar campanhas, criar fixtures, atualizar testes, apagar `campaigns/*` | suíte verde sem campanhas reais; `init-campaign` funciona |
+| **R0** | Antes da Fase 02 (Concluído) | criar `contracts/` (envelope, portas, config), `kernel/` (errors, ids, registry, runtime, schema), `bootstrap.py` e suíte de contrato com fakes; extrair CLI, persistência, `temporal/` e campanha de `lazy_turn.py`/`helpers.py`; nenhum evento emitido | 156 testes verdes; `lazy_turn.py` com 54 linhas; Markdown idêntico; contratos exercitados com fakes; nenhum plugin |
+| **R0.5** | Antes da Fase 02 (Concluído) | arquivar campanhas em `archive/campaigns/`, criar fixtures em `tests/fixtures/`, atualizar testes, limpar `campaigns/` com `.gitkeep` | suíte verde sem campanhas reais; `init-campaign` funciona com verificação all-or-nothing |
 | **R1** | Fase 02 | `ssot.py` → `resources/`; `EventStore` JSONL + índice; `Projector`s; `EventType`s e upcasters | evento ida-e-volta; rebuild de projeção; implementações aprovadas na suíte de contrato; nenhum arquivo > 300 |
 | **R2** | Fases 03/04 | `narrator.py` → `resources/npcs/`; `factions.py` → `resources/factions/`; `quests.py` → `resources/quests/`; `context/` | módulos < 300; sem ciclos; `BehaviorPolicy`/`FactionPolicy`/`ContextProvider` testados |
 | **R3** | Fases 05/06 | `reviewer.py` → `review/`; `world/` com `SimulationPolicy`, `BudgetPolicy`, `DirectorPolicy`, `StagnationPolicy` | lints independentes; diretor determinístico; orçamento testado |
@@ -693,7 +693,7 @@ Os gates continuam definidos no [`ROADMAP.md`](ROADMAP.md). A arquitetura não o
 7. Replay idempotente; eventos antigos passam por upcasters.
 8. Configuração validada contra `config_schema`.
 9. Suíte de contrato por porta.
-10. 69 testes existentes verdes antes e depois de R0; suíte de contrato verde.
+10. 156 testes automatizados verdes após R0/R0.5 e reparos de QA; suíte de contrato verde.
 11. Campanhas de teste em `tests/fixtures/campaigns/`, sem dependência das campanhas reais.
 12. `EXECUCAO.md` atualizado a cada etapa.
 13. `contracts/` e `kernel/` sem I/O e sem imports de `council`, `rulesets`, `resources`, `adapters` ou `interfaces`.
@@ -702,9 +702,9 @@ Os gates continuam definidos no [`ROADMAP.md`](ROADMAP.md). A arquitetura não o
 
 ## 16. Próximos passos
 
-1. Revisar, aprovar e commitar este documento e o `ROADMAP.md` com a base do kernel consolidada.
-2. Executar **R0** (contratos + kernel de composição + extração de CLI/persistência/`temporal/`/campanha), sem emissão de eventos.
-3. Executar **R0.5** (fixtures + arquivamento + remoção das campanhas antigas).
+1. R0 concluído (contratos, kernel, bootstrap e extração modular).
+2. R0.5 concluído (arquivamento de campanhas, fixtures isoladas e campaigns/ limpo com .gitkeep).
+3. Auditoria de QA da Fundação/R0/R0.5 concluída e itens P1/P2 resolvidos.
 4. Escrever a spec da Fase 02 (G1/G2): payloads, serialização/versionamento, retenção, projeções, correções, dependências e fila.
 5. Executar **R1 + Fase 02**.
 6. Seguir para R2–R4 conforme as fases.
