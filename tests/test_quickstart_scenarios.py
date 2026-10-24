@@ -92,6 +92,28 @@ class TestQuickstartScenarios(unittest.TestCase):
             tuple(store.read(self.camp_id))
         seg_file.write_text(orig_seg, encoding="utf-8")
 
+    def test_commit_npc_subfields_are_structured_without_phantom_npc(self) -> None:
+        res = cmd_commit(
+            self.camp_id,
+            summary="Aliado reage ao avanço.",
+            npc_updates="Aliado Inicial: Atitude: alerta | Relação: Confiança +1",
+            force=True,
+        )
+        self.assertEqual(res["status"], "ok")
+
+        store = JsonlEventStore(self.camp_dir)
+        npc_events = [e for e in store.read(self.camp_id) if e.type == "npc.updated"]
+        self.assertEqual(len(npc_events), 1)
+        payload = npc_events[0].payload
+        self.assertEqual(payload["npc_id"], "aliado_inicial")
+        self.assertEqual(payload["changes"]["attitude"], "alerta")
+        self.assertEqual(payload["changes"]["relation"], "Confiança +1")
+        self.assertNotIn("relacao", payload["npc_id"])
+
+        npcs_text = (self.camp_dir / "npcs.md").read_text(encoding="utf-8")
+        self.assertIn("Atitude Atual:** alerta", npcs_text)
+        self.assertIn("Relação com Protagonista:** Confiança +1", npcs_text)
+
     def test_scenario_03_rebuild_byte_identical(self):
         """Cenário 3: Reconstrução de Projeção Byte-Idêntica (C3) após cmd_commit real."""
         res_com = cmd_commit(

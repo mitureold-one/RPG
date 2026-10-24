@@ -14,6 +14,7 @@ from campaign.templates import init_campaign_from_templates
 from contracts.event import ActorRef, EventDraft
 from council.quests import parse_xp_ledger_from_diario
 from council.reviewer import cmd_review
+from kernel.errors import DuplicateBatchError
 from kernel.event_catalog import build_v1_catalog
 from resources.progression import parse_progression_from_ficha
 
@@ -130,6 +131,56 @@ class CausalCorrectionTests(unittest.TestCase):
         )
         issues_after = check_causal_inconsistencies(self.camp_dir, "camp_cor")
         self.assertEqual(issues_after, [])
+
+    def test_repeated_correction_is_rejected_without_duplicate_compensation(self) -> None:
+        res_orig = self.store.append(
+            "camp_cor",
+            [
+                EventDraft(
+                    type="protagonist.progression_changed",
+                    schema_version=1,
+                    actor=ActorRef("system", "ruleset"),
+                    payload={
+                        "xp_delta": 100,
+                        "xp_total": 100,
+                        "level": 1,
+                        "attribute_points": 0,
+                        "ability_points": 0,
+                        "source": "teste",
+                    },
+                    game_time="01 de Janeiro de 304, 10:00",
+                    game_time_sort=600,
+                )
+            ],
+        )
+        orig_eid = res_orig.events[0].event_id
+        changes = [{"field": "xp_delta", "delta": -100}]
+
+        self.service.issue_correction(
+            campaign_id="camp_cor",
+            actor=ActorRef("human", "user"),
+            corrects=[orig_eid],
+            reason="XP indevido",
+            changes=changes,
+            game_time="01 de Janeiro de 304, 12:00",
+            game_time_sort=720,
+        )
+        with self.assertRaises(DuplicateBatchError):
+            self.service.issue_correction(
+                campaign_id="camp_cor",
+                actor=ActorRef("human", "user"),
+                corrects=[orig_eid],
+                reason="XP indevido",
+                changes=changes,
+                game_time="01 de Janeiro de 304, 12:00",
+                game_time_sort=720,
+            )
+
+        events = tuple(self.store.read("camp_cor"))
+        self.assertEqual(sum(1 for e in events if e.type == "correction.issued"), 1)
+        compensations = [e for e in events if e.type == "protagonist.progression_changed"]
+        self.assertEqual(len(compensations), 2)  # original + uma compensação
+        self.assertEqual(compensations[-1].payload["xp_delta"], -100)
 
     def test_cli_cmd_correct_updates_ficha_and_diario_xp_without_mismatch(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

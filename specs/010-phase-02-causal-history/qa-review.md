@@ -7,6 +7,50 @@
 
 ---
 
+## Atualização pós-remediação — `2d886bc` (24/10/2026)
+
+**Reverificado em:** `2d886bc` (`fix(r1): remediate Phase 02 QA findings...`). O `EX-0016` registra `39f59e9`, que é o commit pré-amenda; o HEAD real é `2d886bc`.
+
+**Resultado:** **206 testes OK**. Os três P0 e todos os P1 funcionais foram resolvidos: o `commit` agora inicializa/sincroniza o event log, encena em `.staging`, emite o lote completo de eventos e materializa a raiz e `projections/` via `ProjectionEngine`; rollback cobre `events/`, `projections/`, `artifacts/` e snapshots; o catálogo é o default do store; duplicata é rejeitada mesmo com `expected_last_seq`; correção repetida é recusada; o lock é reentrante e único; snapshot e rebuild preservam estado; hash do lote é verificado; `correct --delta-xp` compensa; comandos `clock`, `quest`, `faction`, `progress`, `plan`, `arc` e `upsert-npc` emitem eventos; eventos de NPC são estruturados e não criam NPC fantasma.
+
+**Ainda restam 5 P2** (não bloqueiam o fluxo normal, mas devem entrar no backlog antes do congelamento definitivo).
+
+| Achado | Status | Evidência |
+| :--- | :---: | :--- |
+| P0-1 log opcional/silencioso | **Corrigido** | Sem `events/`, `commit` recria e grava lote; não há mais `if events.exists()`/`except: pass` |
+| P0-2 projeções fora do SSOT | **Corrigido** | Raiz == `projections/` em diário/ficha/NPCs; rebuild a partir do zero restaura hashes |
+| P0-3 commit só com 3 eventos | **Corrigido** | Commit completo gera `turn.*`, `action.resolved`, `sheet_changed`, `npc.updated`, `clock.*`, `quest.*`, `progression_changed`, `faction.reputation_changed`, `prose.recorded`, `turn.committed` |
+| P1-1 rollback do log | **Corrigido** | Exceção no fim do commit mantém 4 → 4 eventos e restaura Markdown/projeções |
+| P1-2 store sem catálogo | **Corrigido** | Store default usa `build_v1_catalog()`; tipo desconhecido e `schema_version=99` são rejeitados |
+| P1-3 duplicata | **Corrigido** | Lote idêntico com `expected_last_seq` atual gera `DuplicateBatchError` (teste novo em `test_event_store_crash_recovery`) |
+| P1-4 `correct --delta-xp` | **Corrigido** | Compensação `protagonist.progression_changed` com `xp_delta=-50` |
+| P1-5 lock/`last_seq` | **Corrigido** | Um único `.campaign.lock`; `last_seq` não trunca (tail aberto preservado) |
+| P1-6 snapshot | **Corrigido** | Rebuild com snapshot preserva turno antigo e inclui o novo |
+| P1-7 reavaliação | **Parcial (P2)** | `correction.recomputed` lista afetados; não recalcula fato/projeção; compensação cobre XP/ficha/reputação, não relógio/missão |
+| P1-8 `expected_last_seq` | **Corrigido** | `ensure`/`commit_events_and_project`/correção passam a sequência esperada |
+| P1-9 hash | **Corrigido** | Hash adulterado gera `ReplayError` |
+| **P1-A idempotência** | **Corrigido** | Lote idêntico reenviado com `expected_last_seq` atual → `DuplicateBatchError`; correção repetida → erro e apenas uma compensação `xp_delta=-50` |
+| **P1-B NPC no histórico** | **Corrigido** | `--npc-updates "Aliado Inicial: Atitude: alerta \| Relação: Confiança +1"` gera **um** `npc.updated` (`changes` com `attitude` e `relation`); raiz e log concordam, sem `relacao` fantasma |
+| P2-1 perda de `diario.md` | **Aberto** | Sem `diario.md`, `find_campaign` falha e `rebuild` não encontra a campanha, embora `events/` exista |
+| P2-2 snapshots em `meta` | **Aberto** | `turn.committed.meta` guarda `diario_after`/`ficha_after`/`npcs_after` completos; rebuild reaplica blobs, não deriva estado dos eventos |
+| P2-3 correção limitada | **Aberto** | Compensação só cobre XP/ficha/reputação; relógios, missões e arcos não têm compensação; reavaliação é log |
+| P2-4 camadas/tamanho | **Aberto** | `application/commit.py` 516, `event_store.py` 316, `reviewer.py` 692; imports de camada ainda a revisar |
+| P2-5 docs/testes | **Aberto** | 206 testes; ainda faltam casos para perda de `diario.md` e compensação de relógio/missão/arco |
+
+**Veredito da reverificação:** P0 e P1 fechados; a integração causal funciona e as prioridades “histórico não mente” e “correção sem efeitos duplicados” estão atendidas no fluxo testado. **Aprovado com ressalvas**: os 5 P2 devem ser corrigidos/registrados antes do congelamento definitivo, mas não bloqueiam o uso do R1.
+
+### Correção dos P1 residuais (24/10)
+
+- `application/correction.py`: correção idêntica pendente gera `DuplicateBatchError`; `resolve` continua permitido.
+- `adapters/persistence/event_store.py`: fingerprint de lote verificado mesmo com `expected_last_seq`; exceções apenas para `test.*` e `projection.rebuilt`.
+- `council/narrator.py` e `application/commit_events.py`: parser único de NPCs, `parse_npc_update_fields` e tolerância a `|` antes de subcampo.
+- Testes: `test_duplicate_batch_rejected_even_with_expected_last_seq`, `test_repeated_correction_is_rejected_without_duplicate_compensation`, `test_commit_npc_subfields_are_structured_without_phantom_npc`; suíte **206 OK**.
+- Evidência manual: lote duplicado → `DuplicateBatchError`; segunda correção → erro e uma única compensação; NPC → um evento com `attitude`/`relation`; raiz == `projections/`; `review` CLEAN.
+
+**Abaixo, o parecer original de `7f2c165` (histórico).**
+
+---
+
 ## 0. Veredito
 
 **Reprovado.** A suíte tem **199 testes verdes**, mas a implementação **não entrega o invariante central da fase**: o event log não é a verdade e as projeções não são o SSOT. O `commit` continua gravando os Markdown raiz diretamente, emite eventos apenas quando já existe um diretório `events/` e transforma qualquer falha do caminho causal em `except: pass`. Em paralelo, cria uma cópia simplificada em `projections/` que nenhum leitor do jogo usa.

@@ -42,7 +42,7 @@ RPGPRO/
 ├── campaigns/                     # Campanhas ativas (limpo com .gitkeep; use init-campaign)
 ├── archive/campaigns/             # Campanhas legadas arquivadas
 ├── templates/                     # Templates canônicos para novas campanhas
-├── tests/                         # Testes automatizados (203 testes, sem campanhas vivas)
+├── tests/                         # Testes automatizados (206 testes, sem campanhas vivas)
 │   └── fixtures/campaigns/        # Fixtures isoladas para suíte de testes
 ├── AGENTS.md                      # Regra Soberana de Workspace para Agentes
 ├── ARCHITECTURE.md                # Arquitetura canônica, portas de extensão e gates

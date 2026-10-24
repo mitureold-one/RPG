@@ -6,9 +6,10 @@ from typing import Any, Sequence
 
 from contracts.event import ActorRef, AppendResult, EventDraft
 from contracts.ports import EventStore
+from contracts.serialization import canonical_json
 from council.reviewer_checks import check_causal_inconsistencies
 from kernel.dag import DependencyGraph
-from kernel.errors import ValidationError
+from kernel.errors import DuplicateBatchError, ValidationError
 from kernel.ids import new_correction_id
 from rulesets.progression import calculate_level_from_xp
 
@@ -58,6 +59,37 @@ class CorrectionService:
                 resolved_deps.append(cor_events_by_id[cid].event_id)
             else:
                 raise ValidationError(f"Evento corrigido não encontrado: '{cid}'")
+
+        # Idempotência: uma correção idêntica pendente não pode gerar outra
+        # compensação. Depois de RESOLVED, uma nova correção é permitida.
+        if not is_resolve:
+            deps_key = sorted(resolved_deps)
+            changes_key = canonical_json(list(changes))
+            for existing in all_events:
+                if existing.type != "correction.issued":
+                    continue
+                if sorted(existing.payload.get("corrects", [])) != deps_key:
+                    continue
+                if canonical_json(existing.payload.get("changes", [])) != changes_key:
+                    continue
+                if str(existing.payload.get("reason", "")).strip() != reason.strip():
+                    continue
+                existing_cor_id = existing.payload.get("correction_id")
+                already_resolved = any(
+                    e.type == "correction.recomputed"
+                    and e.payload.get("correction_id") == existing_cor_id
+                    and e.payload.get("outcome") == "RESOLVED"
+                    for e in all_events
+                )
+                if not already_resolved:
+                    raise DuplicateBatchError(
+                        "Correção idêntica já registrada e ainda pendente; "
+                        "resolva-a ou altere motivo/alterações.",
+                        details={
+                            "correction_id": existing_cor_id,
+                            "corrects": deps_key,
+                        },
+                    )
 
         forward_adj: dict[str, list[str]] = {}
         for e in all_events:

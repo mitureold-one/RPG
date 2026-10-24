@@ -123,11 +123,11 @@ def build_commit_event_drafts(
 
     # 3. npc.updated
     if npc_updates and npc_updates.strip():
-        for chunk in npc_updates.split("|"):
-            chunk = chunk.strip()
-            if not chunk:
-                continue
-            npc_name = chunk.split(":", 1)[0].strip() if ":" in chunk else chunk
+        from council.narrator import parse_npc_update_fields, split_npc_updates
+
+        for npc_name, raw_update in split_npc_updates(npc_updates):
+            changes = {"name": npc_name}
+            changes.update(parse_npc_update_fields(raw_update))
             drafts.append(
                 EventDraft(
                     type="npc.updated",
@@ -137,7 +137,7 @@ def build_commit_event_drafts(
                     game_time_sort=base_sort,
                     payload={
                         "npc_id": npc_name.lower().replace(" ", "_"),
-                        "changes": {"name": npc_name, "update": chunk},
+                        "changes": changes,
                     },
                     meta={"dependencies": ["batch:1"]},
                 )

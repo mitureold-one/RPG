@@ -281,7 +281,13 @@ class JsonlEventStore:
                     f"Lote duplicado detectado (idempotency_key={d.meta['idempotency_key']})",
                     details={"idempotency_key": d.meta["idempotency_key"]},
                 )
-        if expected_last_seq is None and not all(d.type.startswith("test.") for d in batch):
+        # O fingerprint não depende de expected_last_seq: reenviar o mesmo lote
+        # com a sequência já atualizada continua sendo duplicata. Exceções:
+        # eventos de teste e o evento de auditoria de rebuild, que pode se repetir
+        # de forma idempotente no mesmo estado.
+        test_only = all(d.type.startswith("test.") for d in batch)
+        audit_only = all(d.type == "projection.rebuilt" for d in batch)
+        if not test_only and not audit_only:
             fp = compute_draft_batch_fp(batch)
             if fp in batch_fps:
                 raise DuplicateBatchError(

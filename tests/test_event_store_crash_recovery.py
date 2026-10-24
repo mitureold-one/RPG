@@ -8,7 +8,7 @@ from pathlib import Path
 from adapters.persistence.event_store import JsonlEventStore
 from contract_support import make_draft
 from contracts.event import ActorRef, EventDraft
-from kernel.errors import InvalidDraftError
+from kernel.errors import DuplicateBatchError, InvalidDraftError
 
 
 class EventStoreCrashRecoveryTests(unittest.TestCase):
@@ -131,6 +131,19 @@ class EventStoreCrashRecoveryTests(unittest.TestCase):
         )
         with self.assertRaises(InvalidDraftError):
             self.store.append("camp1", [bad_draft])
+
+    def test_duplicate_batch_rejected_even_with_expected_last_seq(self) -> None:
+        draft = EventDraft(
+            type="turn.proposed",
+            schema_version=1,
+            actor=ActorRef("agent", "qa"),
+            payload={"turn": 1, "action": "a", "summary": "s"},
+            game_time="01 de Janeiro de 304, 00:00",
+            game_time_sort=0,
+        )
+        self.store.append("camp_dup", [draft], expected_last_seq=0)
+        with self.assertRaises(DuplicateBatchError):
+            self.store.append("camp_dup", [draft], expected_last_seq=1)
 
 
 if __name__ == "__main__":

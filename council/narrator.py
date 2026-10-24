@@ -468,6 +468,38 @@ _NPC_SEPARATOR_RE = re.compile(
     r"(?=[A-ZÀ-Ú][^:]{1,45}:)",
     re.IGNORECASE,
 )
+# O '|' é o separador canônico entre NPCs, mas também toleramos '|' antes de
+# um subcampo (ex.: 'A: Atitude: X | Relação: Y') para não criar um NPC falso.
+_NPC_PIPE_RE = re.compile(
+    r"\s*\|\s*(?!(?:\s*)(?:" + "|".join(re.escape(s) for s in _NPC_SUBFIELDS) + r")\s*:)",
+    re.IGNORECASE,
+)
+
+
+def parse_npc_update_fields(raw_update: str) -> dict:
+    """Extrai subcampos conhecidos de um corpo de atualização de NPC.
+
+    Devolve ``{"update": <texto>}`` quando o corpo é livre; caso contrário,
+    devolve as chaves ``attitude``, ``relation`` e ``bonds`` encontradas.
+    """
+    body = (raw_update or "").strip().rstrip(".")
+    m_rel = re.search(
+        r"(?:relação|relacao|relação com protagonista|relacao com protagonista)\s*:\s*([^;|]+)",
+        body,
+        re.IGNORECASE,
+    )
+    m_att = re.search(r"atitude\s*:\s*([^;|]+)", body, re.IGNORECASE)
+    m_bonds = re.search(r"(?:vínculos|vinculos|laços|lacos)\s*:\s*([^;|]+)", body, re.IGNORECASE)
+    fields = {}
+    if m_att:
+        fields["attitude"] = m_att.group(1).strip()
+    if m_rel:
+        fields["relation"] = m_rel.group(1).strip()
+    if m_bonds:
+        fields["bonds"] = m_bonds.group(1).strip()
+    if fields:
+        return fields
+    return {"update": body}
 
 
 def split_npc_updates(npc_updates_str: str) -> list:
@@ -475,13 +507,14 @@ def split_npc_updates(npc_updates_str: str) -> list:
 
     O separador canônico entre NPCs é ``|``. O ponto e vírgula continua aceito
     para compatibilidade, mas é ignorado quando o trecho seguinte é um
-    subcampo (Atitude, Relação, Vínculos, Laços). O corpo de cada NPC é mantido
-    inteiro para que ``apply_npc_updates_to_md`` extraia os subcampos.
+    subcampo (Atitude, Relação, Vínculos, Laços). O ``|`` antes de um subcampo
+    também é tolerado. O corpo de cada NPC é mantido inteiro para que
+    ``apply_npc_updates_to_md`` extraia os subcampos.
     """
     if not npc_updates_str:
         return []
     parts = []
-    for block in re.split(r"\s*\|\s*", npc_updates_str.strip()):
+    for block in _NPC_PIPE_RE.split(npc_updates_str.strip()):
         parts.extend(_NPC_SEPARATOR_RE.split(block))
     pairs = []
     for p in parts:

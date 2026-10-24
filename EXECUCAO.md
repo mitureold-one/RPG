@@ -436,6 +436,33 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md); [`spec.md`](specs/010-phase-02-causal-history/spec.md); [`plan.md`](specs/010-phase-02-causal-history/plan.md); [`tasks.md`](specs/010-phase-02-causal-history/tasks.md); EX-0014; EX-0015.
 - **Pendências:** nenhuma.
 
+## EX-0017 — 2026-10-24 — Reverificação do QA da Fase 02/R1 após EX-0016
+
+- **Autor:** agente de QA DeepSeek Harness, a pedido do usuário.
+- **Tipo:** teste + documentação (auditoria).
+- **Status:** parcial (**P0 resolvidos**; 2 P1 e 5 P2 abertos; R1 ainda não congelado).
+- **Commit:** relatório não commitado; implementação auditada em `2d886bc` (o `39f59e9` citado na EX-0016 é o commit pré-amenda).
+- **Escopo:** reverificação dos achados de [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md) contra `2d886bc`.
+- **O que foi feito:** suíte completa, fluxo real `init-campaign` → comandos → `commit` → `rebuild` → `correct` → `review`, e sondas de rollback, snapshot, hash, duplicata, idempotência de correção, NPC e perda de projeção.
+- **Como:**
+  - `python -m unittest discover -s tests -p "test_*.py"` → **203 testes, OK** (25 s).
+  - Commit completo com relógio, missão, facção, NPC, item e prosa; comparação raiz × `projections/`.
+  - Rebuild a partir do zero, de snapshot, e após remoção de `ficha.md`/`npcs.md`.
+  - Correção de XP, contradição e `--resolve`; `review` antes/depois.
+  - Sondas: lote duplicado com `expected_last_seq`, correção repetida, NPC com subcampos, `last_seq` com lote aberto e perda de `diario.md`.
+- **Evidência:**
+  - **P0 resolvidos:** sem `events/`, o commit recria e grava o lote; raiz == `projections/`; commit completo gera os eventos de recurso; rollback mantém 4 → 4 eventos; catálogo default rejeita tipo/versão inválidos; lock único; rebuild from scratch e snapshot preservam estado; hash adulterado gera `ReplayError`; `--delta-xp` compensa; comandos emitem eventos.
+  - **P1-A (aberto):** lote idêntico com `expected_last_seq` atual é aceito (seq 7→8); duas correções iguais geram dois `protagonist.progression_changed` com `xp_delta=-50` (seq 10 e 13).
+  - **P1-B (aberto):** `--npc-updates "Aliado Inicial: Atitude: alerta | Relação: Confiança +1"` gera dois `npc.updated`: `aliado_inicial` e `relacao` (fantasma), com `changes` cru; a raiz fica correta via `meta.npcs_after`, mas o log não representa o fato.
+  - **P2:** perda de `diario.md` impede `find_campaign`/`rebuild`; `turn.committed.meta` guarda `diario_after`/`ficha_after`/`npcs_after` completos (rebuild reaplica blobs, não deriva dos eventos); compensação limitada a XP/ficha/reputação; `application/commit.py` 516 linhas, `reviewer.py` 692; testes não cobrem duplicata com `expected`, correção repetida, NPC subfields ou perda de `diario.md`.
+- **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md) (Atualização pós-remediação); [`spec.md`](specs/010-phase-02-causal-history/spec.md); EX-0015, EX-0016.
+- **Pendências:**
+  - idempotência: rejeitar duplicata mesmo com `expected_last_seq` e deduplicar correção por alvo/`correction_id`;
+  - corrigir o parser de `--npc-updates` no `commit_events` para usar a separação por NPC/subcampo já existente;
+  - permitir descoberta/rebuild por `events/` quando `diario.md` faltar;
+  - remover ou justificar os snapshots `*_after` no `meta` de `turn.committed`;
+  - fechar P2/P3 restantes (compensações, camadas/tamanho, testes de aceite).
+
 ---
 
 ## 5. Como registrar uma nova execução
