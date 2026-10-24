@@ -256,6 +256,8 @@ Não iniciar a fase inteira antes de resolver o gate correspondente.
 
 G1 não reabre o que o [`ARCHITECTURE.md`](ARCHITECTURE.md) já fixou: JSONL canônico, `evt_<ulid>` e o envelope do evento. Ele ratifica essas escolhas e fecha o que ainda está aberto. G2 é o dono exclusivo da política de correção e reconstrução; nenhum dos dois invade o escopo do outro.
 
+**Status em 23/10/2026:** G1 e G2 **ratificados com ajustes**; ver [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md) e o [`checklist`](specs/010-phase-02-causal-history/checklists/g1-g2-ratification.md). G3–G7 seguem abertos.
+
 Enquanto um gate estiver aberto, a fase correspondente pode ter protótipo e testes de contrato, mas não deve ser declarada concluída.
 
 ---
@@ -344,8 +346,8 @@ Cada cenário deve ter estado inicial, ação/tempo, comportamento esperado e as
 2. **R0 concluído:** contratos (`contracts/`), kernel de extensão (`kernel/`), `bootstrap.py` e extração modular de CLI, persistência, `temporal/` e `campaign/` (`EX-0004` a `EX-0007`).
 3. **R0.5 concluído:** arquivamento de campanhas em `archive/campaigns/`, fixtures em `tests/fixtures/campaigns/`, `campaigns/` limpo com `.gitkeep` (`EX-0008`).
 4. **Auditoria QA concluída:** correções de drift de calendário P1-A, contenção de `campaign_id` P2-1, all-or-nothing de templates P2-2, e lock transacional em plan/progress P2-3 (`EX-0009` / `QA-FASE-01.md`).
-5. **Escrever a spec da Fase 02** (G1/G2): payloads, serialização/versionamento, retenção, projeção, correções, dependências, fila esqueleto.
-6. **Executar R1 + Fase 02.**
+5. **G1/G2 ratificados com ajustes** (23/10/2026): [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md) em `Ready for Planning`; próximos `plan.md`/`tasks.md` com os critérios C1–C4.
+6. **Executar R1 + Fase 02** após `plan.md`/`tasks.md`; a fase não é declarada concluída sem C1–C4.
 7. Seguir para R2–R4 conforme as fases.
 
 ---

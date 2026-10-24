@@ -670,6 +670,10 @@ def cmd_review(campaign_id: str) -> dict:
                 "detail": f"Divergência de Reputação: A reputação com '{matched_rep['name']}' na ficha ({matched_rep['score']}) difere do saldo final registrado no diário ({l_score}).",
             })
 
+    from application.correction import check_causal_inconsistencies
+    camp_dir = Path(info.get("ficha", ".")).parent
+    issues.extend(check_causal_inconsistencies(camp_dir, campaign_id))
+
     return {
         "campaign": campaign_id,
         "operation_mode": "reviewer",

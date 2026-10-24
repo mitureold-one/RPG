@@ -10,22 +10,22 @@
 
 ## Atualização pós-remediação — 23/10/2026
 
-**Reverificado em:** `69153a9` (HEAD). O `EX-0010` registra `9c7b872`, que é o commit **pré-amenda** e não é ancestral do HEAD ([P2-5](#p2-5--registro-ex-0010-aponta-para-commit-fora-do-histórico)).
+**Reverificado em:** `69153a9`, `936fba5` e `a6771fb` (HEAD). O `EX-0010` foi corrigido para o commit real `69153a9`; o antigo `9c7b872` era o pré-amenda ([P2-5](#p2-5--corrigido-ex-0010-alinhado)).
 
-**Resultado:** **156 testes OK**. P1-A (drift de 360 × 365 dias) corrigido para os meses reconhecidos; P2-1, P2-2 e P2-3 fechados. O **P1-B foi retirado** após verificação do cânone: `Sol-Branco` é a **Capital Imperial** (`mundo.md:19`), não um mês; a lista de meses de `regras.md` é que contém um nome de lugar. Restam **P2-D** (revisar a lista canônica dos 12 meses) e **P2-5** (registro de auditoria).
+**Resultado:** **157 testes OK**. P1-A corrigido; P1-B retirado (`Sol-Branco` é a capital, não um mês). P2-D foi **aceito como risco** e encerrado por decisão do dono: a campanha Valíria é legada, foi arquivada em R0.5 e não será migrada (D4); o motor, porém, passou a aceitar meses com hífen. P2-5 foi corrigido (hash `69153a9`, caractere de controle removido). Restam apenas P3 de higiene documental e robustez.
 
 | Achado | Status | Evidência |
 | :--- | :---: | :--- |
 | P1-A drift `+1y`/`+1mo` | **Corrigido** | `+1y` Valíria → `5 de Ventania de 305`; `+2y` → 306; `+12mo` → 305; `+1mo` 30 Ventania → 30 Geada; Gregorian 31 Jan → 28 Fev |
-| P1-B meses com hífen | **Retirado** | `Sol-Branco` é a Capital Imperial (`mundo.md:19`); nenhuma data canônica usa “de Sol-Branco de 304”; o bloco `calendar:` foi introduzido na Fase 01.5 (`7d7f598`) e não existia antes (`065c941`). O regex sem `-` continua como P3 latente |
-| P2-D calendário de Valíria | **Aberto** | `regras.md:19` lista `Sol-Branco` (capital) como 5º mês; a lista de 12 nomes foi criada pelo agente em `7d7f598`, sem fonte no cânone. `Noite-Longa` também só aparece nessa lista |
+| P1-B meses com hífen | **Retirado** | `Sol-Branco` é a Capital Imperial (`mundo.md:19`); nenhuma data canônica usa “de Sol-Branco de 304”; o bloco `calendar:` foi introduzido na Fase 01.5 (`7d7f598`) e não existia antes (`065c941`). O regex foi corrigido em `936fba5` e tem teste próprio |
+| P2-D calendário de Valíria | **Aceito / descartado** | Decisão do dono: campanha legada arquivada em R0.5, sem migração (D4). A lista de 12 nomes segue no fixture apenas como dado de teste; não é cânone do sistema novo |
 | P2-1 `campaign_id` | **Corrigido** | `validate_campaign_id` rejeita `../`, `..`, `/`, `\`, `:`, espaço, `@`; `find_campaign` levanta; CLI sai 2; `init` retorna erro sem criar diretório |
 | P2-2 templates | **Corrigido** | templates ausentes → erro e diretório não criado (teste automatizado) |
 | P2-3 lock `plan`/`progress` | **Corrigido** | decorator aplicado; 2 `plan` + 2 `commit` + 1 `progress` concorrentes persistiram; teste de rollback do ledger passa |
-| P2-4 documentos canônicos | **Corrigido (com resíduos)** | status/§8/README atualizados; restam “69 testes” em `ROADMAP.md:295` e `ARCHITECTURE.md:222`, e o snapshot `cefe5ea` em `ROADMAP.md:4` (P3) |
-| P2-5 registro EX-0010 | **Aberto** | hash registrado não está no histórico; linha do commit tem `\x0c` no lugar do “f” |
+| P2-4 documentos canônicos | **Corrigido (com resíduos)** | status/§8/README atualizados; restam referências a 156 testes e o snapshot `cefe5ea` (P3-10) |
+| P2-5 registro EX-0010 | **Corrigido** | hash alinhado para `69153a9` e `\x0c` removido; a edição direta de uma entrada append-only é desvio de processo (P3-11) |
 | P3-5 README/AGENTS | **Corrigido** | `AGENTS.md` e `README.md` atualizados; `rpgpro-diretrizes-agentes.md` versionado |
-| P3-7 cobertura de calendário | **Parcial** | 4 testes novos, mas só `Ventania`; nenhum teste percorre `calendar.months` |
+| P3-7 cobertura de calendário | **Parcial** | teste de hífen adicionado (`+1d` e `+1mo`), mas ainda não percorre todos os meses de `calendar.months` |
 | P3-1/2/3/4/6/8 | **Abertos** | ver seção 5; não foram tocados pelo EX-0010 |
 
 ### P1-B — retirado: `Sol-Branco` é a capital, não um mês
@@ -36,21 +36,27 @@ O usuário apontou que `Sol-Branco` nomeia o império/capital, não um mês. A v
 - Todas as ocorrências no diário são de lugar (“capital Sol-Branco”, “Senado de Sol-Branco”, “Céus de Sol-Branco”); nenhuma data usa `de Sol-Branco de 304`.
 - O bloco `calendar:` não existia em `065c941` (antes da Fase 01.5) e foi introduzido em `7d7f598`; os 12 nomes foram criados pelo agente, sem lista canônica no repositório.
 
-Portanto o teste `05 de Sol-Branco de 304 +30d` usava uma data inválida: o motor não deveria avançá-la. O **P1-B como defeito de motor está retirado**; o problema real é de **dado** (P2-D), a lista de meses declara um lugar como mês.
+Portanto o teste `05 de Sol-Branco de 304 +30d` usava uma data inválida: o motor não deveria avançá-la. O **P1-B como defeito de motor está retirado**; o problema real é de **dado** (P2-D), encerrado como aceito por se tratar de campanha legada.
 
-O que sobra no motor é uma limitação **P3 latente**: os regexes de [temporal/calendar.py:137](temporal/calendar.py#L137) e [253](temporal/calendar.py#L253) não aceitam `-`; se `Noite-Longa` (ou qualquer mês legítimo) tiver hífen, o avanço vira no-op silencioso. `Noite-Longa` também só aparece na lista criada pelo agente, então precisa da mesma revisão canônica. Correção defensiva: incluir `-` na classe e testar todos os meses declarados — mas a decisão dos nomes é do dono da campanha.
+O motor foi corrigido em `936fba5`: os dois regexes de [temporal/calendar.py:137](temporal/calendar.py#L137) e [253](temporal/calendar.py#L253) agora aceitam `-`, e `test_advance_calendar_with_hyphenated_month` cobre `+1d` e `+1mo` em um calendário com `Noite-Longa`. Verificação manual: `Noite-Longa +1y` → `Noite-Longa` do ano seguinte. A cobertura ainda não percorre todos os meses declarados (P3-7).
 
-### P2-D — Calendário de Valíria declara um lugar como mês
+### P2-D — aceito: a lista de meses da Valíria é dado legado
 
-`tests/fixtures/campaigns/imperio_valiria/regras.md:19` lista `Sol-Branco` como o 5º dos 12 meses. O cânone (`mundo.md:19`) diz que Sol-Branco é a Capital Imperial, e nenhuma data do diário usa esse nome como mês. O bloco inteiro foi criado em `7d7f598` (Fase 01.5) — antes dele, `regras.md` não tinha `calendar:`. Como não há lista canônica dos 12 meses no repositório, `Éter`, `Alvorada` e `Noite-Longa` também merecem confirmação (são usados como facção/ordem/estação em outros contextos).
+`tests/fixtures/campaigns/imperio_valiria/regras.md:19` lista `Sol-Branco` como o 5º dos 12 meses. O cânone (`mundo.md:19`) diz que Sol-Branco é a Capital Imperial, e nenhuma data do diário usa esse nome como mês. O bloco inteiro foi criado em `7d7f598` (Fase 01.5) — antes dele, `regras.md` não tinha `calendar:`.
 
-**Impacto:** o motor aceita o calendário declarado como verdade; uma lista inventada contamina `diario.md`, `commit --time` e, na Fase 02, `Event.game_time`. Não é falha de código; é dado Grau 2 a corrigir.
+**Decisão:** aceito e encerrado. A campanha é anterior ao sistema atual, foi arquivada em R0.5 e não será migrada (D4). O `regras.md` do fixture permanece apenas como dado de teste; não é cânone do sistema novo. Com o suporte a hífen, `advance_time_str` também não depende mais do nome errado para funcionar. Nenhuma ação pendente.
 
-**Correção:** o dono da campanha define a lista canônica dos 12 meses; atualizar `tests/fixtures/campaigns/imperio_valiria/regras.md` (e, se desejado, o template/documentação). Não reescrever `archive/campaigns/` — é histórico. Depois, rodar os testes de calendário com a lista real.
+### P2-5 — corrigido: EX-0010 alinhado
 
-### P2-5 — Registro EX-0010 aponta para commit fora do histórico
+O hash foi corrigido para `69153a9` e o `\x0c` removido da linha do commit. A edição direta de uma entrada append-only, porém, contraria as regras 1 e 12 do próprio `EXECUCAO.md`; o correto seria uma entrada nova (`Corrige: EX-0010`). Fica como desvio de processo (P3-11), não como bloqueio.
 
-`9c7b872` existe no object store, mas `git merge-base --is-ancestor 9c7b872 HEAD` falha; o diff para `69153a9` é só a linha do commit em `EXECUCAO.md` (o hash foi gravado por amend, mudando o próprio hash). Além disso, a linha 288 tem um caractere de controle (`\x0c`) no lugar do “f” de “fix”, e o status “concluído” afirma que todos os P1/P2 foram fechados, o que não se confirmou. Corrigir por nova entrada (`EX-0011`), sem editar a `EX-0010`, e registrar `69153a9`.
+### P3-10 — contagens de teste ainda divergem
+
+A suíte tem **157**. `ROADMAP.md:295` e `ARCHITECTURE.md:222` dizem 157; `README.md:45`, `ROADMAP.md:321`, `ARCHITECTURE.md:3`, `639` e `696` ainda dizem 156. `ROADMAP.md:4` ainda aponta o snapshot `cefe5ea`.
+
+### G1/G2 — ratificados com ajustes; R1 pendente de plan/tasks
+
+G1 e G2 foram especificados em [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md) e ratificados com ajustes em 23/10/2026; o checklist está preenchido em [`checklists/g1-g2-ratification.md`](specs/010-phase-02-causal-history/checklists/g1-g2-ratification.md). A decisão de não migrar campanhas legadas segue compatível com D4 e não bloqueia os gates. O R1 ainda não começou: depende de `plan.md`/`tasks.md` e dos quatro critérios complementares C1–C4; a Fase 02 não deve ser declarada concluída sem eles (`ARCHITECTURE.md:712`).
 
 **Abaixo, o parecer original de `d2f99bf` (histórico).**
 

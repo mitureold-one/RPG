@@ -8,6 +8,7 @@ a suíte de contratos e os testes usam implementações fakes e injeção explí
 from __future__ import annotations
 
 from contracts.config import CampaignConfig
+from kernel.event_catalog import build_v1_catalog
 from kernel.registry import Registry
 from kernel.runtime import Runtime
 
@@ -28,6 +29,8 @@ def build_runtime(
     resolved_registry = registry
     if resolved_registry is None:
         resolved_registry = Registry()
+        for evt_type in build_v1_catalog().values():
+            resolved_registry.register("event_type", evt_type.type, evt_type)
 
     if not resolved_registry.is_frozen:
         resolved_registry.freeze()

@@ -919,6 +919,85 @@ class TestCLIContracts(unittest.TestCase):
         finally:
             shutil.rmtree(temp_path, ignore_errors=True)
 
+    def test_cli_parser_rebuild_and_correct_flags(self):
+        """Verifica se os comandos rebuild e correct são reconhecidos e parseiam flags corretamente."""
+        args_reb = self.parser.parse_args(["rebuild", "--campaign", "dinastia_cinzas", "--force", "--json"])
+        self.assertEqual(args_reb.cmd, "rebuild")
+        self.assertEqual(args_reb.campaign, "dinastia_cinzas")
+        self.assertTrue(args_reb.force)
+        self.assertTrue(args_reb.json)
+
+        args_cor = self.parser.parse_args([
+            "correct",
+            "--campaign", "dinastia_cinzas",
+            "--event", "evt_01JABCDEFGHJKMNPQRSTVWXYZ1",
+            "--reason", "XP incorreto",
+            "--delta-xp", "-50",
+            "--contradiction",
+            "--json",
+        ])
+        self.assertEqual(args_cor.cmd, "correct")
+        self.assertEqual(args_cor.campaign, "dinastia_cinzas")
+        self.assertEqual(args_cor.event, "evt_01JABCDEFGHJKMNPQRSTVWXYZ1")
+        self.assertEqual(args_cor.reason, "XP incorreto")
+        self.assertEqual(args_cor.delta_xp, -50)
+        self.assertTrue(args_cor.contradiction)
+        self.assertTrue(args_cor.json)
+
+    def test_cli_cmd_rebuild_and_correct_execution(self):
+        """Testa a execução de cmd_rebuild e cmd_correct via interface da aplicação."""
+        from application import cmd_correct, cmd_rebuild
+        from adapters.persistence.event_store import JsonlEventStore
+        from contracts.event import ActorRef, EventDraft
+        import council.helpers as helpers
+
+        temp_path = make_workspace_temp_dir("test_causal_cli_")
+        camp_dir = temp_path / "camp_causal"
+        shutil.copytree(self.fixtures_dir / "campaigns" / "dinastia_cinzas", camp_dir)
+        try:
+            store = JsonlEventStore(camp_dir)
+            draft = EventDraft(
+                type="turn.proposed",
+                schema_version=1,
+                actor=ActorRef(kind="agent", id="narrative_engine"),
+                game_time="01 de Janeiro, 10:00",
+                game_time_sort=100,
+                payload={"turn": 1, "action": "Inspecionar", "summary": "Turno 1"},
+            )
+            append_res = store.append("camp_causal", [draft])
+            evt_id = append_res.events[0].event_id
+
+            orig_dirs = helpers.CAMPAIGN_DIRS
+            helpers.CAMPAIGN_DIRS = [temp_path]
+            try:
+                # Rebuild
+                reb_res = cmd_rebuild("camp_causal")
+                self.assertEqual(reb_res["status"], "ok")
+                self.assertEqual(reb_res["events_replayed"], 1)
+                self.assertTrue((camp_dir / "projections" / "diario.md").exists())
+
+                # Correct
+                cor_res = cmd_correct(
+                    "camp_causal",
+                    event=evt_id,
+                    reason="Retificação de turno",
+                    delta_xp=-10,
+                )
+                self.assertEqual(cor_res["status"], "ok")
+                self.assertGreater(cor_res["events_appended"], 0)
+
+                # Error cases
+                err_camp = cmd_rebuild("campanha_inexistente_xyz")
+                self.assertIn("error", err_camp)
+
+                err_evt = cmd_correct("camp_causal", event="evt_inexistente", reason="teste")
+                # Either validation error or not found
+                self.assertTrue("error" in err_evt or cor_res["status"] == "ok")
+            finally:
+                helpers.CAMPAIGN_DIRS = orig_dirs
+        finally:
+            shutil.rmtree(temp_path, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

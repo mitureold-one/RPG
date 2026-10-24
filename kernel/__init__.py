@@ -4,10 +4,15 @@ O kernel não conhece domínio, Markdown, caminhos de campanha nem regras de
 jogo. Ele depende apenas de ``contracts`` e da biblioteca padrão.
 """
 
+from kernel.dag import DependencyGraph
 from kernel.errors import (
     ConfigurationError,
     ConflictError,
+    DependencyCycleError,
+    DependencyDepthError,
+    DependencyError,
     DuplicateRegistrationError,
+    InvalidDraftError,
     LockTimeoutError,
     MissingRequirementError,
     NotFoundError,
@@ -16,6 +21,7 @@ from kernel.errors import (
     RpgError,
     SchemaError,
     SeqConflictError,
+    UnknownEventTypeError,
     UnknownPortError,
     ValidationError,
 )
@@ -27,7 +33,12 @@ from kernel.schema import is_valid_schema, validate_schema
 __all__ = [
     "ConfigurationError",
     "ConflictError",
+    "DependencyCycleError",
+    "DependencyDepthError",
+    "DependencyError",
+    "DependencyGraph",
     "DuplicateRegistrationError",
+    "InvalidDraftError",
     "LockTimeoutError",
     "MissingRequirementError",
     "NotFoundError",
@@ -39,6 +50,7 @@ __all__ = [
     "Runtime",
     "SchemaError",
     "SeqConflictError",
+    "UnknownEventTypeError",
     "UnknownPortError",
     "ValidationError",
     "is_valid_schema",

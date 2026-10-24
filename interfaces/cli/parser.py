@@ -175,4 +175,17 @@ def build_cli() -> argparse.ArgumentParser:
     p_fac.add_argument("--tick", action="store_true", help="Executa o avanço autônomo off-screen de relógios de facções ativas")
     p_fac.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
+    p_reb = sub.add_parser("rebuild", help="Reconstrói projeções Markdown a partir do stream de eventos causal (Modo Revisor/R1)")
+    p_reb.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
+    p_reb.add_argument("--force", action="store_true", help="Força rebuild completo desconsiderando snapshots prévios")
+    p_reb.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
+
+    p_cor = sub.add_parser("correct", help="Emite correção causal append-only com eventos compensatórios (Critério C4/R1)")
+    p_cor.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
+    p_cor.add_argument("--event", required=True, help="ID do evento causal a ser corrigido (ex: 'evt_01J...')")
+    p_cor.add_argument("--reason", required=True, help="Justificativa da correção (obrigatória)")
+    p_cor.add_argument("--delta-xp", "--delta_xp", dest="delta_xp", type=int, default=0, help="Ajuste compensatório de XP")
+    p_cor.add_argument("--contradiction", action="store_true", help="Sinaliza contradição com premissa posterior que requer resolução humana")
+    p_cor.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
+
     return parser

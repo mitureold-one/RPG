@@ -330,6 +330,64 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Relações:** [`QA-FASE-01.md`](QA-FASE-01.md); [`ARCHITECTURE.md`](ARCHITECTURE.md) §12 e §15; [`ROADMAP.md`](ROADMAP.md) §8; EX-0010.
 - **Pendências:** nenhuma. Base R0/R0.5 100% estabilizada e pronta para a Fase 02.
 
+## EX-0012 — 2026-10-23 — Spec 010: gates G1/G2 da Fase 02
+
+- **Autor:** agente de arquitetura/QA DeepSeek Harness, a pedido do usuário.
+- **Tipo:** documentação (especificação).
+- **Status:** parcial (rascunho de spec; G1/G2 aguardando ratificação do dono).
+- **Commit:** não commitado.
+- **Escopo:** Fase 02 — contrato do evento (G1) e correção/dependência/reconstrução (G2).
+- **O que foi feito:** criados `specs/010-phase-02-causal-history/spec.md` (12 decisões G1, 10 decisões G2, catálogo v1 de eventos, layout/retenção, cenários, requisitos e 10 perguntas de ratificação) e `specs/010-phase-02-causal-history/checklists/g1-g2-ratification.md` (ratificação item a item).
+- **Como:** decisões propostas a partir de `ARCHITECTURE.md` §2/§5/§8/§11 e `ROADMAP.md` §3/§5; nenhum código de produção alterado.
+- **Evidência:** arquivos citados; suíte permanece **157 testes, OK** (sem alteração de código). Limite do suporte a calendário: o regex cobre letras/acentos/hífen; nomes de mês com espaço ou apóstrofo continuam fora.
+- **Relações:** [`spec.md`](specs/010-phase-02-causal-history/spec.md); [`ROADMAP.md`](ROADMAP.md) §3 e §5; [`ARCHITECTURE.md`](ARCHITECTURE.md) §5, §8 e §11; EX-0011; [`QA-FASE-01.md`](QA-FASE-01.md).
+- **Pendências:** ratificar G1/G2; somente depois escrever `plan.md`/`tasks.md` e iniciar R1.
+
+## EX-0013 — 2026-10-23 — Ratificação de G1/G2 da Fase 02
+
+- **Autor:** dono do projeto (decisão) + agente de arquitetura/QA DeepSeek Harness (transcrição), a pedido do usuário.
+- **Tipo:** documentação (ratificação de gates).
+- **Status:** parcial (ratificação concluída; commit do registro pendente).
+- **Commit:** não commitado.
+- **Escopo:** gates G1/G2 da Fase 02.
+- **O que foi feito:** Q1–Q10 e G1-D1–G1-D12/G2-D1–G2-D10 ratificadas (integrais ou com ajuste); ajustes incorporados à spec 010 e ao checklist; definidos os quatro critérios complementares C1–C4 de aceite do R1.
+- **Como:**
+  - `specs/010-phase-02-causal-history/checklists/g1-g2-ratification.md`: estados `Ratificado`/`Ratificado com ajuste`/`Rejeitado`, decisões e ajustes transcritos da mensagem do dono de 23/10/2026.
+  - `specs/010-phase-02-causal-history/spec.md`: status `Ready for Planning`, seções 2.3/3.3 com os ajustes, seção 4.1 com C1–C4, FRs e critérios de sucesso complementares.
+  - Nenhum código de produção alterado.
+- **Evidência:**
+  - Checklist preenchido; spec atualizada; `python -m unittest discover -s tests` → **157 testes, OK** (sem alteração de código).
+  - Ajustes principais: motor sem índice; dois hashes (evento e lote); recuperação antes de novo append; dependências intra-lote; `projection.rebuilt` fora do hash que verifica; `DuplicateBatchError`; correção contraditória registra inconsistência.
+- **Relações:** [`spec.md`](specs/010-phase-02-causal-history/spec.md); [`checklists/g1-g2-ratification.md`](specs/010-phase-02-causal-history/checklists/g1-g2-ratification.md); [`ROADMAP.md`](ROADMAP.md) §5 e §8; [`ARCHITECTURE.md`](ARCHITECTURE.md) §5, §8 e §11; EX-0012.
+- **Pendências:** escrever `plan.md`/`tasks.md` com C1–C4; só depois iniciar R1.
+
+## EX-0014 — 2026-10-24 — Implementação R1 da Fase 02 (História Causal & Refatoração SSOT)
+
+- **Autor:** agente Antigravity (modo sênior Ponytail / RPGPRO Router), a pedido do usuário.
+- **Tipo:** implementação (arquitetura R1 e Fase 02).
+- **Status:** concluído (50/50 tarefas executadas; suíte completa 199/199 testes verdes; critérios C1–C4 e 11 cenários de QA validados).
+- **Commit:** 1bd2fb9 (e emenda documental subsequente).
+- **Escopo:** Fase 02 — Gates G1 (contrato do evento, persistência atômica, resiliência sob crash C1, catálogo v1 de 25 eventos com upcasters e schemas, segmentação JSONL e locking cooperativo) e G2 (grafo causal com resolução intra-lote C2, projeções determinísticas byte-idênticas com rebuild C3, correções e compensações com inconsistência C4, prosa imutável com sha256 auditável, fila esqueleto append-only, CLI rebuild/correct e modularização do SSOT para `resources/`).
+- **O que foi feito:**
+  - `adapters/persistence/event_store.py`: `JsonlEventStore` com marcadores `batch.open` e `batch.committed`, rotação de segmentos (1000 eventos/1MB), validação de `game_time`/`game_time_sort`, schemas canônicos, upcasting em leitura e recuperação atômica de truncamento C1.
+  - `adapters/persistence/lock.py`: `CampaignLock` para travamento cooperativo de escrita com timeout.
+  - `adapters/persistence/skeleton_queue.py`: `SkeletonQueue` com persistência append-only em `queue.jsonl` (`enqueue`, `complete`, `fail`, `list_pending`).
+  - `application/prose_store.py`: `ProseStore` para artefatos imutáveis de prosa em `artifacts/prose/turn_{seq:06d}-{hash}.md` auditáveis por `prose.recorded`.
+  - `kernel/dag.py`: `DependencyGraph` com detecção de ciclo, limite de profundidade (<=64) e resolução de dependências intra-lote via `provisional_ids` e referências `batch:k`.
+  - `application/projectors/`: `JournalProjector`, `CharacterSheetProjector`, `NpcProjector` e `ProjectionEngine` com gravação atômica e cálculo de SHA-256 consolidado.
+  - `application/rebuild.py`: `rebuild_projections` determinístico com isolamento estrito de `projection.rebuilt` pós-verificação (C3).
+  - `resources/`: modularização de `council/ssot.py` em 4 submódulos dedicados (`clocks.py`, `ledger.py`, `progression.py`, `sheet.py`), reduzindo `ssot.py` de 797 para 51 linhas (< 100 LOC), todos rigorosamente abaixo de 300 LOC.
+  - `application/correction.py`: `CorrectionService` emitindo `correction.issued`, eventos compensatórios e detecção de contradições causais C4 (`correction.recomputed`).
+  - `council/reviewer.py`: auditor do Modo Revisor checando inconsistências causais pendentes de resolução humana.
+  - `application/commit.py`: integração causal emitindo lote atômico de eventos e atualizando projeções e prosa.
+  - `lazy_turn.py` & `interfaces/cli`: subcomandos `rebuild` e `correct` integrados e operacionais.
+- **Evidência:**
+  - Suíte completa: `python -m unittest discover -s tests -p "test_*.py"` → **199 testes, OK** (0 erros, 0 falhas).
+  - 11 cenários de `quickstart.md` verificados e aprovados via `tests/test_quickstart_scenarios.py` (11/11 OK).
+  - Limites arquiteturais validados via `tests/test_architecture_boundaries.py` (6/6 OK): `lazy_turn.py < 200` (58 LOC), `council/ssot.py < 100` (51 LOC), `council/helpers.py < 100` (52 LOC) e módulos de domínio < 300 LOC.
+- **Relações:** [`spec.md`](specs/010-phase-02-causal-history/spec.md); [`plan.md`](specs/010-phase-02-causal-history/plan.md); [`tasks.md`](specs/010-phase-02-causal-history/tasks.md); [`checklists/g1-g2-ratification.md`](specs/010-phase-02-causal-history/checklists/g1-g2-ratification.md); [`quickstart.md`](specs/010-phase-02-causal-history/quickstart.md); EX-0013.
+- **Pendências:** nenhuma. R1 concluído integralmente.
+
 ---
 
 ## 5. Como registrar uma nova execução

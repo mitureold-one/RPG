@@ -2,14 +2,32 @@
 
 from __future__ import annotations
 
+import shutil
 import unittest
+from pathlib import Path
 
+from adapters.persistence.event_store import JsonlEventStore
 from contract_support import EventStoreContract, FakeEventStore, make_draft
 
 
 class FakeEventStoreContractTests(EventStoreContract, unittest.TestCase):
     def make_store(self) -> FakeEventStore:
         return FakeEventStore()
+
+
+class JsonlEventStoreContractTests(EventStoreContract, unittest.TestCase):
+    def setUp(self) -> None:
+        self.test_dir = Path(".tmp/test_scratch/test_jsonl_contract")
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir, ignore_errors=True)
+        self.test_dir.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self) -> None:
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def make_store(self) -> JsonlEventStore:
+        return JsonlEventStore(base_dir=self.test_dir)
 
 
 class FakeEventStoreFailureTests(unittest.TestCase):

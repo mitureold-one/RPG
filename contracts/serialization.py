@@ -8,9 +8,10 @@ comparação e hash.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 
 def _normalize(value: Any, path: str) -> Any:
@@ -55,4 +56,48 @@ def canonical_json(value: Any) -> str:
     )
 
 
-__all__ = ["canonical_json", "normalize_json_object"]
+def event_to_dict(event: Any) -> dict[str, Any]:
+    """Converte um objeto Event em dict canônico (sem campos operacionais de arquivo)."""
+    actor = event.actor
+    actor_dict = {"id": actor.id, "kind": actor.kind} if hasattr(actor, "kind") else dict(actor)
+    return {
+        "actor": actor_dict,
+        "campaign_id": event.campaign_id,
+        "causation_id": event.causation_id,
+        "correlation_id": event.correlation_id,
+        "event_id": event.event_id,
+        "game_time": event.game_time,
+        "game_time_sort": event.game_time_sort,
+        "meta": dict(event.meta),
+        "payload": dict(event.payload),
+        "recorded_at": event.recorded_at,
+        "schema_version": event.schema_version,
+        "seq": event.seq,
+        "type": event.type,
+    }
+
+
+def hash_event(event: Any) -> str:
+    """Calcula o hash SHA-256 canônico de um evento individual."""
+    d = event_to_dict(event) if hasattr(event, "event_id") else event
+    data = canonical_json(d).encode("utf-8")
+    return f"sha256:{hashlib.sha256(data).hexdigest()}"
+
+
+def hash_batch(events: Sequence[Any]) -> str:
+    """Calcula o hash SHA-256 da concatenação canônica dos eventos do lote ordenados por seq."""
+    sorted_events = sorted(events, key=lambda e: e.seq if hasattr(e, "seq") else e["seq"])
+    buffer = b"".join(
+        canonical_json(event_to_dict(e) if hasattr(e, "event_id") else e).encode("utf-8")
+        for e in sorted_events
+    )
+    return f"sha256:{hashlib.sha256(buffer).hexdigest()}"
+
+
+__all__ = [
+    "canonical_json",
+    "event_to_dict",
+    "hash_batch",
+    "hash_event",
+    "normalize_json_object",
+]

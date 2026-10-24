@@ -17,18 +17,20 @@ from application.factions import cmd_faction
 from application.prepare import cmd_prepare
 from application.progression import cmd_progress, cmd_quest
 from application.prose import cmd_check_prose
-from application.showrunner import cmd_arc, cmd_clock, cmd_plan
+from application.showrunner import cmd_arc, cmd_clock, cmd_correct, cmd_plan, cmd_rebuild
 
 __all__ = [
     "cmd_arc",
     "cmd_check_prose",
     "cmd_clock",
     "cmd_commit",
+    "cmd_correct",
     "cmd_faction",
     "cmd_plan",
     "cmd_prepare",
     "cmd_progress",
     "cmd_quest",
+    "cmd_rebuild",
     "cmd_review",
     "find_campaign",
     "init_campaign_from_templates",

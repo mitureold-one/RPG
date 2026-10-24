@@ -653,7 +653,7 @@ R0 é behavior-preserving. R1–R4 acompanham as fases; não são uma “refator
 |---|---|---|
 | 01 | fundação de persistência/validação | — |
 | 01.5 | concluída: `CalendarProvider` de Valíria e `faction --rep` estrito; R0.5 cobre reset/fixtures | — |
-| 02 | event store, projeção, correções, fila | G1, G2 |
+| 02 | event store, projeção, correções, fila | G1, G2 (ratificados em 23/10/2026) |
 | 03 | `BehaviorPolicy`, `FactionPolicy`, `KnowledgeProvider` | G3 |
 | 04 | `ContextProvider`, contexto causal | schema de evento/agente |
 | 05 | `SimulationPolicy`, `BudgetPolicy`, fila | G4 |
@@ -705,8 +705,8 @@ Os gates continuam definidos no [`ROADMAP.md`](ROADMAP.md). A arquitetura não o
 1. R0 concluído (contratos, kernel, bootstrap e extração modular).
 2. R0.5 concluído (arquivamento de campanhas, fixtures isoladas e campaigns/ limpo com .gitkeep).
 3. Auditoria de QA da Fundação/R0/R0.5 concluída e itens P1/P2 resolvidos.
-4. Escrever a spec da Fase 02 (G1/G2): payloads, serialização/versionamento, retenção, projeções, correções, dependências e fila.
-5. Executar **R1 + Fase 02**.
+4. Spec 010 ratificada com ajustes (G1/G2); próxima etapa: `plan.md`/`tasks.md` com os critérios C1–C4.
+5. Executar **R1 + Fase 02** após o plano.
 6. Seguir para R2–R4 conforme as fases.
 
-Enquanto G1/G2 não estiverem fechados, a Fase 02 pode ter protótipo e testes de contrato, mas não deve ser declarada concluída.
+Com G1/G2 ratificados, a Fase 02 pode ser planejada e implementada; não deve ser declarada concluída sem os critérios complementares C1–C4 da [`spec 010`](specs/010-phase-02-causal-history/spec.md) §4.1.

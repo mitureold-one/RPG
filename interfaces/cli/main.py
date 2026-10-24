@@ -13,6 +13,8 @@ from application import (
     cmd_prepare,
     cmd_progress,
     cmd_quest,
+    cmd_correct,
+    cmd_rebuild,
     cmd_review,
     find_campaign,
     init_campaign_from_templates,
@@ -26,26 +28,12 @@ def main():
     args = parser.parse_args()
     if args.cmd == "prepare":
         res = cmd_prepare(
-            args.campaign,
-            args.action,
-            args.variant,
-            args.dc,
-            args.stat,
-            args.roll,
-            args.no_roll,
-            args.mode,
-            args.turns,
-            args.stakes,
-            args.critical,
-            scene_type=args.scene_type,
-            actors=args.actors,
-            focus=args.focus,
-            contest_npc=args.contest_npc,
-            vs_npc=args.vs_npc,
-            npc_stat=args.npc_stat,
-            vs_stat=args.vs_stat,
-            npc_variant=args.npc_variant,
-            vs_variant=args.vs_variant,
+            args.campaign, args.action, args.variant, args.dc, args.stat, args.roll,
+            args.no_roll, args.mode, args.turns, args.stakes, args.critical,
+            scene_type=args.scene_type, actors=args.actors, focus=args.focus,
+            contest_npc=args.contest_npc, vs_npc=args.vs_npc,
+            npc_stat=args.npc_stat, vs_stat=args.vs_stat,
+            npc_variant=args.npc_variant, vs_variant=args.vs_variant,
         )
         print(json.dumps(res, indent=2, ensure_ascii=False))
     elif args.cmd == "commit":
@@ -61,18 +49,10 @@ def main():
             clock_advance=args.clock_advance,
             clock_resolve=args.clock_resolve,
             scene_type=args.scene_type,
-            add_ability=args.add_ability,
-            add_milestone=args.add_milestone,
-            add_item=args.add_item,
-            prose=args.prose,
-            prose_file=args.prose_file,
-            force=args.force,
-            quest_progress=args.quest_progress,
-            quest_complete=args.quest_complete,
-            quest_fail=args.quest_fail,
-            faction_rep=args.faction_rep,
-            faction_favor=args.faction_favor,
-            faction_debt=args.faction_debt,
+            add_ability=args.add_ability, add_milestone=args.add_milestone, add_item=args.add_item,
+            prose=args.prose, prose_file=args.prose_file, force=args.force,
+            quest_progress=args.quest_progress, quest_complete=args.quest_complete, quest_fail=args.quest_fail,
+            faction_rep=args.faction_rep, faction_favor=args.faction_favor, faction_debt=args.faction_debt,
         )
         print(json.dumps(res, indent=2, ensure_ascii=False))
         if res.get("prose_status") == "REJECTED":
@@ -295,5 +275,21 @@ def main():
             if res.get("action_result"):
                 act = res["action_result"]
                 print(f"\n[Ação]: {json.dumps(act, ensure_ascii=False)}")
+    elif args.cmd == "rebuild":
+        res = cmd_rebuild(args.campaign, force=args.force)
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        if res.get("error"):
+            sys.exit(1)
+    elif args.cmd == "correct":
+        res = cmd_correct(
+            args.campaign,
+            event=args.event,
+            reason=args.reason,
+            delta_xp=args.delta_xp,
+            contradiction=args.contradiction,
+        )
+        print(json.dumps(res, indent=2, ensure_ascii=False))
+        if res.get("error"):
+            sys.exit(1)
     else:
         parser.print_help()

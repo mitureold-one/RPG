@@ -107,7 +107,10 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         helpers_len = len((ROOT / "council" / "helpers.py").read_text(encoding="utf-8").splitlines())
         self.assertLess(helpers_len, 100, f"council/helpers.py deve ter menos de 100 linhas (tem {helpers_len})")
 
-        for package in ("application", "interfaces", "contracts", "kernel", "adapters", "temporal", "campaign"):
+        ssot_len = len((ROOT / "council" / "ssot.py").read_text(encoding="utf-8").splitlines())
+        self.assertLess(ssot_len, 100, f"council/ssot.py deve ter menos de 100 linhas (tem {ssot_len})")
+
+        for package in ("application", "interfaces", "contracts", "kernel", "adapters", "temporal", "campaign", "resources"):
             for path in (ROOT / package).rglob("*.py"):
                 size = len(path.read_text(encoding="utf-8").splitlines())
                 self.assertLess(size, 600, f"{path.relative_to(ROOT)} tem {size} linhas (limite de falha: 600)")

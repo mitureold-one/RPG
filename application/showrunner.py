@@ -17,7 +17,10 @@ from council import (
 )
 from rulesets.progression import evaluate_xp_gain, get_base_step_from_overrides
 from application.transaction import _serialized_campaign_mutation
-
+from adapters.persistence.event_store import JsonlEventStore
+from contracts.event import ActorRef
+from application.rebuild import rebuild_projections
+from application.correction import CorrectionService
 
 @_serialized_campaign_mutation
 def cmd_clock(
@@ -85,7 +88,6 @@ def cmd_clock(
         "breached_count": len([c for c in clocks if c["status"] == "BREACHED"]),
     }
 
-
 @_serialized_campaign_mutation
 def cmd_plan(
     campaign_id: str,
@@ -139,7 +141,6 @@ def cmd_plan(
         "planned_scenes": plan_data.get("planned_scenes", []),
         "future_milestones": plan_data.get("future_milestones", []),
     }
-
 
 @_serialized_campaign_mutation
 def cmd_arc(
@@ -215,4 +216,85 @@ def cmd_arc(
         "current_scene_header": f"[{diario['date_time']}] | [{diario['location']}] | [{diario['present']}]",
         "arc": diario.get("arc", {}),
         "active_clocks": [c for c in diario.get("clocks", []) if c["status"] == "ACTIVE"],
+    }
+
+@_serialized_campaign_mutation
+def cmd_rebuild(campaign_id: str, force: bool = False) -> dict:
+    """Reconstrói as projeções canônicas a partir do log de eventos causal (C3)."""
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
+    if not info:
+        return {"error": f"Campanha '{campaign_id}' não encontrada."}
+    camp_dir = info["dir"]
+
+    store = JsonlEventStore(camp_dir)
+    count, proj_hash = rebuild_projections(store, campaign_id, camp_dir)
+    return {
+        "status": "ok",
+        "campaign": campaign_id,
+        "events_replayed": count,
+        "projection_hash": proj_hash,
+    }
+
+@_serialized_campaign_mutation
+def cmd_correct(
+    campaign_id: str,
+    event: str = "",
+    reason: str = "",
+    delta_xp: int = 0,
+    contradiction: bool = False,
+) -> dict:
+    """Aplica correção append-only reavaliando dependentes e anotando inconsistências (C4)."""
+    if not event:
+        return {"error": "Argumento --event é obrigatório para correções."}
+    if not reason:
+        return {"error": "Argumento --reason é obrigatório para correções."}
+    try:
+        info = find_campaign(campaign_id)
+    except (ValueError, FileNotFoundError) as e:
+        return {"error": str(e)}
+    if not info:
+        return {"error": f"Campanha '{campaign_id}' não encontrada."}
+    camp_dir = info["dir"]
+
+    store = JsonlEventStore(camp_dir)
+    service = CorrectionService(store)
+    changes = []
+    if delta_xp != 0:
+        changes.append({"field": "xp", "delta": delta_xp})
+    if contradiction:
+        changes.append({"field": "outcome", "new_value": "voided", "type": "combat.resolved", "contradiction": True})
+
+    all_evts = tuple(store.read(campaign_id))
+    gt = all_evts[-1].game_time if all_evts else "Tempo Indefinido"
+    gts = all_evts[-1].game_time_sort if all_evts else 0
+
+    actor = ActorRef(kind="agent", id="showrunner")
+    try:
+        res = service.issue_correction(
+            campaign_id=campaign_id,
+            actor=actor,
+            corrects=[event],
+            reason=reason,
+            changes=changes,
+            game_time=gt,
+            game_time_sort=gts,
+        )
+        rebuild_projections(store, campaign_id, camp_dir, emit_audit_event=False)
+    except Exception as exc:
+        return {"error": str(exc)}
+    inconsistency = any(
+        (e.type == "correction.issued" and e.payload.get("inconsistency_detected"))
+        or (e.type == "correction.recomputed" and e.payload.get("outcome") == "INCONSISTENCY_PENDING_REVIEW")
+        for e in res.events
+    )
+    return {
+        "status": "ok",
+        "campaign": campaign_id,
+        "first_seq": res.first_seq,
+        "last_seq": res.last_seq,
+        "events_appended": len(res.events),
+        "inconsistency_detected": inconsistency,
     }

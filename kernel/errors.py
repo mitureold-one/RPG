@@ -96,18 +96,60 @@ class ReplayError(RpgError):
     code = "REPLAY_FAILED"
 
 
+class DuplicateBatchError(ConflictError):
+    """Lote idêntico já foi persistido anteriormente."""
+
+    code = "DUPLICATE_BATCH"
+
+
+class DependencyError(ValidationError):
+    """Dependência ausente ou inválida no evento."""
+
+    code = "DEPENDENCY_ERROR"
+
+
+class DependencyCycleError(DependencyError):
+    """Ciclo causal detectado no grafo de dependências."""
+
+    code = "DEPENDENCY_CYCLE"
+
+
+class DependencyDepthError(DependencyError):
+    """Profundidade do grafo de dependências excedeu o limite máximo."""
+
+    code = "DEPENDENCY_DEPTH_EXCEEDED"
+
+
+class InvalidDraftError(ValidationError):
+    """Rascunho de evento contém dados ausentes ou incompatíveis."""
+
+    code = "INVALID_EVENT_DRAFT"
+
+
+class UnknownEventTypeError(ValidationError):
+    """Tipo de evento não registrado no Registry."""
+
+    code = "UNKNOWN_EVENT_TYPE"
+
+
 __all__ = [
-    "RpgError",
-    "ValidationError",
-    "ConfigurationError",
-    "NotFoundError",
     "ConflictError",
-    "SeqConflictError",
-    "SchemaError",
+    "ConfigurationError",
+    "DependencyCycleError",
+    "DependencyDepthError",
+    "DependencyError",
+    "DuplicateBatchError",
     "DuplicateRegistrationError",
-    "UnknownPortError",
-    "RegistryFrozenError",
-    "MissingRequirementError",
+    "InvalidDraftError",
     "LockTimeoutError",
+    "MissingRequirementError",
+    "NotFoundError",
+    "RegistryFrozenError",
     "ReplayError",
+    "RpgError",
+    "SchemaError",
+    "SeqConflictError",
+    "UnknownEventTypeError",
+    "UnknownPortError",
+    "ValidationError",
 ]

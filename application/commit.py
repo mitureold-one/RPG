@@ -465,6 +465,72 @@ def cmd_commit(
         atomic_write_text(diario_path, diario_text + turn_entry)
         applied.append(f"Diário atualizado: Turno {next_turn} registrado.")
 
+    # 4c. Persistência Causal & Projeções Determinísticas (Fase 02 / R1)
+    camp_dir = info.get("dir") or info.get("ficha").parent
+    if (camp_dir / "events").exists():
+        try:
+            from adapters.persistence.event_store import JsonlEventStore
+            from application.prose_store import ProseStore
+            from contracts.event import ActorRef, EventDraft
+            from application.rebuild import rebuild_projections
+
+            drafts = []
+            turn_draft = EventDraft(
+                type="turn.proposed",
+                schema_version=1,
+                actor=ActorRef(kind="agent", id="narrative_engine"),
+                game_time=new_dt,
+                game_time_sort=next_turn * 100,
+                payload={"turn": next_turn, "action": summary.strip(), "summary": summary.strip()},
+            )
+            drafts.append(turn_draft)
+
+            raw_prose = prose_to_audit or prose
+            if raw_prose:
+                p_store = ProseStore(camp_dir)
+                rel_p, p_hash, p_len = p_store.store_turn_prose(next_turn, raw_prose, scene_type=scene_type)
+                drafts.append(
+                    EventDraft(
+                        type="prose.recorded",
+                        schema_version=1,
+                        actor=ActorRef(kind="agent", id="narrative_engine"),
+                        game_time=new_dt,
+                        game_time_sort=next_turn * 100 + 1,
+                        payload={
+                            "turn": next_turn,
+                            "text_hash": p_hash,
+                            "text_path": rel_p,
+                            "source": "writer_mode",
+                            "bytes": p_len,
+                            "scene_type": scene_type,
+                        },
+                    )
+                )
+
+            drafts.append(
+                EventDraft(
+                    type="turn.committed",
+                    schema_version=1,
+                    actor=ActorRef(kind="agent", id="narrative_engine"),
+                    game_time=new_dt,
+                    game_time_sort=next_turn * 100 + 2,
+                    payload={
+                        "turn": next_turn,
+                        "summary": summary.strip(),
+                        "scene_type": scene_type,
+                        "location": new_loc,
+                        "present": [p.strip() for p in new_pres.split(",") if p.strip()],
+                        "vitals": {k: v["current"] for k, v in ficha_after["vitals"].items()} if ficha_after.get("vitals") else {},
+                    },
+                )
+            )
+
+            store = JsonlEventStore(camp_dir)
+            store.append(campaign_id, drafts)
+            rebuild_projections(store, campaign_id, camp_dir, emit_audit_event=False)
+        except Exception:
+            pass
+
     # 5. Fase 5 do Conselho: Auditoria Automática Pós-Commit (Modo Revisor)
     post_audit = cmd_review(campaign_id)
     final_header = f" [{new_dt}] |  [{new_loc}] |  [{new_pres}]"
