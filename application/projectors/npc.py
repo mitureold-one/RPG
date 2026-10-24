@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import re
+
 from contracts.ports import EventStreamView, ProjectionSection
+
+_DEFAULT_NPCS = """# Personagens Não-Jogáveis (NPCs)
+
+## 1. Elenco Ativo
+"""
 
 
 class NpcProjector:
@@ -12,43 +19,50 @@ class NpcProjector:
     section = "body"
     order = 30
 
+    def __init__(self, initial_text: str | None = None) -> None:
+        self.initial_text = initial_text
+
     def project(self, view: EventStreamView) -> ProjectionSection:
-        npcs: dict[str, dict[str, str]] = {}
+        text = self.initial_text if self.initial_text is not None else _DEFAULT_NPCS
 
         for ev in view.events:
-            if ev.type == "npc.updated":
-                npc_id = ev.payload.get("npc_id", "")
-                changes = ev.payload.get("changes", {})
-                if npc_id not in npcs:
-                    npcs[npc_id] = {}
-                for k, v in changes.items():
-                    npcs[npc_id][str(k)] = str(v)
+            meta = ev.meta or {}
+            p = ev.payload
+            t = ev.type
 
-        lines: list[str] = [
-            "# Personagens Não-Jogáveis (NPCs)",
-            "",
-            "## 1. Elenco Ativo",
-            "",
-        ]
-        if npcs:
-            for nid, data in sorted(npcs.items()):
-                name = data.get("name", nid)
-                status = data.get("status", "Ativo")
-                lines.append(f"### {name}")
-                lines.append(f"* **ID:** {nid}")
-                lines.append(f"* **Status:** {status}")
-                for k, v in sorted(data.items()):
+            if t == "projection.rebuilt":
+                continue
+
+            if t == "campaign.created":
+                baseline = meta.get("baseline", {})
+                if isinstance(baseline, dict) and "npcs.md" in baseline:
+                    text = str(baseline["npcs.md"])
+                continue
+
+            if "npcs_after" in meta and meta["npcs_after"]:
+                text = str(meta["npcs_after"])
+                continue
+
+            if t == "npc.updated":
+                npc_id = str(p.get("npc_id", ""))
+                changes = dict(p.get("changes") or {})
+                name = str(changes.get("name", npc_id))
+                status = str(changes.get("status", "Ativo"))
+                pat = re.compile(rf"###\s*{re.escape(name)}\b.*?(?=\n###|\n##|\Z)", re.IGNORECASE | re.DOTALL)
+                lines = [f"### {name}", f"* **ID:** {npc_id}", f"* **Status:** {status}"]
+                for k, v in sorted(changes.items()):
                     if k not in ("name", "status"):
                         lines.append(f"* **{k}:** {v}")
-                lines.append("")
-        else:
-            lines.append("*Nenhum NPC registrado até o momento.*")
-            lines.append("")
+                block = "\n".join(lines) + "\n"
+                if pat.search(text):
+                    text = pat.sub(block, text, count=1)
+                else:
+                    text = text.rstrip() + "\n\n" + block
 
         return ProjectionSection(
             file=self.file,
             section=self.section,
-            content="\n".join(lines).strip() + "\n",
+            content=text.rstrip() + "\n",
         )
 
 

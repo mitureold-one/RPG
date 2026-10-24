@@ -27,7 +27,7 @@ class JsonlEventStoreContractTests(EventStoreContract, unittest.TestCase):
             shutil.rmtree(self.test_dir, ignore_errors=True)
 
     def make_store(self) -> JsonlEventStore:
-        return JsonlEventStore(base_dir=self.test_dir)
+        return JsonlEventStore(base_dir=self.test_dir, catalog=None)
 
 
 class FakeEventStoreFailureTests(unittest.TestCase):

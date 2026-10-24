@@ -1,16 +1,19 @@
 """Composition root do RPGPRO.
 
-Único ponto de composição e instanciação de :class:`Runtime` com registry congelado.
-No R0, nenhum evento real é emitido e nenhum plugin de produção é registrado;
-a suíte de contratos e os testes usam implementações fakes e injeção explícita.
+Único ponto de composição e instanciação de :class:`Runtime` com registry congelado
+e registro da fábrica do EventStore de produção.
 """
 
 from __future__ import annotations
 
+from adapters.persistence.event_store import JsonlEventStore
 from contracts.config import CampaignConfig
+from contracts.ports import create_event_store, register_event_store_factory
 from kernel.event_catalog import build_v1_catalog
 from kernel.registry import Registry
 from kernel.runtime import Runtime
+
+register_event_store_factory(JsonlEventStore)
 
 
 def build_runtime(
@@ -42,4 +45,4 @@ def build_runtime(
     )
 
 
-__all__ = ["build_runtime"]
+__all__ = ["build_runtime", "create_event_store"]

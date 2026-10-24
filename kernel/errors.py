@@ -84,7 +84,7 @@ class MissingRequirementError(ConfigurationError):
     code = "PLUGIN_REQUIREMENT_MISSING"
 
 
-class LockTimeoutError(RpgError):
+class LockTimeoutError(RpgError, TimeoutError):
     """Não foi possível adquirir o lock da campanha no prazo."""
 
     code = "LOCK_TIMEOUT"

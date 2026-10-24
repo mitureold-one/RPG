@@ -21,7 +21,7 @@ class CausalDAGTests(unittest.TestCase):
             shutil.rmtree(self.test_dir, ignore_errors=True)
         self.test_dir.mkdir(parents=True, exist_ok=True)
         self.dag = DependencyGraph(max_depth=64)
-        self.store = JsonlEventStore(base_dir=self.test_dir, dep_graph=self.dag)
+        self.store = JsonlEventStore(base_dir=self.test_dir, dep_graph=self.dag, catalog=None)
 
     def tearDown(self) -> None:
         if self.test_dir.exists():

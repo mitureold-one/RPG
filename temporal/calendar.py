@@ -369,3 +369,60 @@ def advance_time_str(dt_str: str, advance: int | str, calendar: dict | None = No
         f"Formato de data não reconhecido: '{dt_str}'. Use 'DD de Mês de YYYY, HH:MM', "
         f"'DD/MM/YYYY, HH:MM', 'Dia X, HH:MM' ou configure 'calendar' em regras.md."
     )
+
+
+def game_time_to_minutes(dt_str: str, calendar: dict | None = None, fallback_turn: int = 0) -> int:
+    """Converte string de tempo diegético em minutos inteiros desde a época (>= 0) para game_time_sort."""
+    if not dt_str:
+        return max(0, fallback_turn * 60)
+
+    cal = _normalize_calendar(calendar) if calendar else {}
+    months = cal.get("months") or []
+    days_per_month = cal.get("days_per_month") or []
+
+    m_full = re.search(
+        r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ\-]+)\s+de\s+(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?",
+        dt_str,
+        re.IGNORECASE,
+    )
+    if m_full:
+        day = max(1, int(m_full.group(1)))
+        m_name = m_full.group(2)
+        year = max(1, int(m_full.group(3)))
+        h = int(m_full.group(4)) if m_full.group(4) else 12
+        mins = int(m_full.group(5)) if m_full.group(5) else 0
+        if months:
+            month_idx = next(
+                (i for i, name in enumerate(months) if name.casefold() == m_name.casefold()),
+                0,
+            )
+            year_days = sum(days_per_month)
+            prior_month_days = sum(days_per_month[:month_idx])
+            total_days = (year - 1) * year_days + prior_month_days + (day - 1)
+            return max(0, total_days * 1440 + h * 60 + mins)
+        month_num = MONTHS_MAP.get(m_name.lower(), 1)
+        total_days = (year - 1) * 365 + (month_num - 1) * 30 + (day - 1)
+        return max(0, total_days * 1440 + h * 60 + mins)
+
+    m_slash = re.search(r"(\d{1,2})/(\d{1,2})/(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?", dt_str)
+    if m_slash:
+        day, month, year = int(m_slash.group(1)), int(m_slash.group(2)), int(m_slash.group(3))
+        h = int(m_slash.group(4)) if m_slash.group(4) else 12
+        mins = int(m_slash.group(5)) if m_slash.group(5) else 0
+        total_days = max(0, year - 1) * 365 + max(0, month - 1) * 30 + max(0, day - 1)
+        return max(0, total_days * 1440 + h * 60 + mins)
+
+    m_dia = re.search(r"(?:Dia|Day)\s+(\d+)(?:,\s*(\d{1,2}):(\d{2}))?", dt_str, re.IGNORECASE)
+    if m_dia:
+        day_num = max(1, int(m_dia.group(1)))
+        h = int(m_dia.group(2)) if m_dia.group(2) else 12
+        mins = int(m_dia.group(3)) if m_dia.group(3) else 0
+        return max(0, (day_num - 1) * 1440 + h * 60 + mins)
+
+    m_time = re.search(r"(\d{1,2}):(\d{2})", dt_str)
+    if m_time:
+        h, mins = int(m_time.group(1)), int(m_time.group(2))
+        return max(0, fallback_turn * 1440 + h * 60 + mins)
+
+    return max(0, fallback_turn * 60)
+

@@ -1,5 +1,6 @@
 """Caso de uso de facções, reputação, favores/débitos e tick off-screen."""
 
+from pathlib import Path
 import sys
 from typing import Optional, Tuple
 
@@ -12,7 +13,25 @@ from council.factions import (
     append_faction_ledger_entry,
     simulate_faction_tick,
 )
-from application.transaction import _serialized_campaign_mutation
+from application.transaction import (
+    _serialized_campaign_mutation,
+    ensure_campaign_event_log,
+    record_command_mutation,
+)
+from contracts.event import ActorRef, EventDraft
+from temporal.calendar import game_time_to_minutes
+
+
+def _current_time_info(diario_path: Path, calendar_cfg=None) -> tuple[str, int, int]:
+    diario_ctx = parse_diario_md(diario_path) if diario_path.exists() else {}
+    gt = str(diario_ctx.get("date_time") or "Dia 1, 08:00")
+    turn_num = int(diario_ctx.get("last_turn_num") or 1)
+    gts = game_time_to_minutes(
+        gt,
+        calendar=calendar_cfg if isinstance(calendar_cfg, dict) else None,
+        fallback_turn=turn_num,
+    )
+    return gt, gts, turn_num
 
 
 @_serialized_campaign_mutation
@@ -41,11 +60,22 @@ def cmd_faction(
         return {"error": f"Campanha '{campaign_id}' não encontrada."}
 
     info["id"] = campaign_id
+    camp_dir = Path(info["dir"])
     mundo_path = info["mundo"]
     ficha_path = info["ficha"]
     diario_path = info["diario"]
 
     action_res = None
+    mutating = bool(add_name or rep or favor or debt or tick)
+    store = None
+    expected_last_seq = 0
+    prev_event_id = ""
+    if mutating:
+        store, expected_last_seq, prev_event_id = ensure_campaign_event_log(camp_dir, campaign_id)
+
+    drafts: list[EventDraft] = []
+    actor = ActorRef(kind="agent", id="showrunner")
+    gt, gts, cur_turn = _current_time_info(diario_path, info.get("calendar"))
 
     def _check_faction_known(fn_name: str) -> Tuple[bool, Optional[str]]:
         factions_in_mundo = parse_factions_from_mundo(mundo_path)
@@ -69,47 +99,100 @@ def cmd_faction(
             clock=clock,
             desc=desc,
         )
+        drafts.append(
+            EventDraft(
+                type="command.executed",
+                schema_version=1,
+                actor=actor,
+                game_time=gt,
+                game_time_sort=gts,
+                payload={"command": "faction.add", "status": "ok", "summary": f"Facção '{add_name}' cadastrada"},
+            )
+        )
     elif rep:
         parts = rep.rsplit(":", 1)
         fn = parts[0].strip()
-        delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+        delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(("-", "+")) and parts[1].strip()[1:].isdigit())) else 1
         is_ok, msg = _check_faction_known(fn)
         if not is_ok:
             return {"error": msg}
         res = update_reputation_in_ficha(ficha_path, fn, score_delta=delta)
-        cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
-        append_faction_ledger_entry(diario_path, fn, delta_rep=delta, new_score=res["new_score"], reason=reason or "Ajuste avulso de reputação", turn=cur_turn)
+        rsn = reason or "Ajuste avulso de reputação"
+        append_faction_ledger_entry(diario_path, fn, delta_rep=delta, new_score=res["new_score"], reason=rsn, turn=cur_turn)
         action_res = {"action": "reputation_updated", **res}
         if msg:
             action_res["warning"] = msg
+        drafts.append(
+            EventDraft(
+                type="faction.reputation_changed",
+                schema_version=1,
+                actor=actor,
+                game_time=gt,
+                game_time_sort=gts,
+                payload={"faction": fn, "delta_rep": delta, "new_score": res["new_score"], "delta_favors": 0, "delta_debts": 0, "reason": rsn},
+            )
+        )
     elif favor:
         parts = favor.rsplit(":", 1)
         fn = parts[0].strip()
-        delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+        delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(("-", "+")) and parts[1].strip()[1:].isdigit())) else 1
         is_ok, msg = _check_faction_known(fn)
         if not is_ok:
             return {"error": msg}
         res = update_reputation_in_ficha(ficha_path, fn, favors_delta=delta)
-        cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
-        append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=reason or "Ajuste de favores", turn=cur_turn, delta_favors=delta)
+        rsn = reason or "Ajuste de favores"
+        append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=rsn, turn=cur_turn, delta_favors=delta)
         action_res = {"action": "favors_updated", **res}
         if msg:
             action_res["warning"] = msg
+        drafts.append(
+            EventDraft(
+                type="faction.reputation_changed",
+                schema_version=1,
+                actor=actor,
+                game_time=gt,
+                game_time_sort=gts,
+                payload={"faction": fn, "delta_rep": 0, "new_score": res["new_score"], "delta_favors": delta, "delta_debts": 0, "reason": rsn},
+            )
+        )
     elif debt:
         parts = debt.rsplit(":", 1)
         fn = parts[0].strip()
-        delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(('-', '+')) and parts[1].strip()[1:].isdigit())) else 1
+        delta = int(parts[1].strip()) if len(parts) > 1 and (parts[1].strip().isdigit() or (parts[1].strip().startswith(("-", "+")) and parts[1].strip()[1:].isdigit())) else 1
         is_ok, msg = _check_faction_known(fn)
         if not is_ok:
             return {"error": msg}
         res = update_reputation_in_ficha(ficha_path, fn, debts_delta=delta)
-        cur_turn = parse_diario_md(diario_path).get("last_turn_num", 1)
-        append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=reason or "Ajuste de débitos", turn=cur_turn, delta_debts=delta)
+        rsn = reason or "Ajuste de débitos"
+        append_faction_ledger_entry(diario_path, fn, delta_rep=0, new_score=res["new_score"], reason=rsn, turn=cur_turn, delta_debts=delta)
         action_res = {"action": "debts_updated", **res}
         if msg:
             action_res["warning"] = msg
+        drafts.append(
+            EventDraft(
+                type="faction.reputation_changed",
+                schema_version=1,
+                actor=actor,
+                game_time=gt,
+                game_time_sort=gts,
+                payload={"faction": fn, "delta_rep": 0, "new_score": res["new_score"], "delta_favors": 0, "delta_debts": delta, "reason": rsn},
+            )
+        )
     elif tick:
         action_res = simulate_faction_tick(info)
+        drafts.append(
+            EventDraft(
+                type="command.executed",
+                schema_version=1,
+                actor=actor,
+                game_time=gt,
+                game_time_sort=gts,
+                payload={"command": "faction.tick", "status": "ok", "summary": "Tick off-screen de facções"},
+            )
+        )
+
+    if mutating and drafts and store is not None:
+        record_command_mutation(camp_dir, campaign_id, store, expected_last_seq, prev_event_id, drafts)
 
     factions = parse_factions_from_mundo(mundo_path)
     reps = parse_reputation_from_ficha(ficha_path)

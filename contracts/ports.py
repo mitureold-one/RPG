@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Iterable, Protocol, Sequence, runtime_checkable
+from typing import Any, Callable, Iterable, Protocol, Sequence, runtime_checkable
 
 from contracts.event import AppendResult, Event, EventDraft
 
@@ -91,10 +91,26 @@ class Clock(Protocol):
         ...
 
 
+_EVENT_STORE_FACTORY: Callable[..., EventStore] | None = None
+
+
+def register_event_store_factory(factory: Callable[..., EventStore]) -> None:
+    global _EVENT_STORE_FACTORY
+    _EVENT_STORE_FACTORY = factory
+
+
+def create_event_store(base_dir: Any, **kwargs: Any) -> EventStore:
+    if _EVENT_STORE_FACTORY is None:
+        raise RuntimeError("EventStore factory not registered")
+    return _EVENT_STORE_FACTORY(base_dir, **kwargs)
+
+
 __all__ = [
     "Clock",
     "EventStore",
     "EventStreamView",
     "ProjectionSection",
     "Projector",
+    "create_event_store",
+    "register_event_store_factory",
 ]

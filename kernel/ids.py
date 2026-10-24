@@ -58,4 +58,16 @@ def new_batch_id() -> str:
     return f"bat_{_next_ulid()}"
 
 
-__all__ = ["new_batch_id", "new_event_id"]
+def new_correction_id() -> str:
+    """Devolve um identificador novo no formato ``cor_<ulid>``."""
+
+    return f"cor_{_next_ulid()}"
+
+
+def new_work_id() -> str:
+    """Devolve um identificador novo no formato ``wrk_<ulid>``."""
+
+    return f"wrk_{_next_ulid()}"
+
+
+__all__ = ["new_batch_id", "new_correction_id", "new_event_id", "new_work_id"]

@@ -186,6 +186,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_cor.add_argument("--reason", required=True, help="Justificativa da correção (obrigatória)")
     p_cor.add_argument("--delta-xp", "--delta_xp", dest="delta_xp", type=int, default=0, help="Ajuste compensatório de XP")
     p_cor.add_argument("--contradiction", action="store_true", help="Sinaliza contradição com premissa posterior que requer resolução humana")
+    p_cor.add_argument("--resolve", action="store_true", help="Resolve inconsistência causal pendente do evento indicado")
     p_cor.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
     return parser

@@ -145,42 +145,19 @@ def init_campaign_from_templates(
             atomic_write_text(camp_dir / target_name, content)
             created.append(target_name)
 
-        # Inicializa o EventStore canônico da Fase 02
-        try:
-            from adapters.persistence.event_store import JsonlEventStore
-            from contracts.event import ActorRef, EventDraft
-            store = JsonlEventStore(camp_dir)
-            init_drafts = [
-                EventDraft(
-                    type="campaign.created",
-                    schema_version=1,
-                    actor=ActorRef(kind="system", id="bootstrap"),
-                    game_time=start_date.strip(),
-                    game_time_sort=0,
-                    payload={
-                        "title": clean_title,
-                        "system": "default",
-                        "calendar": "standard",
-                        "start_game_time": start_date.strip(),
-                        "config_version": 1,
-                    },
-                )
-            ]
-            store.append(clean_id, init_drafts)
-        except Exception:
-            pass
+        # Inicializa o EventStore canônico e projeções da Fase 02
+        from application.transaction import ensure_campaign_event_log
+
+        ensure_campaign_event_log(
+            camp_dir,
+            clean_id,
+            title=clean_title,
+            start_game_time=start_date.strip(),
+        )
     except Exception as exc:
-        for f in created:
-            p = camp_dir / f
-            if p.is_file():
-                try:
-                    p.unlink()
-                except OSError:
-                    pass
-        try:
-            camp_dir.rmdir()
-        except OSError:
-            pass
+        import shutil
+
+        shutil.rmtree(camp_dir, ignore_errors=True)
         return {"error": f"Falha na escrita dos arquivos da campanha: {exc}"}
 
     return {

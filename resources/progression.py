@@ -69,15 +69,25 @@ def update_progression_in_ficha(
     new_xp = max(0, cur_prog["xp"] + xp_add)
     new_level, next_thresh = calculate_level_from_xp(new_xp, base_step=base_step)
 
-    bonuses = calculate_level_up_bonuses(old_level, new_level)
-    new_attr_points = max(0, cur_prog["attribute_points"] + bonuses["attribute_points"] + attribute_points_delta)
-    new_abil_points = max(0, cur_prog["ability_points"] + bonuses["ability_points"] + ability_points_delta)
-
-    if new_level > old_level:
+    if new_level >= old_level:
+        bonuses = calculate_level_up_bonuses(old_level, new_level)
+        attr_bonus = bonuses["attribute_points"]
+        abil_bonus = bonuses["ability_points"]
         hp_add = bonuses["hp_bonus"]
         sta_add = bonuses["stamina_bonus"]
         ce_add = bonuses["energy_bonus"]
+    else:
+        rev = calculate_level_up_bonuses(new_level, old_level)
+        attr_bonus = -rev["attribute_points"]
+        abil_bonus = -rev["ability_points"]
+        hp_add = -rev["hp_bonus"]
+        sta_add = -rev["stamina_bonus"]
+        ce_add = -rev["energy_bonus"]
 
+    new_attr_points = max(0, cur_prog["attribute_points"] + attr_bonus + attribute_points_delta)
+    new_abil_points = max(0, cur_prog["attribute_points" if False else "ability_points"] + abil_bonus + ability_points_delta)
+
+    if new_level != old_level:
         m_v_sec = re.search(r"(###\s*Vitais[^\n]*\n)(.*?)(?=\n###|\Z)", text, re.IGNORECASE | re.DOTALL)
         if m_v_sec:
             header_v = m_v_sec.group(1)
@@ -95,7 +105,7 @@ def update_progression_in_ficha(
                     bonus = sta_add
                 elif "ce" in low or "energia" in low or "mp" in low or "mana" in low:
                     bonus = ce_add
-                return f"* **{lbl}:** {cur_v + bonus} / {mx_v + bonus}"
+                return f"* **{lbl}:** {max(1, cur_v + bonus)} / {max(1, mx_v + bonus)}"
 
             new_v_content = re.sub(r"\*\s*\*\*([^:*]+):\*\*\s*(\d+)\s*/\s*(\d+)", repl_vital, v_content)
             text = text[: m_v_sec.start()] + header_v + new_v_content + text[m_v_sec.end() :]
@@ -126,6 +136,7 @@ def update_progression_in_ficha(
         "new_level": new_level,
         "xp_added": xp_add,
         "total_xp": new_xp,
+        "new_xp": new_xp,
         "next_threshold": next_thresh,
         "attribute_points": new_attr_points,
         "ability_points": new_abil_points,

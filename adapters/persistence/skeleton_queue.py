@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
+
+from adapters.persistence.lock import CampaignLock
 
 
 class SkeletonQueue:
@@ -15,10 +18,13 @@ class SkeletonQueue:
         self.queue_file = self.campaign_dir / "queue.jsonl"
 
     def _append(self, record: dict) -> dict:
-        self.queue_file.parent.mkdir(parents=True, exist_ok=True)
-        line = json.dumps(record, ensure_ascii=False) + "\n"
-        with self.queue_file.open("a", encoding="utf-8") as f:
-            f.write(line)
+        with CampaignLock(self.campaign_dir):
+            self.queue_file.parent.mkdir(parents=True, exist_ok=True)
+            line = json.dumps(record, ensure_ascii=False) + "\n"
+            with self.queue_file.open("a", encoding="utf-8", newline="\n") as f:
+                f.write(line)
+                f.flush()
+                os.fsync(f.fileno())
         return record
 
     def enqueue(self, task_id: str, task_type: str, payload: dict | None = None) -> dict:

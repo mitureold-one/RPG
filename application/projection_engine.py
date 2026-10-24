@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 from typing import Sequence
 
-from adapters.persistence.files import atomic_write_text
 from contracts.ports import EventStreamView, Projector
+
+
+def _atomic_write(path: Path, content: str, encoding: str = "utf-8") -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    with open(tmp_path, "w", encoding=encoding, newline="\n") as fh:
+        fh.write(content)
+        fh.flush()
+        os.fsync(fh.fileno())
+    os.replace(tmp_path, path)
 
 
 class ProjectionEngine:
@@ -36,13 +46,23 @@ class ProjectionEngine:
         }
 
     def write_projections_atomic(self, projections: dict[str, str]) -> str:
-        """Grava os arquivos de projeção atomicamente e devolve o hash consolidado."""
+        """Grava os arquivos de projeção atomicamente em projections/ e na raiz da campanha."""
         self.projections_dir.mkdir(parents=True, exist_ok=True)
-        buffer = bytearray()
+        self.campaign_dir.mkdir(parents=True, exist_ok=True)
 
+        for existing in list(self.projections_dir.iterdir()):
+            if existing.is_file() and existing.name not in projections:
+                try:
+                    existing.unlink()
+                except OSError:
+                    pass
+
+        buffer = bytearray()
         for filename, content in sorted(projections.items()):
-            target_path = self.projections_dir / filename
-            atomic_write_text(target_path, content, encoding="utf-8")
+            proj_target = self.projections_dir / filename
+            root_target = self.campaign_dir / filename
+            _atomic_write(proj_target, content, encoding="utf-8")
+            _atomic_write(root_target, content, encoding="utf-8")
             buffer.extend(filename.encode("utf-8"))
             buffer.extend(b":")
             buffer.extend(content.encode("utf-8"))

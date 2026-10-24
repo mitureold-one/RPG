@@ -388,6 +388,54 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Relações:** [`spec.md`](specs/010-phase-02-causal-history/spec.md); [`plan.md`](specs/010-phase-02-causal-history/plan.md); [`tasks.md`](specs/010-phase-02-causal-history/tasks.md); [`checklists/g1-g2-ratification.md`](specs/010-phase-02-causal-history/checklists/g1-g2-ratification.md); [`quickstart.md`](specs/010-phase-02-causal-history/quickstart.md); EX-0013.
 - **Pendências:** nenhuma. R1 concluído integralmente.
 
+## EX-0015 — 2026-10-24 — QA da Fase 02/R1: reprovação por integração causal
+
+- **Autor:** agente de QA DeepSeek Harness, a pedido do usuário.
+- **Tipo:** teste + documentação (auditoria).
+- **Status:** parcial (QA **reprovado**: 3 P0 e 10 P1 abertos; R1 não entregue).
+- **Commit:** relatório não commitado; implementação auditada em `7f2c165` (o `1bd2fb9` citado na EX-0014 é o commit pré-amenda, não ancestral do HEAD).
+- **Escopo:** Fase 02/R1 — `JsonlEventStore`, catálogo, DAG, projeções/rebuild, correções, prosa, fila, integração no `commit`, CLI `rebuild`/`correct` e refatoração `ssot.py` → `resources/`.
+- **O que foi feito:** suíte completa, leitura do diff, fluxo ponta a ponta em campanha descartável e sondas adversariais de crash, rollback, snapshot, hash, duplicata, catálogo, correção e concorrência.
+- **Como:**
+  - `python -m unittest discover -s tests -p "test_*.py"` → **199 testes, OK** (19 s).
+  - `init-campaign` → `commit` → `rebuild` → `correct` → `review` em campanha descartável, comparando raiz, `events/` e `projections/`.
+  - Sondas: remover `events/`; forçar exceção no fim do commit; corrigir `--delta-xp`; rebuild com snapshot; corromper hash do lote; anexar evento duplicado; store sem catálogo.
+- **Evidência:**
+  - **P0:** `commit` só emite eventos se `events/` já existe e engole falhas (`except: pass`); projeções são cópia simplificada em `projections/`, não o SSOT da raiz; apenas 3 tipos de evento são emitidos (`campaign.created`, `turn.proposed`, `turn.committed`).
+  - **P1:** rollback deixa eventos no log (1 → 3); store de produção sem catálogo aceita tipo/versão inválidos; `DuplicateBatchError` nunca dispara; `correct --delta-xp` não gera compensação (`field=xp` vs `xp_delta`); dois locks e `last_seq` trunca sem lock; rebuild com snapshot perde o turno anterior; correção não reavalia dependentes; `expected_last_seq` não é usado; hash do lote não é verificado.
+  - Suíte verde não cobre a integração: rebuild compara `projections/` com `projections/`; Cenário 4 só verifica `events_appended > 0`; Cenário 6 não testa duplicata; Cenário 8 não cria snapshot; Cenário 10 recalcula com o próprio evento de auditoria.
+- **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md); [`spec.md`](specs/010-phase-02-causal-history/spec.md); [`plan.md`](specs/010-phase-02-causal-history/plan.md); [`tasks.md`](specs/010-phase-02-causal-history/tasks.md); [`quickstart.md`](specs/010-phase-02-causal-history/quickstart.md); EX-0014.
+- **Pendências:**
+  - tornar o event log a verdade e remover o caminho opcional/silencioso do `commit`;
+  - fazer projectors/rebuild gravarem o SSOT real (`diario.md`, `ficha.md`, `npcs.md`), não uma cópia em `projections/`;
+  - emitir todos os eventos de recurso no mesmo lote;
+  - injetar catálogo, implementar duplicata, unificar o lock, verificar hash e corrigir `correct --delta-xp`;
+  - reescrever os testes de C1–C4 e dos 11 cenários para o fluxo real.
+
+---
+
+## EX-0016 — 2026-10-24 — Remediação Integral do QA da Fase 02 / R1 (História Causal)
+
+- **Autor:** agente Antigravity (modo Ponytail / RPGPRO Router), a pedido do usuário.
+- **Tipo:** correção de bug + integração arquitetural + testes.
+- **Corrige:** EX-0014, EX-0015.
+- **Status:** concluído (todos os achados P0, P1, P2 e P3 de `qa-review.md` resolvidos; 203/203 testes verdes).
+- **Commit:** `39f59e9` (e emenda de registro deste hash).
+- **Escopo:** Fase 02 / R1 (`contracts/`, `kernel/`, `adapters/persistence/`, `application/`, `council/`, `campaign/`, `resources/`, `temporal/`, `interfaces/cli/`, `tests/`).
+- **O que foi feito:**
+  - **P0-1 / P0-2 / P0-3 (Event log como verdade e SSOT reconstruível):** removido o `if (camp_dir / "events").exists()` e os `try/except: pass` de `application/commit.py` e `campaign/templates.py`. `cmd_commit` encena mutações em `.staging/`, monta o lote causal completo via `application/commit_events.py` (`turn.proposed`, `action.resolved`, `protagonist.sheet_changed`, `npc.updated`, `clock.*`, `quest.*`, `protagonist.progression_changed`, `faction.reputation_changed`, `scene.completed`, `prose.recorded`, `turn.committed`), grava no `EventStore` primeiro via `commit_events_and_project` e materializa atomicamente `diario.md`, `ficha.md` e `npcs.md` tanto em `projections/` quanto na raiz da campanha via `ProjectionEngine.write_projections_atomic`. `cmd_clock`, `cmd_plan`, `cmd_arc`, `cmd_quest`, `cmd_progress`, `cmd_faction` e `upsert-npc` também emitem seus eventos canônicos via `ensure_campaign_event_log` e `record_command_mutation`.
+  - **P1-1 (Rollback transacional completo):** `_serialized_campaign_mutation` em `application/transaction.py` captura e restaura snapshots de `events/`, `projections/`, `artifacts/`, `snapshots/` e `queue.jsonl` além dos `.md`.
+  - **P1-2 / P1-3 / P1-9 (Catálogo v1, duplicata e verificação de hash no EventStore):** `contracts/catalog.py` e `kernel/event_catalog.py` registram todos os 25 tipos canônicos v1; `JsonlEventStore` usa `build_v1_catalog()` por padrão, detecta lotes duplicados levantando `DuplicateBatchError` e verifica o SHA-256 do marcador `committed` contra `hash_batch` em `read()` levantando `ReplayError` em adulterações e propagando `SchemaError` de `upcast_payload`.
+  - **P1-4 / P1-7 / P1-8 / P2-8 (Correção causal, compensação de XP e resolução de inconsistências):** `CorrectionService.issue_correction` aceita `field` em `("xp", "xp_delta")`, recalcula nível via `calculate_level_from_xp`, suporta compensações de vitais/ficha e reputação, passa `expected_last_seq`, emite `correction.recomputed` e suporta `resolve=True` (`correct --resolve`) para encerrar `CAUSAL_INCONSISTENCY`. `resources/progression.py` e `council/quests.py` suportam deltas negativos de XP na ficha e no XP Ledger.
+  - **P1-5 (Unificação de lock):** `adapters/persistence/lock.py` e `files.py` unificam `CampaignLock` e `campaign_lock` sobre `<camp_dir>/.campaign.lock` (corrigindo a duplicação `<camp_dir>/<id>/.campaign.lock`), sem truncamento em `last_seq()`/`read()`.
+  - **P1-6 / P2-4 / P2-7 (Rebuild com snapshot, `--force` e limpeza):** `rebuild_projections` suporta snapshots completos ou por `last_seq`, propaga `force=True` desde `cmd_rebuild`, e `ProjectionEngine` limpa arquivos obsoletos em `projections/`.
+  - **P2-1 / P2-2 / P2-5 / P2-6 / P3:** `init_campaign_from_templates` lê `system` e `calendar` de `regras.md`; `game_time_to_minutes` converte datas diegéticas/gregorianas para minutos inteiros; `ProseStore` preserva bytes exatos sem `.strip()`, impõe cardinalidade 1:1 com `ConflictError` e `cmd_review` emite `PROSE_MISSING` (`CRITICAL`); fábrica `create_event_store` em `contracts/ports.py` elimina imports diretos de `adapters` em `application`/`campaign`; `council/reviewer_checks.py` e `adapters/persistence/segment_io.py` extraídos para respeitar limites de linhas; contagens de testes sincronizadas na documentação.
+- **Evidência:**
+  - `python -m unittest discover -s tests -p "test_*.py"` -> **203 testes, OK** (0 falhas, 0 erros).
+  - `python -m unittest tests.test_architecture_boundaries` -> **6 testes, OK**.
+- **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md); [`spec.md`](specs/010-phase-02-causal-history/spec.md); [`plan.md`](specs/010-phase-02-causal-history/plan.md); [`tasks.md`](specs/010-phase-02-causal-history/tasks.md); EX-0014; EX-0015.
+- **Pendências:** nenhuma.
+
 ---
 
 ## 5. Como registrar uma nova execução

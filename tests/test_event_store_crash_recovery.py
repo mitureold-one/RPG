@@ -17,7 +17,7 @@ class EventStoreCrashRecoveryTests(unittest.TestCase):
         if self.test_dir.exists():
             shutil.rmtree(self.test_dir, ignore_errors=True)
         self.test_dir.mkdir(parents=True, exist_ok=True)
-        self.store = JsonlEventStore(base_dir=self.test_dir, max_events_per_segment=5)
+        self.store = JsonlEventStore(base_dir=self.test_dir, max_events_per_segment=5, catalog=None)
 
     def tearDown(self) -> None:
         if self.test_dir.exists():

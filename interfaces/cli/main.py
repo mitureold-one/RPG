@@ -1,6 +1,7 @@
 """Despacho da CLI: traduz argumentos em casos de uso e formata a saída."""
 
 import json
+from pathlib import Path
 import sys
 
 from application import (
@@ -20,6 +21,8 @@ from application import (
     init_campaign_from_templates,
     upsert_npc_to_md,
 )
+from application.transaction import ensure_campaign_event_log, record_command_mutation
+from contracts.event import ActorRef, EventDraft
 from interfaces.cli.parser import build_cli
 
 
@@ -49,10 +52,18 @@ def main():
             clock_advance=args.clock_advance,
             clock_resolve=args.clock_resolve,
             scene_type=args.scene_type,
-            add_ability=args.add_ability, add_milestone=args.add_milestone, add_item=args.add_item,
-            prose=args.prose, prose_file=args.prose_file, force=args.force,
-            quest_progress=args.quest_progress, quest_complete=args.quest_complete, quest_fail=args.quest_fail,
-            faction_rep=args.faction_rep, faction_favor=args.faction_favor, faction_debt=args.faction_debt,
+            add_ability=args.add_ability,
+            add_milestone=args.add_milestone,
+            add_item=args.add_item,
+            prose=args.prose,
+            prose_file=args.prose_file,
+            force=args.force,
+            quest_progress=args.quest_progress,
+            quest_complete=args.quest_complete,
+            quest_fail=args.quest_fail,
+            faction_rep=args.faction_rep,
+            faction_favor=args.faction_favor,
+            faction_debt=args.faction_debt,
         )
         print(json.dumps(res, indent=2, ensure_ascii=False))
         if res.get("prose_status") == "REJECTED":
@@ -153,6 +164,8 @@ def main():
         if not info:
             print(json.dumps({"error": f"Campanha '{args.campaign}' não encontrada."}))
         else:
+            camp_dir = Path(info["dir"])
+            store, expected_last_seq, prev_event_id = ensure_campaign_event_log(camp_dir, args.campaign)
             res = upsert_npc_to_md(
                 info["npcs"],
                 name=args.name,
@@ -167,6 +180,26 @@ def main():
                 appearance=args.appearance,
                 bonds=args.bonds,
                 relation=args.relation,
+            )
+            record_command_mutation(
+                camp_dir,
+                args.campaign,
+                store,
+                expected_last_seq,
+                prev_event_id,
+                [
+                    EventDraft(
+                        type="npc.updated",
+                        schema_version=1,
+                        actor=ActorRef(kind="agent", id="showrunner"),
+                        game_time="Dia 1, 08:00",
+                        game_time_sort=0,
+                        payload={
+                            "npc_id": args.name.strip().lower().replace(" ", "_"),
+                            "changes": {"name": args.name.strip(), "action": res.get("action", "upserted")},
+                        },
+                    )
+                ],
             )
             print(json.dumps(res, indent=2, ensure_ascii=False))
     elif args.cmd == "init-campaign":
@@ -287,6 +320,7 @@ def main():
             reason=args.reason,
             delta_xp=args.delta_xp,
             contradiction=args.contradiction,
+            resolve=args.resolve,
         )
         print(json.dumps(res, indent=2, ensure_ascii=False))
         if res.get("error"):

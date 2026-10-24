@@ -9,12 +9,12 @@
 
 ## 1. Pré-Requisitos e Baseline
 
-Antes de iniciar qualquer validação de código ou migração do R1, certifique-se de que a suíte base de 157 testes está totalmente verde:
+Antes de iniciar qualquer validação de código ou migração do R1, certifique-se de que a suíte completa de 203 testes está totalmente verde:
 
 ```bash
-python -m unittest discover -s tests
+python -m unittest discover -s tests -p "test_*.py"
 ```
-*Critério de Aceite:* 157 testes executados com status `OK`.
+*Critério de Aceite:* 203 testes executados com status `OK`.
 
 ---
 

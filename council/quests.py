@@ -190,7 +190,7 @@ def parse_xp_ledger_from_text(text: str) -> List[Dict[str, Any]]:
         return []
     ledger = []
     line_pat = re.compile(
-        r"^\*\s*\*\*\[XP\]\s*\+(?P<amount>\d+)\s*XP\*\*\s*(?:\((?P<reason>[^)]*)\))?(?:\s*\|\s*Turno\s*(?P<turn>\d+))?",
+        r"^\*\s*\*\*\[XP\]\s*(?P<amount>[+-]?\d+)\s*XP\*\*\s*(?:\((?P<reason>[^)]*)\))?(?:\s*\|\s*Turno\s*(?P<turn>\d+))?",
         re.IGNORECASE,
     )
     for line in m_sec.group(1).splitlines():
@@ -223,7 +223,8 @@ def append_xp_ledger_entry(
     text = diario_path.read_text(encoding="utf-8")
     turn_str = f" | Turno {turn}" if turn is not None else ""
     reason_str = f" ({reason.strip()})" if reason.strip() else ""
-    entry_line = f"* **[XP] +{amount} XP**{reason_str}{turn_str}"
+    sign = "+" if amount >= 0 else ""
+    entry_line = f"* **[XP] {sign}{amount} XP**{reason_str}{turn_str}"
 
     if LEDGER_SECTION_HEADER.lower() in text.lower():
         m_sec = re.search(r"(###\s*Registro de Experiência[^\n]*\n)", text, re.IGNORECASE)
