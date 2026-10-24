@@ -463,6 +463,27 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
   - remover ou justificar os snapshots `*_after` no `meta` de `turn.committed`;
   - fechar P2/P3 restantes (compensações, camadas/tamanho, testes de aceite).
 
+## EX-0018 — 2026-10-24 — Correção dos P1 residuais: idempotência e eventos de NPC
+
+- **Autor:** agente de QA/implementação DeepSeek Harness, a pedido do usuário.
+- **Tipo:** correção + teste.
+- **Status:** concluído (P1-A e P1-B fechados; 206 testes; restam 5 P2).
+- **Commit:** `d18e3b9`.
+- **Escopo:** Fase 02/R1 — idempotência de lote/correção e fidelidade dos eventos de NPC.
+- **O que foi feito:**
+  - `adapters/persistence/event_store.py`: fingerprint de lote verificado mesmo quando `expected_last_seq` é informado; exceções apenas para eventos `test.*` e `projection.rebuilt`.
+  - `application/correction.py`: correção idêntica ainda pendente gera `DuplicateBatchError`; `resolve` continua permitido; evita compensação duplicada.
+  - `council/narrator.py`: `parse_npc_update_fields` e tolerância a `|` antes de subcampo; `split_npc_updates` deixou de criar NPC fantasma.
+  - `application/commit_events.py`: usa `split_npc_updates`/`parse_npc_update_fields`; `npc.updated.changes` recebe `attitude`/`relation`/`bonds`.
+- **Como:** testes novos em `test_event_store_crash_recovery`, `test_causal_correction` e `test_quickstart_scenarios`; verificação manual do fluxo `init → commit → correct → review`.
+- **Evidência:**
+  - `python -m unittest discover -s tests -p "test_*.py"` → **206 testes, OK** (26 s).
+  - Lote duplicado com `expected_last_seq` → `DuplicateBatchError`.
+  - Duas correções iguais → segunda retorna erro e há uma única compensação `xp_delta=-50`.
+  - `--npc-updates "Aliado Inicial: Atitude: alerta | Relação: Confiança +1"` → um `npc.updated` com `attitude` e `relation`, sem `relacao`; raiz e `projections/` iguais; `review` CLEAN.
+- **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md) (Atualização pós-remediação); EX-0016, EX-0017.
+- **Pendências (P2):** descoberta/rebuild sem `diario.md`; snapshots `*_after` no `meta`; compensação de relógio/missão/arco; camadas/tamanho; casos de teste restantes.
+
 ---
 
 ## 5. Como registrar uma nova execução
