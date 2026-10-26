@@ -1,6 +1,6 @@
 # RPGPRO — Arquitetura-Alvo e Kernel de Extensão
 
-**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5, 02, 03 e 04 concluídas; Fase 05 implementada e em homologação; Gates G1, G2, G3 e G4 homologados; R0, R0.5, R1, R2 e a parte `world/` do R3 entregues.
+**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5, 02, 03, 04 e 05 concluídas; Gates G1, G2, G3 e G4 homologados; R0, R0.5, R1, R2 e a parte `world/` do R3 entregues.
 **Dono:** este documento é a fonte canônica da árvore de módulos, das portas de extensão e das regras de dependência.
 **Relação com os demais documentos:** [`ROADMAP.md`](ROADMAP.md) governa fases e gates; [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md) governa comportamento; [`DECISOES_ARQUITETURA.md`](DECISOES_ARQUITETURA.md) guarda o racional histórico; [`EXECUCAO.md`](EXECUCAO.md) registra o que foi feito.
 
@@ -708,6 +708,6 @@ Os gates continuam definidos no [`ROADMAP.md`](ROADMAP.md). A arquitetura não o
 4. Specs 010/011 concluídas: G1/G2 ratificados, C1–C4 e P2 aprovados; G3 ratificado em 26/10/2026.
 5. **R1 + Fase 02 concluídos e aprovados** em 26/10/2026 (211 testes; `EX-0021`).
 6. **Fases 03 e 04 concluídas** em 26/10/2026 (G3 homologado em [`G3`](specs/012-phase-03-agents/g3-decision-record.md); contexto causal em `EX-0040`).
-7. **G4 ratificado e Fase 05 implementada** em 26/10/2026: portas `SimulationPolicy`/`BudgetPolicy`, `resources/world/`, `plugins/simulation_policy.py`, `plugins/budget_policy.py`, `application/world_tick.py`, projeção `queue.json` e CLI `world-tick`/`schedule`/`queue` ([`G4`](specs/015-phase-05-simulation/g4-decision-record.md); `EX-0041`/`EX-0043`); homologação aguarda re-auditoria independente.
+7. **G4 ratificado e Fase 05 concluída** em 26/10/2026: portas `SimulationPolicy`/`BudgetPolicy`, `resources/world/`, `plugins/simulation_policy.py`, `plugins/budget_policy.py`, `application/world_tick.py`, projeção `queue.json` e CLI `world-tick`/`schedule`/`queue` ([`G4`](specs/015-phase-05-simulation/g4-decision-record.md); `EX-0044`).
 
-Com G1–G4 ratificados, as Fases 02–04 estão concluídas e a Fase 05 está em homologação; a Fase 06 depende do G5 (modelo de arco, critérios do diretor e revelação) e a Fase 07 do G6.
+Com G1–G4 ratificados, as Fases 02–05 estão concluídas; a Fase 06 depende do G5 (modelo de arco, critérios do diretor e revelação) e a Fase 07 do G6.

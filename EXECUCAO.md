@@ -1121,6 +1121,24 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+## EX-0044 — 2026-10-26 — Homologação final da Fase 05 após re-auditoria independente
+
+- **Autor:** implementador RPGPRO, com parecer de auditor independente.
+- **Tipo:** homologação + documentação (nenhum código alterado).
+- **Status:** **concluído — Fase 05 aprovada**.
+- **Corrige:** pendência de homologação de `EX-0043`.
+- **Escopo:** Fase 05 / Gate G4 (`specs/015-phase-05-simulation/`).
+- **Evidência:**
+  - Parecer independente em [`qa-review.md`](specs/015-phase-05-simulation/qa-review.md) §6: **APROVADO**, nenhum achado novo; os 5 achados de P0/P1/P2 confirmados fechados com sondas reproduzíveis (`.tmp/probe_reauth_state.py`, `.tmp/probe_reauth_dupe.py`).
+  - Suíte completa: `python -m unittest discover -s tests -p "test_*.py"` -> **282 testes OK** (74,97 s; 0 falhas, 0 erros).
+  - Fase 05 + fronteiras: **40 testes OK** (32 da fase + 8 de `test_architecture_boundaries`).
+  - Escopo verificado: o tick não concede XP/reputação/missão, não narra e não chama LLM; `rebuild --force` preserva o hash de `queue.json` e a conclusão registrada.
+  - Observação não bloqueante registrada: repetir o mesmo `--to` com adiados abertos drena um item (C13/AT-G4-03), comportamento previsto; C14 drena antes de repetir.
+- **Relações:** `EX-0041`, `EX-0042`, `EX-0043`; [`G4`](specs/015-phase-05-simulation/g4-decision-record.md); [`ROADMAP.md`](ROADMAP.md) §3 (Fase 05) e §5 (G4).
+- **Pendências:** nenhuma na Fase 05. Próximo ciclo: G5 e spec 016 (Fase 06/Direção); o split `review/` do R3 acompanha a Fase 06 por G4-D13.
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.

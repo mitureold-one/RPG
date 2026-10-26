@@ -1,7 +1,7 @@
 # Quickstart & Verification Guide: 015 — Fase 05: Simulação de Mundo por Tempo
 
 **Feature:** `phase-05-simulation`
-**Status:** Guia reproduzível (executável após a implementação)
+**Status:** Guia reproduzível (verificado na Fase 05, homologada em `EX-0044`)
 **Created:** 2026-10-26
 **Spec:** [`spec.md`](spec.md) · **Plan:** [`plan.md`](plan.md) · **Data model:** [`data-model.md`](data-model.md)
 
@@ -9,7 +9,7 @@
 
 ## 1. Pré-requisitos
 
-Execute a partir da raiz do repositório, no PowerShell. Os subcomandos `world-tick`, `schedule` e `queue` são entregues pela Fase 05; antes da implementação, a CLI ainda não os reconhece.
+Execute a partir da raiz do repositório, no PowerShell. Os subcomandos `world-tick`, `schedule` e `queue` são entregues pela Fase 05.
 
 ```powershell
 $env:PYTHONPATH='.'
@@ -126,7 +126,7 @@ Critérios observáveis:
 | C15 calendário | `+30d` e `+1a` consistentes; agendamento dispara uma única vez em `due_at_sort` |
 | C16 profundidade seletiva | entidade sem cadência vencida não gera evento; `silent_entities` no relatório |
 | C17 retry/proposta | falha cresce `attempts`, esgota em `permanent`; `schedule` inválido gera `proposal.rejected` sem mutação |
-| Regressão | 250 testes legados verdes; snapshot do `prepare` e rebuild C3 intactos |
+| Regressão | 282 testes verdes no total; snapshot do `prepare` e rebuild C3 intactos |
 | Fronteiras | módulos novos `< 300` linhas; políticas sem I/O; `lazy_turn.py < 200` |
 
 Se algum comando `world-tick` devolver erro de campanha, calendário ou configuração, o esperado é erro tipado e nenhuma escrita — nunca um tick vazio silencioso.

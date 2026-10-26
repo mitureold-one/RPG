@@ -62,6 +62,6 @@
 
 ## Observações
 
-- G4 foi ratificado em 26/10/2026 com as emendas de cadência, orçamento, retry, catálogo de eventos e R3 faseado.
-- A linha de status global do `ROADMAP.md` é anterior à ratificação do G4; o escopo normativo da Fase 05 e o gate não são contraditos.
-- Documento pronto para a implementação, condicionado ao `plan.md` e à suíte C11–C17.
+- G4 foi ratificado em 26/10/2026 com as emendas de cadência, orçamento, retry, catálogo de eventos, R3 faseado e remoção de `max_depth`.
+- A linha de status do `ROADMAP.md` foi alinhada à homologação (`EX-0044`); spec, plano e gate não se contradizem.
+- Documento concluído; a suíte de aceite C11–C17 e a re-auditoria independente (§6 de `qa-review.md`) validaram a implementação.

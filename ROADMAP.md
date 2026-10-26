@@ -155,7 +155,7 @@ Entregue:
 
 ### Fase 05 — Simulação
 
-**Status:** **implementada e remediada** em 26/10/2026 — G4 ratificado ([`specs/015`](specs/015-phase-05-simulation/g4-decision-record.md)); `world_tick`, fila derivada do log, orçamento adaptativo, retry com backoff e agendamento futuro entregues; C11–C17 e regressões verdes, 282 testes na suíte completa (`EX-0041`/`EX-0043`). **Homologação final aguarda re-auditoria independente** ([`qa-review.md`](specs/015-phase-05-simulation/qa-review.md)).
+**Status:** **aprovada** em 26/10/2026 — G4 ratificado ([`specs/015`](specs/015-phase-05-simulation/g4-decision-record.md)); `world_tick`, fila derivada do log, orçamento adaptativo, retry com backoff e agendamento futuro entregues; C11–C17 e regressões verdes, 282 testes na suíte completa e re-auditoria independente **APROVADA** ([`qa-review.md`](specs/015-phase-05-simulation/qa-review.md) §6; `EX-0041`–`EX-0044`).
 
 **Objetivo:** o mundo evoluir por tempo e eventos, com profundidade seletiva.
 
@@ -264,7 +264,7 @@ Não iniciar a fase inteira antes de resolver o gate correspondente.
 
 G1 não reabre o que o [`ARCHITECTURE.md`](ARCHITECTURE.md) já fixou: JSONL canônico, `evt_<ulid>` e o envelope do evento. Ele ratifica essas escolhas e fecha o que ainda está aberto. G2 é o dono exclusivo da política de correção e reconstrução; nenhum dos dois invade o escopo do outro.
 
-**Status em 26/10/2026:** Fases 02, 03 e 04 concluídas e aprovadas; Fase 05 implementada e em homologação (re-auditoria independente pendente); G1, G2, G3 e **G4 ratificados**; ver [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md), [`specs/011-close-phase02-qa-p2/spec.md`](specs/011-close-phase02-qa-p2/spec.md), [`G3`](specs/012-phase-03-agents/g3-decision-record.md), [`G4`](specs/015-phase-05-simulation/g4-decision-record.md) e `EX-0021`/`EX-0043`. G5–G7 seguem abertos; a Fase 06 depende do G5.
+**Status em 26/10/2026:** Fases 02, 03, 04 e 05 concluídas e aprovadas; G1, G2, G3 e **G4 ratificados**; ver [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md), [`specs/011-close-phase02-qa-p2/spec.md`](specs/011-close-phase02-qa-p2/spec.md), [`G3`](specs/012-phase-03-agents/g3-decision-record.md), [`G4`](specs/015-phase-05-simulation/g4-decision-record.md) e `EX-0021`/`EX-0044`. G5–G7 seguem abertos; a Fase 06 pode ser planejada.
 
 Enquanto um gate estiver aberto, a fase correspondente pode ter protótipo e testes de contrato, mas não deve ser declarada concluída.
 
@@ -357,7 +357,7 @@ Cada cenário deve ter estado inicial, ação/tempo, comportamento esperado e as
 5. **Fase 02/R1 concluída e aprovada (26/10/2026):** G1/G2, spec 010 (C1–C4), remediação P2 da spec 011, 211 testes e QA final aprovado (`EX-0021`).
 6. **G3 ratificado (26/10/2026):** spec 012 da Fase 03/Agentes homologada com as emendas do [`G3`](specs/012-phase-03-agents/g3-decision-record.md); implementação e QA concluídos (`EX-0033`).
 7. **Fase 04 concluída (26/10/2026):** contexto causal no `prepare`, cache `estado.json`, consulta sob demanda e remediação integral de QA (`EX-0039`/`EX-0040`).
-8. **G4 ratificado e Fase 05 implementada (26/10/2026):** `world_tick`, fila derivada do log, orçamento adaptativo, retry com backoff, agendamento futuro e `queue.json`; spec 015, C11–C17 e remediação de auditoria (`EX-0041`/`EX-0043`). Próxima etapa: re-auditoria independente da Fase 05; depois G5 e spec 016 (Fase 06/Direção).
+8. **G4 ratificado e Fase 05 concluída (26/10/2026):** `world_tick`, fila derivada do log, orçamento adaptativo, retry com backoff, agendamento futuro e `queue.json`; spec 015, C11–C17, remediação de auditoria e re-auditoria independente **APROVADA** (`EX-0041`–`EX-0044`). Próxima etapa: G5 e spec 016 (Fase 06/Direção).
 
 ---
 
@@ -379,4 +379,4 @@ Cada cenário deve ter estado inicial, ação/tempo, comportamento esperado e as
 - **22/10/2026:** Fase 01 implementada (atomicidade, validação, parsing, idempotência, calendário).
 - **22/10/2026:** consolidação das diretrizes de mundo autônomo em [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md).
 - **26/10/2026:** Fase 02, G3 e Fase 03 homologados; Fase 04 aprovada com ressalvas menores e P3 fechados.
-- **26/10/2026:** G4 ratificado (tick explícito, tempo inteiro, fila derivada do log, orçamento adaptativo, retry com backoff, R3 faseado) e Fase 05 implementada; auditoria independente interrompida, achados remediados em `EX-0043`, homologação pendente de re-auditoria.
+- **26/10/2026:** G4 ratificado (tick explícito, tempo inteiro, fila derivada do log, orçamento adaptativo, retry com backoff, R3 faseado), Fase 05 implementada, achados de auditoria remediados e re-auditoria independente aprovada (`EX-0044`).

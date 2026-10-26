@@ -100,3 +100,4 @@ flowchart TD
 - [X] T028 Commitar a fase com mensagem `feat(phase-05): world tick, fila, orçamento e retry (Gate G4)`.
 - [X] T029 Remediar os achados recuperados da auditoria interrompida: estado sequencial entre itens do mesmo ciclo (P0), agendamento duplicado idempotente (P1), ordem da fila por `priority_final`, remoção de `max_depth` e mês fora do calendário com erro (P2); testes de regressão.
 - [X] T030 Registrar `EX-0043` e `qa-review.md` e submeter a Fase 05 à re-auditoria independente.
+- [X] T031 Homologar a Fase 05 após parecer **APROVADO** da re-auditoria independente (`EX-0044`), alinhando `ROADMAP.md`, `ARCHITECTURE.md` e `qa-review.md`.

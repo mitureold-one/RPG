@@ -1,8 +1,8 @@
 # QA Review — Fase 05: Simulação de Mundo por Tempo
 
 **Feature:** `phase-05-simulation` · **Gate:** [`G4`](g4-decision-record.md) · **Spec:** [`spec.md`](spec.md)
-**Status:** **AUDITORIA INDEPENDENTE INTERROMPIDA** — o agente auditor falhou antes de emitir o parecer. As sondas que ele produziu (`.tmp/probe_qa5_{smoke,time,tick,budget,causality}.py` e `out_*.txt`) foram recuperadas, reexecutadas e transformadas nos achados abaixo; a remediação está em `EX-0043`. A **re-auditoria independente** (agente novo) é pendência explícita.
-**Regra de governança:** este documento não declara aprovação por conta própria. O veredito final cabe à re-auditoria.
+**Status:** **APROVADO** na re-auditoria independente de 26/10/2026 ([§6](#6-re-auditoria-independente)). O histórico abaixo registra a primeira auditoria, que foi interrompida antes do parecer; a homologação está em `EX-0044`.
+**Regra de governança:** este documento não declara aprovação por conta própria. O veredito final é o da re-auditoria independente (§6).
 
 ---
 
@@ -46,3 +46,48 @@
 1. **Re-auditoria independente** por agente novo: reexecutar sondas e a suíte, confirmar os cinco achados fechados e emitir veredito final sem autodeclaração do implementador.
 2. Se a re-auditoria apontar resíduo, nova remediação e nova entrada em `EXECUCAO.md`.
 3. `review/` continua fora da Fase 05 por decisão G4-D13 (Fase 06).
+
+## 6. Re-auditoria independente
+
+**Data:** 26/10/2026 · **Auditor:** agente independente (re-auditoria) · **Objeto:** Fase 05 (`specs/015-phase-05-simulation/`).
+
+Este parecer substitui o status histórico do cabeçalho; o registro da auditoria interrompida permanece como histórico.
+
+### 6.1 Comandos e contagens
+
+| Comando | Resultado |
+| :--- | :--- |
+| `python -m unittest tests.test_phase05_world_tick tests.test_phase05_policies` | **32 testes OK** (5,3 s; 0 falhas, 0 erros) |
+| `python -m unittest tests.test_phase05_world_tick tests.test_phase05_policies tests.test_architecture_boundaries` | **40 testes OK** (6,4 s; 0 falhas, 0 erros) |
+| `python -m unittest discover -s tests -p "test_*.py"` | **282 testes OK** (74,97 s; 0 falhas, 0 erros) |
+| `.tmp/probe_qa5_tick.py` | JSON integral; `deferred_plus_new_same_tick` e `duplicate_schedule` conferidos |
+| `.tmp/probe_qa5_budget.py` | teto duro 1/3/8/20; `max_depth` inerte; fila = seleção |
+| `.tmp/probe_qa5_smoke.py` | tick `+10080 min`, 3 `world.work_completed`, diário e hash de fila |
+| `.tmp/probe_reauth_state.py` | `ok=true`; `clock_violations=[]`, `plan_violations=[]` |
+| `.tmp/probe_reauth_dupe.py` | `already_scheduled`, 1 conclusão, `idempotent`, hash de rebuild igual |
+
+### 6.2 Situação dos cinco achados
+
+| ID | Status | Evidência |
+| :--- | :---: | :--- |
+| **P0-1** | **Fechado** | `.tmp/probe_reauth_state.py`: `Alfa` 9→10 e `Beta` 9→10; final `Alfa 10/10 BREACHED`, `Beta 10/10 BREACHED`; planos finais `[completed, completed, pending]`; nenhuma violação de monotonicidade. |
+| **P1-1** | **Fechado** | `probe_qa5_tick.py`: duplicata devolve `already_completed`, mesmo `work_id`, `scene_completions_total=1`. `probe_reauth_dupe.py`: `already_scheduled`, mesmo `work_id`, sem exceção, `last_seq_unchanged=true`; segundo `--to` com `status=idempotent`, 0 eventos e 1 `world.work_completed`. |
+| **P2-1** | **Fechado** | Seleção e `queue.json` em `[cena_A, relogio_B]`; `priority_final` `[60, 55]` nos dois lados (bruto `[46, 50]`), `priority_final_coherent=true`. |
+| **P2-2** | **Fechado** | `TickBudget(max_items, max_items_per_day, override)` sem `max_depth`; `DEFAULT_SIMULATION` sem a chave; `normalize_simulation({"max_depth": 1})` ignora e mantém defaults; sonda com `max_depth` 1 vs 5 seleciona o mesmo (`equal=true`). Resíduo de `max_depth` apenas no `DependencyGraph` (`kernel/dag.py` e seu teste), fora do orçamento. |
+| **P2-3** | **Fechado** | `game_time_to_minutes("30 de Solsticio de 304, 23:59", calendar=CAL12)` levanta `ValueError` ("Mês 'Solsticio' não consta no calendário..."); `"5 de Outubro de 300, 10:00"` sem calendário devolve `155396760`. |
+
+### 6.3 Achados novos
+
+**Nenhum achado novo.**
+
+Observação não bloqueante: no cenário `same_target_with_deferred` da sonda antiga, repetir o mesmo `--to` com adiados abertos drena um item e altera `last_seq`. Isso é o comportamento de C13/AT-G4-03 (novo ciclo sobre trabalho adiado), não uma falha de C14, cujo teste drena antes de repetir. Registrado para transparência.
+
+### 6.4 Riscos de escopo
+
+- **Sem XP/reputação/missão, narração ou LLM no tick:** grep em `application/world_tick.py`, `application/world_schedule.py`, `plugins/*`, `resources/world/*`, `application/projectors/world_journal.py` e `interfaces/cli/world_cli.py` encontrou apenas docstrings; não há import ou chamada de LLM nem escrita de progressão.
+- **`queue.json` reconstruível:** `cmd_rebuild(force=True)` (mesmo caminho do `rebuild --force`) devolve `status=ok`, `events_replayed=8`, e o hash da fila permanece `sha256:95205c3b...`; 1 `world.work_completed` após o rebuild.
+- **Fronteiras:** os 40 testes incluem `tests.test_architecture_boundaries` (8), verdes; os 32 restantes são de Fase 05.
+
+### 6.5 Veredito
+
+**APROVADO.** Os cinco achados estão fechados com evidência reproduzível, a suíte completa (282) e os 40 testes de Fase 05/fronteiras passam, e não há achado novo. A Fase 05 está apta à homologação; a observação de 6.3 é comportamento previsto em C13/AT-G4-03, não ressalva.
