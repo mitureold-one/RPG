@@ -1,7 +1,7 @@
 # RPGPRO — Roadmap de Evolução
 
 **Status:** documento de direção técnica e narrativa; não é uma especificação final aprovada.
-**Snapshot:** commit `cefe5ea` (Fases 01 e 01.5).
+**Snapshot:** commit `df514d6` (Fases 01, 01.5 e 02/R1).
 **Fontes:** [`ARCHITECTURE.md`](ARCHITECTURE.md), [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md), [`DECISOES_ARQUITETURA.md`](DECISOES_ARQUITETURA.md), [`AGENTS.md`](AGENTS.md), auditoria arquitetural de 22/10/2026.
 
 > **Regra de leitura:** este roadmap separa **decisões de comportamento confirmadas** de **decisões técnicas pendentes**. Não trate um gate pendente como requisito já resolvido. A ordem das fases segue dependências causais, não preferência estética.
@@ -100,12 +100,14 @@ Entregue:
 
 ### Fase 02 — História causal
 
+**Status:** concluída em 26/10/2026 — G1/G2 ratificados, C1–C4 aprovados, 211 testes e QA final aprovado (`EX-0021`; `specs/010` e `specs/011`).
+
 **Objetivo:** registrar tentativas, resultados, custos, efeitos e correções sem perder o passado.
 
 **Entregáveis:**
 
 - schema de evento com `event_id`, `turno`, `versão`, tipo, ator, alvo, pré-condições, resultado, custos, dependências e estado (`proposta`, `tentativa`, `concluída`, `rejeitada`, `adiada`, `abandonada`);
-- store append-only (JSONL ou SQLite; decisão no gate G1);
+- store append-only (JSONL canônico; SQLite opcional, conforme G1);
 - projector que reconstrói `diario.md`/estado atual a partir dos eventos válidos;
 - correções como novos eventos que referenciam os afetados;
 - grafo de dependências v1 e reavaliação seletiva;
@@ -116,6 +118,8 @@ Entregue:
 **Critério de aceite:** evento ida-e-volta; rebuild de projeção sem duplicar efeitos; correção reavalia só dependências afetadas; prosa antiga recuperável; teste de retomada sem duplicação.
 
 ### Fase 03 — Agentes
+
+**Status:** pronta para planejamento; implementação bloqueada até a ratificação do G3.
 
 **Objetivo:** NPCs e facções com estado persistente, objetivos e conhecimento próprio.
 
@@ -256,7 +260,7 @@ Não iniciar a fase inteira antes de resolver o gate correspondente.
 
 G1 não reabre o que o [`ARCHITECTURE.md`](ARCHITECTURE.md) já fixou: JSONL canônico, `evt_<ulid>` e o envelope do evento. Ele ratifica essas escolhas e fecha o que ainda está aberto. G2 é o dono exclusivo da política de correção e reconstrução; nenhum dos dois invade o escopo do outro.
 
-**Status em 23/10/2026:** G1 e G2 **ratificados com ajustes**; ver [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md) e o [`checklist`](specs/010-phase-02-causal-history/checklists/g1-g2-ratification.md). G3–G7 seguem abertos.
+**Status em 26/10/2026:** Fase 02/R1 concluída; G1 e G2 **ratificados com ajustes**; ver [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md), [`specs/011-close-phase02-qa-p2/spec.md`](specs/011-close-phase02-qa-p2/spec.md) e [`EX-0021`](EXECUCAO.md). G3–G7 seguem abertos; a Fase 03 depende do G3.
 
 Enquanto um gate estiver aberto, a fase correspondente pode ter protótipo e testes de contrato, mas não deve ser declarada concluída.
 
@@ -296,7 +300,7 @@ A árvore canônica, as portas de extensão, as regras de dependência e o kerne
 |---|---|---|---|
 | **R0** | Antes da Fase 02 (Concluído) | criar `contracts/` + `kernel/` + `bootstrap.py` + suíte de contrato com fakes; extrair CLI, persistência, `temporal/` e campanha de `lazy_turn.py`/`helpers.py`; sem emissão de eventos | 157 testes automatizados verdes; `lazy_turn.py` com 54 linhas; Markdown idêntico; contratos exercitados com fakes |
 | **R0.5** | Antes da Fase 02 | arquivar campanhas, criar fixtures, atualizar testes, apagar `campaigns/*` | suíte verde sem campanhas reais; `init-campaign` funciona |
-| **R1** | Com a Fase 02 | `ssot.py` → `resources/`; `EventStore` JSONL + índice; `Projector`s; `EventType`s e upcasters | nenhum arquivo > 300; evento ida-e-volta; rebuild de projeção; implementações aprovadas na suíte de contrato |
+| **R1** | Com a Fase 02 (Concluído) | `ssot.py` → `resources/`; `EventStore` JSONL + índice; `Projector`s; `EventType`s e upcasters | nenhum arquivo > 300; evento ida-e-volta; rebuild de projeção; implementações aprovadas na suíte de contrato |
 | **R2** | Com a Fase 03/04 | `narrator.py` → `resources/npcs/`; `factions.py` → `resources/factions/`; `quests.py` → `resources/quests/`; `context/` | módulos < 300; sem ciclos; `BehaviorPolicy`/`FactionPolicy`/`ContextProvider` testados |
 | **R3** | Com a Fase 05/06 | `reviewer.py` → `review/`; `world/` com simulação, budget, diretor e estagnação | lints independentes; diretor determinístico; orçamento testado |
 | **R4** | Com a Fase 07 | `memory/` e `knowledge/` | proveniência rastreável; resumos reconstruíveis |
@@ -321,7 +325,7 @@ A árvore canônica, as portas de extensão, as regras de dependência e o kerne
 ### 7.1 Estado atual
 
 - 211 testes automatizados verdes (incluindo suíte de estabilidade, suíte de contratos com fakes e `JsonlEventStore`, validação de schema/registry/runtime, C1–C4 e todos os cenários da Fase 02/R1 com aprovação integral de QA).
-- Nenhum teste de comportamento narrativo ainda.
+- Os testes de comportamento de agentes (Fase 03) ainda não existem.
 
 ### 7.2 Cenários obrigatórios da Fase 08
 
@@ -346,9 +350,9 @@ Cada cenário deve ter estado inicial, ação/tempo, comportamento esperado e as
 2. **R0 concluído:** contratos (`contracts/`), kernel de extensão (`kernel/`), `bootstrap.py` e extração modular de CLI, persistência, `temporal/` e `campaign/` (`EX-0004` a `EX-0007`).
 3. **R0.5 concluído:** arquivamento de campanhas em `archive/campaigns/`, fixtures em `tests/fixtures/campaigns/`, `campaigns/` limpo com `.gitkeep` (`EX-0008`).
 4. **Auditoria QA concluída:** correções de drift de calendário P1-A, contenção de `campaign_id` P2-1, all-or-nothing de templates P2-2, e lock transacional em plan/progress P2-3 (`EX-0009` / `QA-FASE-01.md`).
-5. **G1/G2 ratificados com ajustes** (23/10/2026): [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md) em `Ready for Planning`; próximos `plan.md`/`tasks.md` com os critérios C1–C4.
-6. **Executar R1 + Fase 02** após `plan.md`/`tasks.md`; a fase não é declarada concluída sem C1–C4.
-7. Seguir para R2–R4 conforme as fases.
+5. **Fase 02/R1 concluída (26/10/2026):** G1/G2, spec 010 (C1–C4), remediação P2 da spec 011, 211 testes e QA final aprovado (`EX-0021`).
+6. **Próximo passo — Fase 03/Agentes:** ratificar o G3 (schema de conhecimento, proveniência, confiança e crença falsa) e abrir a spec 012; a fase não pode ser declarada concluída antes do G3.
+7. **R2 em paralelo à Fase 03/04:** decompor `narrator.py`, `factions.py`, `quests.py` e `context/` em módulos menores; depois seguir R3/R4.
 
 ---
 
