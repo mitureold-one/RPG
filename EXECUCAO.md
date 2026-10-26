@@ -507,6 +507,28 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md) (Veredito atualizado para `APROVADO SEM RESSALVAS`); [`spec.md`](specs/011-close-phase02-qa-p2/spec.md); [`plan.md`](specs/011-close-phase02-qa-p2/plan.md); [`tasks.md`](specs/011-close-phase02-qa-p2/tasks.md); EX-0017, EX-0018.
 - **Pendências:** nenhuma.
 
+## EX-0020 — 2026-10-26 — Reverificação independente dos 5 P2
+
+- **Autor:** agente de QA DeepSeek Harness, a pedido do usuário.
+- **Tipo:** teste + auditoria.
+- **Status:** parcial (**P2-1/P2-2 fechados**; **P1-C aberto** em `--vital`/`--rep`; P2-3 parcial; P2-4/P2-5 com ressalvas).
+- **Commits auditados:** `752d401` (implementação) e `5a63603` (EX-0019).
+- **Escopo:** P2-1 a P2-5 de [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md), com foco em recuperação sem `diario.md`, ausência de blobs `*_after`, compensações e limites de módulo.
+- **Como:** suíte completa, `test_architecture_boundaries`, rebuild somente com `events/`, remoção de raiz/projeções, correções `--clock`/`--quest`/`--arc`/`--vital`/`--rep` em campanha descartável e inspeção de payloads/projeções.
+- **Evidência:**
+  - `python -m unittest discover -s tests -p "test_*.py"` → **210 testes, OK** (31 s); fronteiras **7 OK**.
+  - **P2-1 passa:** sem `diario.md`, `ficha.md`, `npcs.md` e `projections/`, `rebuild --force` restaurou os três arquivos byte-idênticos a partir de `events/`; sem `diario.md` e sem `events/`, erro explícito.
+  - **P2-2 passa:** zero eventos com `diario_after`/`ficha_after`/`npcs_after`; rebuild só de eventos manteve os três hashes.
+  - **P2-3 núcleo passa:** `--clock C1:-1` → 0/2, `--quest Q2:ACTIVE`, `--arc-stage/--arc-title` atualizados; raiz == `projections/`.
+  - **P1-C (aberto):** `--vital hp:+2` com HP 20 → **2/25** (esperado 22); `--rep FTest:-1` com score 1 → **-1** (esperado 0). `application/correction.py` grava `new_score=delta` e `--vital` trata `+N` como valor absoluto.
+  - **P2-4 ressalva:** `application/projectors/journal.py` 351 e `application/correction.py` 324 ainda acima de 300; `test_architecture_boundaries.py` não os inclui no limite estrito.
+  - **P2-5 ressalva:** 210 testes/docs sincronizados, mas sem cobertura de `--vital`/`--rep`; `EX-0019` afirma resolução total.
+- **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md) (Re-verificação independente dos P2); EX-0017, EX-0018, EX-0019.
+- **Pendências:**
+  - corrigir `--vital` com sinal (delta vs absoluto) e `--rep` (`score_atual + delta`, com clamp) e adicionar testes;
+  - decidir se `journal.py`/`correction.py` entram no teto estrito de 300 e ajustar o teste/documentação;
+  - atualizar novamente o veredito e a contagem após a correção.
+
 ---
 
 ## 5. Como registrar uma nova execução

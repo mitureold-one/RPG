@@ -7,6 +7,26 @@
 
 ---
 
+## Re-verificação independente dos P2 — 26/10/2026 (`752d401` / `5a63603`)
+
+**Suíte:** 210 testes OK; fronteiras 7 OK. **P2-1 e P2-2 passam** nos testes independentes (inclusive rebuild somente com `events/`, sem `diario.md`/`ficha.md`/`npcs.md`/`projections/`). **P2-3 passa em relógio/missão/arco**, mas **falha em `--vital` e `--rep`**. **P2-4** fecha os alvos originais, mas `journal.py` (351) e `correction.py` (324) continuam acima de 300. **P2-5** tem 210 testes e docs sincronizados, porém sem cobertura para os dois bugs abaixo.
+
+| Verificação independente | Resultado | Evidência |
+| :--- | :---: | :--- |
+| P2-1 recuperação sem `diario.md` | **Passa** | `rebuild --force` restaurou diário/ficha/NPCs byte-idênticos só com `events/`; sem `diario.md` e sem `events/`, erro explícito |
+| P2-2 sem blobs `*_after` | **Passa** | Nenhum evento com `diario_after`/`ficha_after`/`npcs_after`; rebuild só de eventos restaurou os três hashes |
+| P2-3 `--clock`, `--quest`, `--arc` | **Passa** | `clock C1:-1` → 0/2; `Q2:ACTIVE`; arco título/fase atualizados na raiz e em `projections/` |
+| **P2-3 `--vital`/`--rep`** | **Falha (P1)** | `--vital hp:+2` com HP 20 → **2/25** (esperado 22); `--rep FTest:-1` com score 1 → **-1** (esperado 0) |
+| P2-4 alvos originais | **Passa** | `commit.py` 222, `commit_stage.py` 270, `event_store.py` 188, `batch_io.py` 170, `reviewer.py` 292, `prose_linter.py` 275, `reviewer_checks.py` 269 |
+| P2-4 módulos restantes | **Ressalva** | `journal.py` 351 e `correction.py` 324 ainda >300; o teste de fronteira não os inclui no limite estrito |
+| P2-5 testes/docs | **Ressalva** | 210 OK e docs em 210, mas faltam testes de `--vital`/`--rep`; `EX-0019` afirma “todos os P0–P3 resolvidos” |
+
+**P1-C — compensação de vital/reputação erra o valor.** Em `application/correction.py`, `--rep` grava `new_score = delta` (não `score_atual + delta`) e o projector aplica `delta_rep` **e** `set_score`; `--vital` com sinal (`+N`/`-N`) é tratado como valor absoluto. O help documenta `mana:+5`, então o resultado contradiz a interface e corrompe a ficha.
+
+**Veredito independente:** **APROVADO COM RESSALVAS** — P2-1/P2-2 fechados; P2-3 parcial por P1-C; P2-4/P2-5 com ressalvas. Não congelar até corrigir `--vital`/`--rep` e decidir o teto dos dois módulos restantes.
+
+---
+
 ## Atualização final pós-fechamento dos 5 P2 — 26/10/2026 (`specs/011-close-phase02-qa-p2`)
 
 **Resultado:** **210 testes OK** (incluindo 7 testes de fronteiras e tamanho `< 300` linhas). Todos os achados **P0, P1, P2 e P3** foram integralmente resolvidos e verificados:
@@ -28,18 +48,19 @@
 | P1-4 `correct --delta-xp` | **Corrigido** | Compensação `protagonist.progression_changed` com `xp_delta=-50` |
 | P1-5 lock/`last_seq` | **Corrigido** | Um único `.campaign.lock`; `last_seq` não trunca (tail aberto preservado) |
 | P1-6 snapshot | **Corrigido** | Rebuild com snapshot preserva turno antigo e inclui o novo |
-| P1-7 reavaliação | **Corrigido** | `correction.recomputed` lista afetados; compensação cobre XP, vitais/ficha, reputação, relógio, missão e arco com reprojeção automática |
+| P1-7 reavaliação | **Parcial** | `correction.recomputed` lista afetados; compensação cobre XP, ficha, relógio, missão e arco, mas `--vital`/`--rep` erram o valor (P1-C) |
 | P1-8 `expected_last_seq` | **Corrigido** | `ensure`/`commit_events_and_project`/correção passam a sequência esperada |
 | P1-9 hash | **Corrigido** | Hash adulterado gera `ReplayError` |
 | **P1-A idempotência** | **Corrigido** | Lote idêntico reenviado com `expected_last_seq` atual → `DuplicateBatchError`; correção repetida → erro e apenas uma compensação `xp_delta=-50` |
 | **P1-B NPC no histórico** | **Corrigido** | `--npc-updates "Aliado Inicial: Atitude: alerta \| Relação: Confiança +1"` gera **um** `npc.updated` (`changes` com `attitude` e `relation`); raiz e log concordam, sem `relacao` fantasma |
+| **P1-C vital/reputação** | **Aberto** | `--vital hp:+2` com HP 20 → 2/25; `--rep FTest:-1` com score 1 → -1 (esperado 0); ver seção independente acima |
 | P2-1 perda de `diario.md` | **Corrigido** | Sem `diario.md`, `cmd_rebuild` localiza a campanha via `events/` e restaura `diario.md` byte-idêntico (`test_cmd_rebuild_recovers_missing_diario_md_and_rejects_empty_campaign_p2_1`) |
 | P2-2 snapshots em `meta` | **Corrigido** | Zero eventos possuem `diario_after`/`ficha_after`/`npcs_after` em `meta`; projectors derivam 100% do estado a partir dos payloads (`test_zero_after_blobs_in_event_meta_across_commit_and_commands_p2_2`) |
-| P2-3 correção limitada | **Corrigido** | Compensação cobre XP, ficha/vitais, reputação, relógios (`--clock`), missões (`--quest`) e arcos (`--arc-stage`/`--arc-title`) com reprojeção imediata (`test_causal_compensation_for_clock_quest_and_arc_updates_projections_immediately_p2_3`) |
-| P2-4 camadas/tamanho | **Corrigido** | `commit.py`, `commit_stage.py`, `event_store.py`, `batch_io.py`, `segment_io.py`, `reviewer.py`, `prose_linter.py` e `reviewer_checks.py` todos `< 300` linhas e sem imports proibidos (`test_architecture_boundaries.py`) |
-| P2-5 docs/testes | **Corrigido** | 210 testes verdes sincronizados em `ROADMAP.md`, `ARCHITECTURE.md`, `README.md`, `qa-review.md` e `EXECUCAO.md` (`EX-0019`) |
+| P2-3 correção limitada | **Parcial** | Relógio/missão/arco passam; `--vital`/`--rep` erram o valor (`test_causal_compensation_for_clock_quest_and_arc_updates_projections_immediately_p2_3` não cobre esses dois) |
+| P2-4 camadas/tamanho | **Parcial** | Alvos originais `< 300`; `journal.py` 351 e `correction.py` 324 ainda acima, fora do limite estrito do teste |
+| P2-5 docs/testes | **Parcial** | 210 testes e docs em 210; faltam casos de `--vital`/`--rep`; `EX-0019` afirma resolução total |
 
-**Veredito final:** **APROVADO SEM RESSALVAS.** Todos os achados P0, P1, P2 e P3 estão encerrados e a Fase 02 / R1 encontra-se pronta para congelamento definitivo.
+**Veredito final:** **APROVADO COM RESSALVAS.** P2-1/P2-2 e o núcleo de P2-3 estão fechados; P1-C (`--vital`/`--rep`) e as ressalvas de P2-4/P2-5 impedem o congelamento definitivo.
 
 ### Correção dos P1 residuais (24/10)
 
