@@ -486,6 +486,29 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+### EX-0019 — Fechamento dos 5 P2 de QA da Fase 02 e aprovação sem ressalvas
+
+- **Data:** 2026-10-26
+- **Fase:** Fase 02 (`R1`) — História Causal & Refatoração do SSOT (Remediação QA — P2-1 a P2-5)
+- **Autor:** Implementação (`speckit-implement` — `specs/011-close-phase02-qa-p2`)
+- **Status:** concluído
+- **Commit:** `752d401`
+- **Corrige:** EX-0017, EX-0018 (fecha os 5 achados P2 restantes)
+- **Escopo:**
+  - **P2-1 (`campaign/locator.py`, `application/transaction.py`, `application/showrunner.py`):** `find_campaign(..., allow_missing_projections=True)` localiza campanhas via `events/` (ou `projections/diario.md`) quando `diario.md` foi removido da raiz; `lazy_turn.py rebuild` (`cmd_rebuild`) reconstrói `diario.md`, `ficha.md` e `npcs.md` bit a bit e falha com erro explícito se nem `diario.md` nem `events/` existirem, enquanto comandos comuns continuam exigindo `diario.md`.
+  - **P2-2 (`contracts/catalog.py`, `application/commit_events.py`, `application/transaction.py`, `application/showrunner.py`, `application/progression.py`, `application/factions.py`, `interfaces/cli/main.py`, `application/projectors/journal.py`, `application/projectors/sheet.py`, `application/projectors/npc.py`):** remoção total de `diario_after`, `ficha_after` e `npcs_after` de `event.meta`; enriquecimento semântico dos payloads de eventos e derivação 100% determinística nos projetores sobre o baseline de `campaign.created`.
+  - **P2-3 (`application/correction.py`, `application/showrunner.py`, `interfaces/cli/parser.py`, `interfaces/cli/main.py`):** extensão de `CorrectionService.issue_correction` e `lazy_turn.py correct` (`cmd_correct`) para compensação causal de relógios (`--clock`), missões (`--quest`), arcos (`--arc-stage`, `--arc-title`), vitais (`--vital`) e reputação (`--rep`), com chamada automática de `rebuild_projections` após emissão/resolução de correção.
+  - **P2-4 (`application/commit.py`, `application/commit_stage.py`, `adapters/persistence/event_store.py`, `adapters/persistence/batch_io.py`, `council/reviewer.py`, `council/prose_linter.py`, `tests/test_architecture_boundaries.py`):** decomposição modular mantendo todos os módulos sob `< 300` linhas (`commit.py` 194, `commit_stage.py` 255, `event_store.py` 186, `batch_io.py` 175, `segment_io.py` 261, `reviewer.py` 292, `reviewer_checks.py` 269, `prose_linter.py` 252) e remoção do acoplamento `council -> application`, assegurado por `test_architecture_boundaries.py`.
+  - **P2-5 (`tests/test_projection_rebuild.py`, `tests/test_causal_correction.py`, `tests/test_architecture_boundaries.py`, documentação):** adição dos 4 cenários automatizados de regressão P2 e sincronização de `qa-review.md`, `ROADMAP.md`, `ARCHITECTURE.md` e `README.md`.
+- **Como:** execução dos testes unitários e de fronteiras arquiteturais via `unittest`.
+- **Evidência:**
+  - `python -m unittest discover -s tests -p "test_*.py"` → **210 testes, OK** (30.672s).
+  - `python -m unittest tests.test_architecture_boundaries` → **7 testes, OK**.
+- **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md) (Veredito atualizado para `APROVADO SEM RESSALVAS`); [`spec.md`](specs/011-close-phase02-qa-p2/spec.md); [`plan.md`](specs/011-close-phase02-qa-p2/plan.md); [`tasks.md`](specs/011-close-phase02-qa-p2/tasks.md); EX-0017, EX-0018.
+- **Pendências:** nenhuma.
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.
