@@ -705,8 +705,8 @@ Os gates continuam definidos no [`ROADMAP.md`](ROADMAP.md). A arquitetura não o
 1. R0 concluído (contratos, kernel, bootstrap e extração modular).
 2. R0.5 concluído (arquivamento de campanhas, fixtures isoladas e campaigns/ limpo com .gitkeep).
 3. Auditoria de QA da Fundação/R0/R0.5 concluída e itens P1/P2 resolvidos.
-4. Specs 010/011 concluídas: G1/G2 ratificados, C1–C4 e P2 aprovados.
+4. Specs 010/011 concluídas: G1/G2 ratificados, C1–C4 e P2 aprovados; G3 ratificado em 26/10/2026.
 5. **R1 + Fase 02 concluídos e aprovados** em 26/10/2026 (211 testes; `EX-0021`).
-6. Próximo: ratificar **G3** e abrir a spec 012 (Fase 03/Agentes); R2–R4 acompanham as fases seguintes.
+6. **G3 ratificado** em 26/10/2026; abrir a spec 012 (Fase 03/Agentes) com as emendas do [`G3`](specs/012-phase-03-agents/g3-decision-record.md); R2–R4 acompanham as fases seguintes.
 
-Com G1/G2 ratificados e C1–C4 aprovados, a Fase 02/R1 está concluída; a Fase 03 depende do G3.
+Com G1/G2/G3 ratificados e C1–C4 aprovados, a Fase 02/R1 está concluída e a Fase 03 está liberada para especificação; a implementação exige spec/plan/tasks e R2.

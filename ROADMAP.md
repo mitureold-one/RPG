@@ -119,7 +119,7 @@ Entregue:
 
 ### Fase 03 — Agentes
 
-**Status:** pronta para planejamento; implementação bloqueada até a ratificação do G3.
+**Status:** G3 ratificado em 26/10/2026; planejamento da spec 012 liberado; implementação após `spec.md`/`plan.md`/`tasks.md` e R2. Ver [`G3`](specs/012-phase-03-agents/g3-decision-record.md).
 
 **Objetivo:** NPCs e facções com estado persistente, objetivos e conhecimento próprio.
 
@@ -133,7 +133,7 @@ Entregue:
 - facção com objetivos coletivos, liderança, autoridade, sucessão, subgrupos, divergências e conspirações;
 - validação de capacidade/recurso/conhecimento antes de aceitar uma proposta.
 
-**Dependências:** Fase 02; gate G3.
+**Dependências:** Fase 02; G3 ratificado em 26/10/2026.
 **Critério de aceite:** NPC com objetivo produz ação planejada sem o protagonista; NPC não usa fato que desconhece; facção não é tratada como opinião única; plano não vira fato automaticamente.
 
 ### Fase 04 — Contexto causal
@@ -260,7 +260,7 @@ Não iniciar a fase inteira antes de resolver o gate correspondente.
 
 G1 não reabre o que o [`ARCHITECTURE.md`](ARCHITECTURE.md) já fixou: JSONL canônico, `evt_<ulid>` e o envelope do evento. Ele ratifica essas escolhas e fecha o que ainda está aberto. G2 é o dono exclusivo da política de correção e reconstrução; nenhum dos dois invade o escopo do outro.
 
-**Status em 26/10/2026:** Fase 02/R1 concluída e aprovada; G1 e G2 **ratificados com ajustes**; ver [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md), [`specs/011-close-phase02-qa-p2/spec.md`](specs/011-close-phase02-qa-p2/spec.md) e [`EX-0021`](EXECUCAO.md). G3–G7 seguem abertos; a Fase 03 depende do G3.
+**Status em 26/10/2026:** Fase 02/R1 concluída e aprovada; G1, G2 e **G3 ratificados**; ver [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md), [`specs/011-close-phase02-qa-p2/spec.md`](specs/011-close-phase02-qa-p2/spec.md), [`G3`](specs/012-phase-03-agents/g3-decision-record.md) e [`EX-0021`](EXECUCAO.md). G4–G7 seguem abertos; a Fase 03 pode ser planejada.
 
 Enquanto um gate estiver aberto, a fase correspondente pode ter protótipo e testes de contrato, mas não deve ser declarada concluída.
 
@@ -351,7 +351,7 @@ Cada cenário deve ter estado inicial, ação/tempo, comportamento esperado e as
 3. **R0.5 concluído:** arquivamento de campanhas em `archive/campaigns/`, fixtures em `tests/fixtures/campaigns/`, `campaigns/` limpo com `.gitkeep` (`EX-0008`).
 4. **Auditoria QA concluída:** correções de drift de calendário P1-A, contenção de `campaign_id` P2-1, all-or-nothing de templates P2-2, e lock transacional em plan/progress P2-3 (`EX-0009` / `QA-FASE-01.md`).
 5. **Fase 02/R1 concluída e aprovada (26/10/2026):** G1/G2, spec 010 (C1–C4), remediação P2 da spec 011, 211 testes e QA final aprovado (`EX-0021`).
-6. **Próximo passo — Fase 03/Agentes:** ratificar o G3 (schema de conhecimento, proveniência, confiança e crença falsa) e abrir a spec 012; a fase não pode ser declarada concluída antes do G3.
+6. **G3 ratificado (26/10/2026):** abrir a spec 012 da Fase 03/Agentes com as emendas do [`G3`](specs/012-phase-03-agents/g3-decision-record.md); implementar somente após `spec.md`/`plan.md`/`tasks.md`.
 7. **R2 em paralelo à Fase 03/04:** decompor `narrator.py`, `factions.py`, `quests.py` e `context/` em módulos menores; depois seguir R3/R4.
 
 ---
