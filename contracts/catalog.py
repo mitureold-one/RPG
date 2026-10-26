@@ -4,312 +4,122 @@ from __future__ import annotations
 
 from typing import Any
 
+_S = {"type": "string"}
+_I = {"type": "integer"}
+_B = {"type": "boolean"}
+_A = {"type": "array"}
+_O = {"type": "object"}
+_SN = {"type": ["string", "null"]}
+_IN = {"type": ["integer", "null"]}
+_AS = {"type": ["array", "string"]}
+
+
+def _obj(req: list[str], props: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "object", "required": req, "properties": props}
+
+
 V1_EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
-    "campaign.created": {
-        "type": "object",
-        "required": ["title", "system", "calendar", "start_game_time", "config_version"],
-        "properties": {
-            "title": {"type": "string"},
-            "system": {"type": "string"},
-            "calendar": {"type": ["string", "object"]},
-            "start_game_time": {"type": "string"},
-            "config_version": {"type": "integer"},
+    "campaign.created": _obj(
+        ["title", "system", "calendar", "start_game_time", "config_version"],
+        {"title": _S, "system": _S, "calendar": {"type": ["string", "object"]}, "start_game_time": _S, "config_version": _I},
+    ),
+    "command.executed": _obj(
+        ["command", "status", "summary"],
+        {"command": _S, "args": _A, "status": _S, "summary": _S, "files": _O, "Clock": _S, "clock_updates": _A},
+    ),
+    "turn.proposed": _obj(
+        ["turn", "action", "summary"],
+        {"turn": _I, "action": _S, "summary": _S, "stakes": _S, "dc": _I, "stat": _S, "target": _O, "preconditions": _A},
+    ),
+    "turn.rejected": _obj(["turn", "reasons"], {"turn": _I, "reasons": _A}),
+    "action.resolved": _obj(
+        ["turn", "result", "outcome"],
+        {"turn": _I, "result": _S, "outcome": _S, "costs": _O, "effects": _O},
+    ),
+    "turn.committed": _obj(
+        ["turn", "summary"],
+        {
+            "turn": _I, "summary": _S, "scene_type": _S, "location": _S, "present": _AS,
+            "vitals": _O, "vitals_line": _S, "costs": _O, "state_shift": _S, "alerts": _A,
+            "restored_vitals": _B, "time_changed": _B, "location_changed": _B, "present_changed": _B,
         },
-    },
-    "command.executed": {
-        "type": "object",
-        "required": ["command", "status", "summary"],
-        "properties": {
-            "command": {"type": "string"},
-            "args": {"type": "array"},
-            "status": {"type": "string"},
-            "summary": {"type": "string"},
-            "files": {"type": "object"},
-            "Clock": {"type": "string"},
-            "clock_updates": {"type": "array"},
+    ),
+    "clock.created": _obj(
+        ["name", "max", "trigger"],
+        {"name": _S, "max": {"type": "integer", "minimum": 1}, "trigger": _S, "current": _I, "status": _S},
+    ),
+    "clock.advanced": _obj(
+        ["name", "current", "max", "status"],
+        {"name": _S, "steps": _I, "delta": _I, "current": _I, "max": _I, "status": _S, "trigger": _S},
+    ),
+    "clock.resolved": _obj(["name"], {"name": _S, "status": _S, "outcome": _S, "xp_granted": _I}),
+    "quest.created": _obj(
+        ["title", "type"],
+        {
+            "id": _S, "quest_id": _S, "title": _S, "type": _S, "objectives": _A,
+            "contractor": _SN, "clock": _SN, "reward": {"type": ["object", "string", "null"]}, "phase": _SN,
         },
-    },
-    "turn.proposed": {
-        "type": "object",
-        "required": ["turn", "action", "summary"],
-        "properties": {
-            "turn": {"type": "integer"},
-            "action": {"type": "string"},
-            "summary": {"type": "string"},
-            "stakes": {"type": "string"},
-            "dc": {"type": "integer"},
-            "stat": {"type": "string"},
-            "target": {"type": "object"},
-            "preconditions": {"type": "array"},
+    ),
+    "quest.objective_completed": _obj(
+        [],
+        {"id": _S, "quest_id": _S, "objective_idx": _I, "objective_index": _I, "xp_awarded": _I, "xp_granted": _I, "turn": _IN},
+    ),
+    "quest.completed": _obj(
+        [],
+        {"id": _S, "quest_id": _S, "xp_awarded": _I, "xp_granted": _I, "evidence": _S, "turn": _IN, "contractor_rep": _O},
+    ),
+    "quest.failed": _obj(
+        ["reason"],
+        {"id": _S, "quest_id": _S, "reason": _S, "turn": _IN, "contractor_rep": _O},
+    ),
+    "quest.status_changed": _obj(
+        [],
+        {"id": _S, "quest_id": _S, "status": _S, "action": _S, "objective": _S, "from": _S, "to": _S, "reason": _S, "turn": _IN},
+    ),
+    "arc.updated": _obj(
+        [],
+        {
+            "title": _S, "question": _S, "stage": _S, "scene_name": _S, "date_time": _S,
+            "location": _S, "present": _AS, "future_milestone": _S, "milestone": _S, "resolve_clocks": _B,
         },
-    },
-    "turn.rejected": {
-        "type": "object",
-        "required": ["turn", "reasons"],
-        "properties": {
-            "turn": {"type": "integer"},
-            "reasons": {"type": "array"},
+    ),
+    "scene.planned": _obj(["beat", "scene_type"], {"beat": _S, "scene_type": _S, "actors": _AS}),
+    "scene.completed": _obj(["index"], {"index": _I}),
+    "npc.updated": _obj(["npc_id", "changes"], {"npc_id": _S, "changes": _O}),
+    "faction.reputation_changed": _obj(
+        ["faction", "delta_rep", "new_score"],
+        {
+            "faction": _S, "delta_rep": _I, "new_score": _I, "delta_favors": _I, "delta_debts": _I,
+            "favors": _I, "debts": _I, "turn": _IN, "quest_id": _S, "reason": _S,
         },
-    },
-    "action.resolved": {
-        "type": "object",
-        "required": ["turn", "result", "outcome"],
-        "properties": {
-            "turn": {"type": "integer"},
-            "result": {"type": "string"},
-            "outcome": {"type": "string"},
-            "costs": {"type": "object"},
-            "effects": {"type": "object"},
+    ),
+    "protagonist.progression_changed": _obj(
+        ["xp_delta", "xp_total", "level"],
+        {
+            "xp_delta": _I, "xp_total": _I, "level": _I, "attribute_points": _I, "ability_points": _I,
+            "base_step": _I, "turn": _IN, "skip_ledger": _B, "source": _S,
         },
-    },
-    "turn.committed": {
-        "type": "object",
-        "required": ["turn", "summary"],
-        "properties": {
-            "turn": {"type": "integer"},
-            "summary": {"type": "string"},
-            "scene_type": {"type": "string"},
-            "location": {"type": "string"},
-            "present": {"type": ["array", "string"]},
-            "vitals": {"type": "object"},
-            "vitals_line": {"type": "string"},
-            "costs": {"type": "object"},
-            "state_shift": {"type": "string"},
-            "alerts": {"type": "array"},
-            "restored_vitals": {"type": "boolean"},
-            "time_changed": {"type": "boolean"},
-            "location_changed": {"type": "boolean"},
-            "present_changed": {"type": "boolean"},
-        },
-    },
-    "clock.created": {
-        "type": "object",
-        "required": ["name", "max", "trigger"],
-        "properties": {
-            "name": {"type": "string"},
-            "max": {"type": "integer", "minimum": 1},
-            "trigger": {"type": "string"},
-            "current": {"type": "integer"},
-            "status": {"type": "string"},
-        },
-    },
-    "clock.advanced": {
-        "type": "object",
-        "required": ["name", "current", "max", "status"],
-        "properties": {
-            "name": {"type": "string"},
-            "steps": {"type": "integer"},
-            "delta": {"type": "integer"},
-            "current": {"type": "integer"},
-            "max": {"type": "integer"},
-            "status": {"type": "string"},
-            "trigger": {"type": "string"},
-        },
-    },
-    "clock.resolved": {
-        "type": "object",
-        "required": ["name"],
-        "properties": {
-            "name": {"type": "string"},
-            "status": {"type": "string"},
-            "outcome": {"type": "string"},
-            "xp_granted": {"type": "integer"},
-        },
-    },
-    "quest.created": {
-        "type": "object",
-        "required": ["title", "type"],
-        "properties": {
-            "id": {"type": "string"},
-            "quest_id": {"type": "string"},
-            "title": {"type": "string"},
-            "type": {"type": "string"},
-            "objectives": {"type": "array"},
-            "contractor": {"type": ["string", "null"]},
-            "clock": {"type": ["string", "null"]},
-            "reward": {"type": ["object", "string", "null"]},
-            "phase": {"type": ["string", "null"]},
-        },
-    },
-    "quest.objective_completed": {
-        "type": "object",
-        "required": [],
-        "properties": {
-            "id": {"type": "string"},
-            "quest_id": {"type": "string"},
-            "objective_idx": {"type": "integer"},
-            "objective_index": {"type": "integer"},
-            "xp_awarded": {"type": "integer"},
-            "xp_granted": {"type": "integer"},
-            "turn": {"type": ["integer", "null"]},
-        },
-    },
-    "quest.completed": {
-        "type": "object",
-        "required": [],
-        "properties": {
-            "id": {"type": "string"},
-            "quest_id": {"type": "string"},
-            "xp_awarded": {"type": "integer"},
-            "xp_granted": {"type": "integer"},
-            "evidence": {"type": "string"},
-            "turn": {"type": ["integer", "null"]},
-            "contractor_rep": {"type": "object"},
-        },
-    },
-    "quest.failed": {
-        "type": "object",
-        "required": ["reason"],
-        "properties": {
-            "id": {"type": "string"},
-            "quest_id": {"type": "string"},
-            "reason": {"type": "string"},
-            "turn": {"type": ["integer", "null"]},
-            "contractor_rep": {"type": "object"},
-        },
-    },
-    "quest.status_changed": {
-        "type": "object",
-        "required": [],
-        "properties": {
-            "id": {"type": "string"},
-            "quest_id": {"type": "string"},
-            "status": {"type": "string"},
-            "action": {"type": "string"},
-            "objective": {"type": "string"},
-            "from": {"type": "string"},
-            "to": {"type": "string"},
-            "reason": {"type": "string"},
-            "turn": {"type": ["integer", "null"]},
-        },
-    },
-    "arc.updated": {
-        "type": "object",
-        "required": [],
-        "properties": {
-            "title": {"type": "string"},
-            "question": {"type": "string"},
-            "stage": {"type": "string"},
-            "scene_name": {"type": "string"},
-            "date_time": {"type": "string"},
-            "location": {"type": "string"},
-            "present": {"type": ["array", "string"]},
-            "future_milestone": {"type": "string"},
-            "milestone": {"type": "string"},
-            "resolve_clocks": {"type": "boolean"},
-        },
-    },
-    "scene.planned": {
-        "type": "object",
-        "required": ["beat", "scene_type"],
-        "properties": {
-            "beat": {"type": "string"},
-            "scene_type": {"type": "string"},
-            "actors": {"type": ["array", "string"]},
-        },
-    },
-    "scene.completed": {
-        "type": "object",
-        "required": ["index"],
-        "properties": {
-            "index": {"type": "integer"},
-        },
-    },
-    "npc.updated": {
-        "type": "object",
-        "required": ["npc_id", "changes"],
-        "properties": {
-            "npc_id": {"type": "string"},
-            "changes": {"type": "object"},
-        },
-    },
-    "faction.reputation_changed": {
-        "type": "object",
-        "required": ["faction", "delta_rep", "new_score"],
-        "properties": {
-            "faction": {"type": "string"},
-            "delta_rep": {"type": "integer"},
-            "new_score": {"type": "integer"},
-            "delta_favors": {"type": "integer"},
-            "delta_debts": {"type": "integer"},
-            "favors": {"type": "integer"},
-            "debts": {"type": "integer"},
-            "turn": {"type": ["integer", "null"]},
-            "quest_id": {"type": "string"},
-            "reason": {"type": "string"},
-        },
-    },
-    "protagonist.progression_changed": {
-        "type": "object",
-        "required": ["xp_delta", "xp_total", "level"],
-        "properties": {
-            "xp_delta": {"type": "integer"},
-            "xp_total": {"type": "integer"},
-            "level": {"type": "integer"},
-            "attribute_points": {"type": "integer"},
-            "ability_points": {"type": "integer"},
-            "base_step": {"type": "integer"},
-            "turn": {"type": ["integer", "null"]},
-            "skip_ledger": {"type": "boolean"},
-            "source": {"type": "string"},
-        },
-    },
-    "protagonist.sheet_changed": {
-        "type": "object",
-        "required": ["kind", "target", "new_value"],
-        "properties": {
-            "kind": {"type": "string"},
-            "target": {"type": "string"},
-            "new_value": {},
-            "delta": {"type": "integer"},
-            "points_remaining": {"type": "integer"},
-            "training": {"type": "string"},
-            "source": {"type": "string"},
-        },
-    },
-    "prose.recorded": {
-        "type": "object",
-        "required": ["turn", "text_hash", "text_path"],
-        "properties": {
-            "turn": {"type": "integer"},
-            "text_hash": {"type": "string"},
-            "text_path": {"type": "string"},
-            "source": {"type": "string"},
-            "bytes": {"type": "integer"},
-            "scene_type": {"type": "string"},
-        },
-    },
-    "correction.issued": {
-        "type": "object",
-        "required": ["correction_id", "corrects", "reason", "changes"],
-        "properties": {
-            "correction_id": {"type": "string"},
-            "corrects": {"type": "array"},
-            "reason": {"type": "string"},
-            "changes": {"type": "array"},
-            "state": {"type": "string"},
-            "inconsistency_detected": {"type": "boolean"},
-        },
-    },
-    "correction.recomputed": {
-        "type": "object",
-        "required": ["correction_id", "affected", "outcome"],
-        "properties": {
-            "correction_id": {"type": "string"},
-            "affected": {"type": "array"},
-            "outcome": {"type": "string"},
-        },
-    },
-    "projection.rebuilt": {
-        "type": "object",
-        "required": ["from_seq", "to_seq", "projection_version", "hash"],
-        "properties": {
-            "from_seq": {"type": "integer"},
-            "to_seq": {"type": "integer"},
-            "projection_version": {"type": "integer"},
-            "hash": {"type": "string"},
-        },
-    },
+    ),
+    "protagonist.sheet_changed": _obj(
+        ["kind", "target", "new_value"],
+        {"kind": _S, "target": _S, "new_value": {}, "delta": _I, "points_remaining": _I, "training": _S, "source": _S},
+    ),
+    "prose.recorded": _obj(
+        ["turn", "text_hash", "text_path"],
+        {"turn": _I, "text_hash": _S, "text_path": _S, "source": _S, "bytes": _I, "scene_type": _S},
+    ),
+    "correction.issued": _obj(
+        ["correction_id", "corrects", "reason", "changes"],
+        {"correction_id": _S, "corrects": _A, "reason": _S, "changes": _A, "state": _S, "inconsistency_detected": _B},
+    ),
+    "correction.recomputed": _obj(
+        ["correction_id", "affected", "outcome"],
+        {"correction_id": _S, "affected": _A, "outcome": _S},
+    ),
+    "projection.rebuilt": _obj(
+        ["from_seq", "to_seq", "projection_version", "hash"],
+        {"from_seq": _I, "to_seq": _I, "projection_version": _I, "hash": _S},
+    ),
 }
 
 __all__ = ["V1_EVENT_SCHEMAS"]

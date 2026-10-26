@@ -15,7 +15,7 @@ from resources.progression import (
     spend_attribute_point_in_ficha,
     update_progression_in_ficha,
 )
-from resources.sheet import parse_ficha_md, upsert_ficha_feature
+from resources.sheet import normalize_vital_key, parse_ficha_md, upsert_ficha_feature
 from rulesets.progression import DEFAULT_BASE_STEP
 
 _DEFAULT_FICHA = """# Ficha do Protagonista
@@ -47,6 +47,9 @@ _DEFAULT_FICHA = """# Ficha do Protagonista
 
 ### Equipamento & Inventário
 * *(Vazio)*
+
+### Vínculos, Laços & Matriz Relacional
+* **Reputação com Facções:**
 
 ### Reputação de Facções
 """
@@ -158,16 +161,19 @@ class CharacterSheetProjector:
                 upsert_ficha_feature(tmp, item=target)
             elif kind == "vital":
                 ficha_data = parse_ficha_md(tmp)
-                if target in ficha_data.get("vitals", {}):
-                    v = ficha_data["vitals"][target]
-                    if "delta" in p and p.get("source") == "commit_cost":
+                v_key = normalize_vital_key(target, ficha_data.get("vitals", {}))
+                if v_key in ficha_data.get("vitals", {}):
+                    v = ficha_data["vitals"][v_key]
+                    if "delta" in p and (val is None or p.get("source") == "commit_cost"):
                         new_val = max(0, min(v["max"], v["current"] + int(p["delta"])))
+                    elif isinstance(val, str) and val.strip().startswith(("-", "+")) and val.strip()[1:].isdigit():
+                        new_val = max(0, min(v["max"], v["current"] + int(val.strip())))
                     else:
                         new_val = max(0, min(v["max"], int(val)))
                     pattern = rf"(\*\s*\*\*{re.escape(v['label'])}:\*\*\s*)\d+(\s*/\s*{v['max']})"
                     tmp.write_text(re.sub(pattern, rf"\g<1>{new_val}\g<2>", tmp.read_text(encoding="utf-8")), encoding="utf-8")
                 else:
-                    tmp.write_text(self._update_vital(tmp.read_text(encoding="utf-8"), target, int(val)), encoding="utf-8")
+                    tmp.write_text(self._update_vital(tmp.read_text(encoding="utf-8"), v_key, int(val or p.get("delta", 0))), encoding="utf-8")
             else:
                 tmp.write_text(self._apply_sheet_change(tmp.read_text(encoding="utf-8"), kind, target, val, pts_rem), encoding="utf-8")
 

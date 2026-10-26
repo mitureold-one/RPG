@@ -473,8 +473,11 @@ def cmd_correct(
     if vital and ":" in vital:
         target, val = vital.split(":", 1)
         val_s = val.strip()
-        new_v = int(val_s) if (val_s.isdigit() or (val_s.startswith(("-", "+")) and val_s[1:].isdigit())) else val_s
-        changes.append({"field": "sheet", "kind": "vital", "target": target.strip(), "new_value": new_v})
+        if val_s.startswith(("-", "+")) and val_s[1:].isdigit():
+            changes.append({"field": "sheet", "kind": "vital", "target": target.strip(), "delta": int(val_s)})
+        else:
+            new_v = int(val_s) if val_s.isdigit() else val_s
+            changes.append({"field": "sheet", "kind": "vital", "target": target.strip(), "new_value": new_v})
     if rep and ":" in rep:
         fac, val = rep.split(":", 1)
         val_s = val.strip()

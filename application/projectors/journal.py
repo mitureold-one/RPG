@@ -11,11 +11,7 @@ from contracts.ports import EventStreamView, ProjectionSection
 from council.factions import append_faction_ledger_entry
 from council.quests import append_xp_ledger_entry, upsert_quest_in_diario
 from resources.clocks import upsert_clock_in_diario
-from resources.ledger import (
-    parse_diario_md,
-    update_arc_in_diario,
-    upsert_planned_scene_in_diario,
-)
+from resources.ledger import parse_diario_md, update_arc_in_diario, upsert_planned_scene_in_diario
 
 _DEFAULT_DIARIO = """<!-- schema_version: 1 -->
 # Diário — Campanha
@@ -70,17 +66,10 @@ class JournalProjector:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp = Path(tmp_dir) / "diario.md"
             tmp.write_text(init_txt, encoding="utf-8")
-
             for ev in view.events:
                 self._apply_event(tmp, ev)
-
             final_text = tmp.read_text(encoding="utf-8")
-
-        return ProjectionSection(
-            file=self.file,
-            section=self.section,
-            content=final_text.rstrip() + "\n",
-        )
+        return ProjectionSection(file=self.file, section=self.section, content=final_text.rstrip() + "\n")
 
     def _apply_event(self, tmp: Path, ev: Any) -> None:
         meta = ev.meta or {}
@@ -99,12 +88,7 @@ class JournalProjector:
             title = str(p.get("title", "Campanha"))
             start_gt = str(p.get("start_game_time", ev.game_time))
             text = re.sub(r"(?m)^#\s*Diário[^\n]*", f"# Diário — {title}", text, count=1)
-            text = re.sub(
-                r"(\*\s*\*\*Data\s*&\s*Local:\*\*\s*)[^\n]+",
-                rf"\g<1>{start_gt} — Local Ativo.",
-                text,
-                count=1,
-            )
+            text = re.sub(r"(\*\s*\*\*Data\s*&\s*Local:\*\*\s*)[^\n]+", rf"\g<1>{start_gt} — Local Ativo.", text, count=1)
             tmp.write_text(text, encoding="utf-8")
             return
 
@@ -120,27 +104,16 @@ class JournalProjector:
             name = str(p.get("name", ""))
             if t == "clock.created":
                 upsert_clock_in_diario(
-                    tmp,
-                    name,
-                    current=int(p.get("current", 0)),
-                    max_steps=int(p.get("max", 4)),
-                    trigger=str(p.get("trigger", "")),
-                    status=str(p.get("status", "")),
-                    create_if_missing=True,
+                    tmp, name, current=int(p.get("current", 0)), max_steps=int(p.get("max", 4)),
+                    trigger=str(p.get("trigger", "")), status=str(p.get("status", "")), create_if_missing=True,
                 )
             elif t == "clock.advanced":
                 cur_arg = int(p["current"]) if "current" in p else None
                 adv_arg = int(p["delta"]) if ("current" not in p and "delta" in p) else None
                 mx_arg = int(p["max"]) if "max" in p else None
                 upsert_clock_in_diario(
-                    tmp,
-                    name,
-                    current=cur_arg,
-                    advance=adv_arg,
-                    max_steps=mx_arg,
-                    trigger=str(p.get("trigger", "")),
-                    status=str(p.get("status", "")),
-                    create_if_missing=True,
+                    tmp, name, current=cur_arg, advance=adv_arg, max_steps=mx_arg,
+                    trigger=str(p.get("trigger", "")), status=str(p.get("status", "")), create_if_missing=True,
                 )
             else:
                 st = str(p.get("status") or p.get("outcome") or "RESOLVED").upper()
@@ -151,16 +124,10 @@ class JournalProjector:
         elif t == "quest.created":
             objs = p.get("objectives") or [""]
             upsert_quest_in_diario(
-                tmp,
-                "add",
-                title=str(p.get("title", "")),
-                quest_type=str(p.get("type", "MAIN")),
-                objective=str(objs[0]) if objs else "",
-                contractor=str(p.get("contractor") or ""),
-                clock=str(p.get("clock") or ""),
-                reward=str(p.get("reward") or ""),
-                phase=str(p.get("phase") or ""),
-                current_turn=p.get("turn"),
+                tmp, "add", title=str(p.get("title", "")), quest_type=str(p.get("type", "MAIN")),
+                objective=str(objs[0]) if objs else "", contractor=str(p.get("contractor") or ""),
+                clock=str(p.get("clock") or ""), reward=str(p.get("reward") or ""),
+                phase=str(p.get("phase") or ""), current_turn=p.get("turn"),
             )
         elif t == "quest.objective_completed":
             qid = str(p.get("id") or p.get("quest_id") or "")
@@ -171,64 +138,35 @@ class JournalProjector:
             xp_aw = p.get("xp_awarded")
             xp_paid_arg = int(xp_aw) if (xp_aw is not None and int(xp_aw) > 0) else None
             upsert_quest_in_diario(
-                tmp,
-                "complete",
-                quest_id=qid,
-                evidence=str(p.get("evidence") or ""),
-                xp_paid=xp_paid_arg,
-                current_turn=p.get("turn"),
+                tmp, "complete", quest_id=qid, evidence=str(p.get("evidence") or ""),
+                xp_paid=xp_paid_arg, current_turn=p.get("turn"),
             )
         elif t == "quest.failed":
             qid = str(p.get("id") or p.get("quest_id") or "")
-            r = str(p.get("reason") or "")
-            if r == "Sem justificativa":
-                r = ""
+            r = "" if str(p.get("reason") or "") == "Sem justificativa" else str(p.get("reason") or "")
             upsert_quest_in_diario(tmp, "fail", quest_id=qid, reason=r, current_turn=p.get("turn"))
         elif t == "quest.status_changed":
             qid = str(p.get("id") or p.get("quest_id") or "")
-            act = str(p.get("action") or "")
-            if not act:
-                st_map = {
-                    "BLOCKED": "block",
-                    "ABANDONED": "abandon",
-                    "FAILED": "fail",
-                    "COMPLETED": "complete",
-                    "ACTIVE": "reopen",
-                }
-                act = st_map.get(str(p.get("status", "ACTIVE")).upper(), "reopen")
+            st_map = {"BLOCKED": "block", "ABANDONED": "abandon", "FAILED": "fail", "COMPLETED": "complete", "ACTIVE": "reopen"}
+            act = str(p.get("action") or "") or st_map.get(str(p.get("status", "ACTIVE")).upper(), "reopen")
             upsert_quest_in_diario(
-                tmp,
-                act,
-                quest_id=qid,
-                objective=str(p.get("objective") or ""),
-                reason=str(p.get("reason") or ""),
-                current_turn=p.get("turn"),
+                tmp, act, quest_id=qid, objective=str(p.get("objective") or ""),
+                reason=str(p.get("reason") or ""), current_turn=p.get("turn"),
             )
         elif t == "scene.planned":
-            upsert_planned_scene_in_diario(
-                tmp,
-                scene_type=str(p.get("scene_type", "interlude")),
-                beat=str(p.get("beat", "")),
-                actors=str(p.get("actors", "")),
-            )
+            upsert_planned_scene_in_diario(tmp, scene_type=str(p.get("scene_type", "interlude")), beat=str(p.get("beat", "")), actors=str(p.get("actors", "")))
         elif t == "scene.completed":
             upsert_planned_scene_in_diario(tmp, mark_done_idx=int(p.get("index", 0)))
         elif t == "arc.updated":
-            if p.get("future_milestone") and not any(
-                p.get(k) for k in ("title", "question", "stage", "scene_name", "date_time", "location", "present", "resolve_clocks", "milestone")
-            ):
+            arc_keys = ("title", "question", "stage", "scene_name", "date_time", "location", "present", "resolve_clocks", "milestone")
+            if p.get("future_milestone") and not any(p.get(k) for k in arc_keys):
                 upsert_planned_scene_in_diario(tmp, future_milestone=str(p["future_milestone"]))
             else:
                 update_arc_in_diario(
-                    tmp,
-                    title=str(p.get("title", "")),
-                    central_question=str(p.get("question", "")),
-                    stage=str(p.get("stage", "")),
-                    scene_name=str(p.get("scene_name", "")),
-                    date_time=str(p.get("date_time", "")),
-                    location=str(p.get("location", "")),
-                    present=str(p.get("present", "")),
-                    resolve_clocks=bool(p.get("resolve_clocks", False)),
+                    tmp, title=str(p.get("title", "")), central_question=str(p.get("question", "")),
+                    stage=str(p.get("stage", "")), scene_name=str(p.get("scene_name", "")),
+                    date_time=str(p.get("date_time", "")), location=str(p.get("location", "")),
+                    present=str(p.get("present", "")), resolve_clocks=bool(p.get("resolve_clocks", False)),
                     archive_milestone=str(p.get("milestone", "")),
                 )
         elif t == "protagonist.progression_changed":
@@ -239,14 +177,9 @@ class JournalProjector:
         elif t == "faction.reputation_changed":
             t_num = int(p["turn"]) if p.get("turn") is not None else None
             append_faction_ledger_entry(
-                tmp,
-                faction_name=str(p.get("faction", "")),
-                delta_rep=int(p.get("delta_rep", 0)),
-                new_score=int(p.get("new_score", 0)),
-                reason=str(p.get("reason", "")),
-                turn=t_num,
-                delta_favors=int(p.get("delta_favors", 0)),
-                delta_debts=int(p.get("delta_debts", 0)),
+                tmp, faction_name=str(p.get("faction", "")), delta_rep=int(p.get("delta_rep", 0)),
+                new_score=int(p.get("new_score", 0)), reason=str(p.get("reason", "")), turn=t_num,
+                delta_favors=int(p.get("delta_favors", 0)), delta_debts=int(p.get("delta_debts", 0)),
                 quest_id=str(p.get("quest_id", "")),
             )
         elif t == "turn.committed":
@@ -260,14 +193,9 @@ class JournalProjector:
             tmp.write_text(self._append_history(tmp.read_text(encoding="utf-8"), entry), encoding="utf-8")
         elif t == "correction.recomputed":
             cor_id = str(p.get("correction_id", ""))
-            outcome = str(p.get("outcome", ""))
-            if outcome in ("RESOLVED", "COMPENSATED"):
-                text = re.sub(
-                    rf"(\*\s*\*\*\[Correção {re.escape(cor_id)}\]\*\*\s*Alvo:\s*`[^`]*`\s*\|\s*Estado:\s*)`[^`]+`",
-                    r"\g<1>`concluída`",
-                    tmp.read_text(encoding="utf-8"),
-                )
-                tmp.write_text(text, encoding="utf-8")
+            if str(p.get("outcome", "")) in ("RESOLVED", "COMPENSATED"):
+                pat = rf"(\*\s*\*\*\[Correção {re.escape(cor_id)}\]\*\*\s*Alvo:\s*`[^`]*`\s*\|\s*Estado:\s*)`[^`]+`"
+                tmp.write_text(re.sub(pat, r"\g<1>`concluída`", tmp.read_text(encoding="utf-8")), encoding="utf-8")
 
     @staticmethod
     def _apply_turn_committed(tmp: Path, ev: Any, p: dict[str, Any]) -> None:
@@ -275,24 +203,10 @@ class JournalProjector:
         loc = str(p.get("location", "Local Ativo"))
         pres = p.get("present", "")
         pres_str = ", ".join(str(x) for x in pres) if isinstance(pres, (list, tuple)) else str(pres)
-        time_ch = p.get("time_changed", True)
-        loc_ch = p.get("location_changed", True)
-        pres_ch = p.get("present_changed", bool(pres_str))
-
-        if time_ch or loc_ch:
-            d_text = re.sub(
-                r"(\*\s*\*\*Data\s*&\s*Local:\*\*\s*)[^\n]+",
-                rf"\g<1>{ev.game_time} — {loc}.",
-                d_text,
-                count=1,
-            )
-        if pres_ch and pres_str:
-            d_text = re.sub(
-                r"(\*\s*\*\*Presentes:\*\*\s*)[^\n]+",
-                rf"\g<1>{pres_str}.",
-                d_text,
-                count=1,
-            )
+        if p.get("time_changed", True) or p.get("location_changed", True):
+            d_text = re.sub(r"(\*\s*\*\*Data\s*&\s*Local:\*\*\s*)[^\n]+", rf"\g<1>{ev.game_time} — {loc}.", d_text, count=1)
+        if p.get("present_changed", bool(pres_str)) and pres_str:
+            d_text = re.sub(r"(\*\s*\*\*Presentes:\*\*\s*)[^\n]+", rf"\g<1>{pres_str}.", d_text, count=1)
         tag_prefix = _SCENE_TAGS.get(str(p.get("scene_type", "standard")), "")
         clean_summary = re.sub(r"\s*Vitais:\s*[^\n]+$", "", str(p.get("summary", "")).strip()).rstrip(".")
         vitals_line = str(p.get("vitals_line") or "")
@@ -323,9 +237,7 @@ class JournalProjector:
         lines = [f"* **Tick Off-Screen (Turno {cur_turn}):**"]
         for adv in advancements:
             b_note = " [Gatilho de Ruptura Disparado!]" if adv.get("status") == "BREACHED" else ""
-            lines.append(
-                f"  * **{adv['faction']}:** Avançou relógio '{adv['clock']}' para {adv['new_progress']} (Poder {adv['power']}){b_note}."
-            )
+            lines.append(f"  * **{adv['faction']}:** Avançou relógio '{adv['clock']}' para {adv['new_progress']} (Poder {adv['power']}){b_note}.")
         entry_block = "\n".join(lines)
         sec_header = "### Movimentações de Facções Off-Screen"
         if sec_header in d_text:

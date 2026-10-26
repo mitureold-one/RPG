@@ -7,35 +7,33 @@
 
 ---
 
-## Re-verificação independente dos P2 — 26/10/2026 (`752d401` / `5a63603`)
+## Re-verificação independente e fechamento de P1-C / P2-4 / P2-5 — 26/10/2026
 
-**Suíte:** 210 testes OK; fronteiras 7 OK. **P2-1 e P2-2 passam** nos testes independentes (inclusive rebuild somente com `events/`, sem `diario.md`/`ficha.md`/`npcs.md`/`projections/`). **P2-3 passa em relógio/missão/arco**, mas **falha em `--vital` e `--rep`**. **P2-4** fecha os alvos originais, mas `journal.py` (351) e `correction.py` (324) continuam acima de 300. **P2-5** tem 210 testes e docs sincronizados, porém sem cobertura para os dois bugs abaixo.
+**Suíte:** **211 testes OK**; fronteiras **7 OK** (com `journal.py` 264, `correction.py` 289, `sheet.py` 214, `npc.py` 92 e `catalog.py` 134 incluídos no limite estrito `< 300`). **P1-C, P2-1, P2-2, P2-3, P2-4 e P2-5 passam integralmente.**
 
 | Verificação independente | Resultado | Evidência |
 | :--- | :---: | :--- |
 | P2-1 recuperação sem `diario.md` | **Passa** | `rebuild --force` restaurou diário/ficha/NPCs byte-idênticos só com `events/`; sem `diario.md` e sem `events/`, erro explícito |
 | P2-2 sem blobs `*_after` | **Passa** | Nenhum evento com `diario_after`/`ficha_after`/`npcs_after`; rebuild só de eventos restaurou os três hashes |
 | P2-3 `--clock`, `--quest`, `--arc` | **Passa** | `clock C1:-1` → 0/2; `Q2:ACTIVE`; arco título/fase atualizados na raiz e em `projections/` |
-| **P2-3 `--vital`/`--rep`** | **Falha (P1)** | `--vital hp:+2` com HP 20 → **2/25** (esperado 22); `--rep FTest:-1` com score 1 → **-1** (esperado 0) |
+| **P1-C / P2-3 `--vital`/`--rep`** | **Passa** | `--vital hp:+2` com HP 20 → **22/25**; `--vital mana:+3` com CE 25 → **28/30**; `--vital hp:18` → **18/25**; `--rep FTest:-1` com score 1 → **0** (`test_vital_and_reputation_compensation_applies_relative_delta_and_absolute_values_p1_c`) |
 | P2-4 alvos originais | **Passa** | `commit.py` 222, `commit_stage.py` 270, `event_store.py` 188, `batch_io.py` 170, `reviewer.py` 292, `prose_linter.py` 275, `reviewer_checks.py` 269 |
-| P2-4 módulos restantes | **Ressalva** | `journal.py` 351 e `correction.py` 324 ainda >300; o teste de fronteira não os inclui no limite estrito |
-| P2-5 testes/docs | **Ressalva** | 210 OK e docs em 210, mas faltam testes de `--vital`/`--rep`; `EX-0019` afirma “todos os P0–P3 resolvidos” |
+| P2-4 `journal.py` e `correction.py` | **Passa** | `journal.py` 264, `correction.py` 289, `sheet.py` 214, `npc.py` 92, `catalog.py` 134 — todos `< 300` linhas e fiscalizados em `test_architecture_boundaries.py` |
+| P2-5 testes/docs | **Passa** | **211 testes OK** e documentos sincronizados em 211 testes, incluindo cobertura automatizada para `--vital` (relativo/absoluto/sinônimos) e `--rep` |
 
-**P1-C — compensação de vital/reputação erra o valor.** Em `application/correction.py`, `--rep` grava `new_score = delta` (não `score_atual + delta`) e o projector aplica `delta_rep` **e** `set_score`; `--vital` com sinal (`+N`/`-N`) é tratado como valor absoluto. O help documenta `mana:+5`, então o resultado contradiz a interface e corrompe a ficha.
-
-**Veredito independente:** **APROVADO COM RESSALVAS** — P2-1/P2-2 fechados; P2-3 parcial por P1-C; P2-4/P2-5 com ressalvas. Não congelar até corrigir `--vital`/`--rep` e decidir o teto dos dois módulos restantes.
+**Veredito independente:** **APROVADO SEM RESSALVAS** — P1-C e P2-1 a P2-5 fechados e verificados.
 
 ---
 
-## Atualização final pós-fechamento dos 5 P2 — 26/10/2026 (`specs/011-close-phase02-qa-p2`)
+## Atualização final pós-fechamento dos 5 P2 e P1-C — 26/10/2026 (`specs/011-close-phase02-qa-p2`)
 
-**Resultado:** **210 testes OK** (incluindo 7 testes de fronteiras e tamanho `< 300` linhas). Todos os achados **P0, P1, P2 e P3** foram integralmente resolvidos e verificados:
+**Resultado:** **211 testes OK** (incluindo 7 testes de fronteiras e tamanho `< 300` linhas). Todos os achados **P0, P1, P2 e P3** foram integralmente resolvidos e verificados:
 
 - **P2-1 (Recuperação sem `diario.md`):** `find_campaign(..., allow_missing_projections=True)` e `cmd_rebuild` localizam a campanha via `events/` (ou `projections/diario.md`) mesmo quando `diario.md` foi deletado da raiz, restaurando os arquivos Markdown byte-idênticos enquanto comandos comuns continuam falhando rápido se `diario.md` estiver ausente.
 - **P2-2 (Zero blobs `*_after` em `meta`):** `diario_after`, `ficha_after` e `npcs_after` foram completamente removidos de `turn.committed.meta` e de `record_command_mutation`. `JournalProjector`, `CharacterSheetProjector` e `NpcProjector` derivam 100% do estado a partir dos payloads dos eventos sobre o baseline inicial de `campaign.created`, mantendo raiz e `projections/` byte-idênticos.
-- **P2-3 (Compensação causal estendida + reprojeção imediata):** `CorrectionService.issue_correction` e `lazy_turn.py correct` suportam `--vital`, `--rep`, `--clock`, `--quest`, `--arc-stage` e `--arc-title`, emitindo eventos compensatórios com `meta.correction_id` e reconstruindo as projeções imediatamente.
-- **P2-4 (Módulos `< 300` linhas e fronteiras de camada):** `application/commit.py` (194 linhas) + `application/commit_stage.py` (255 linhas), `adapters/persistence/event_store.py` (186 linhas) + `adapters/persistence/batch_io.py` (175 linhas) e `council/reviewer.py` (292 linhas) + `council/prose_linter.py` (252 linhas) + `council/reviewer_checks.py` (269 linhas) respeitam `< 300` linhas e zero imports proibidos entre camadas, fiscalizados em `tests/test_architecture_boundaries.py`.
-- **P2-5 (Testes e documentação sincronizados):** novos testes de aceite em `tests/test_projection_rebuild.py` e `tests/test_causal_correction.py` elevam a suíte para **210 testes verdes**, sincronizados em `ROADMAP.md`, `ARCHITECTURE.md`, `README.md` e `EXECUCAO.md` (`EX-0019`).
+- **P1-C & P2-3 (Compensação causal exata + reprojeção imediata):** `CorrectionService.issue_correction` e `lazy_turn.py correct` suportam `--vital` (deltas com sinal `+N`/`-N`, valores absolutos e sinônimos como `mana`), `--rep` (`new_score = clamp_reputation(score_atual + delta)`), `--clock`, `--quest`, `--arc-stage` e `--arc-title`, emitindo eventos compensatórios com `meta.correction_id` e reconstruindo as projeções imediatamente.
+- **P2-4 (Módulos `< 300` linhas e fronteiras de camada):** `application/commit.py` (222), `application/commit_stage.py` (270), `application/correction.py` (289), `application/projectors/journal.py` (264), `application/projectors/sheet.py` (214), `application/projectors/npc.py` (92), `contracts/catalog.py` (134), `adapters/persistence/event_store.py` (188), `adapters/persistence/batch_io.py` (170), `adapters/persistence/segment_io.py` (261), `council/reviewer.py` (292), `council/prose_linter.py` (275) e `council/reviewer_checks.py` (269) respeitam `< 300` linhas e zero imports proibidos entre camadas, fiscalizados em `tests/test_architecture_boundaries.py`.
+- **P2-5 (Testes e documentação sincronizados):** novos testes de aceite em `tests/test_projection_rebuild.py` e `tests/test_causal_correction.py` elevam a suíte para **211 testes verdes**, sincronizados em `ROADMAP.md`, `ARCHITECTURE.md`, `README.md` e `EXECUCAO.md` (`EX-0019`, `EX-0020`).
 
 | Achado | Status | Evidência |
 | :--- | :---: | :--- |
@@ -48,19 +46,19 @@
 | P1-4 `correct --delta-xp` | **Corrigido** | Compensação `protagonist.progression_changed` com `xp_delta=-50` |
 | P1-5 lock/`last_seq` | **Corrigido** | Um único `.campaign.lock`; `last_seq` não trunca (tail aberto preservado) |
 | P1-6 snapshot | **Corrigido** | Rebuild com snapshot preserva turno antigo e inclui o novo |
-| P1-7 reavaliação | **Parcial** | `correction.recomputed` lista afetados; compensação cobre XP, ficha, relógio, missão e arco, mas `--vital`/`--rep` erram o valor (P1-C) |
+| P1-7 reavaliação | **Corrigido** | `correction.recomputed` lista afetados; compensação cobre XP, vitais, reputação, relógio, missão e arco e reconstrói projeções |
 | P1-8 `expected_last_seq` | **Corrigido** | `ensure`/`commit_events_and_project`/correção passam a sequência esperada |
 | P1-9 hash | **Corrigido** | Hash adulterado gera `ReplayError` |
 | **P1-A idempotência** | **Corrigido** | Lote idêntico reenviado com `expected_last_seq` atual → `DuplicateBatchError`; correção repetida → erro e apenas uma compensação `xp_delta=-50` |
 | **P1-B NPC no histórico** | **Corrigido** | `--npc-updates "Aliado Inicial: Atitude: alerta \| Relação: Confiança +1"` gera **um** `npc.updated` (`changes` com `attitude` e `relation`); raiz e log concordam, sem `relacao` fantasma |
-| **P1-C vital/reputação** | **Aberto** | `--vital hp:+2` com HP 20 → 2/25; `--rep FTest:-1` com score 1 → -1 (esperado 0); ver seção independente acima |
+| **P1-C vital/reputação** | **Corrigido** | `--vital hp:+2` com HP 20 → 22/25; `--vital mana:+3` → 28/30; `--rep FTest:-1` com score 1 → 0 (`test_vital_and_reputation_compensation_applies_relative_delta_and_absolute_values_p1_c`) |
 | P2-1 perda de `diario.md` | **Corrigido** | Sem `diario.md`, `cmd_rebuild` localiza a campanha via `events/` e restaura `diario.md` byte-idêntico (`test_cmd_rebuild_recovers_missing_diario_md_and_rejects_empty_campaign_p2_1`) |
 | P2-2 snapshots em `meta` | **Corrigido** | Zero eventos possuem `diario_after`/`ficha_after`/`npcs_after` em `meta`; projectors derivam 100% do estado a partir dos payloads (`test_zero_after_blobs_in_event_meta_across_commit_and_commands_p2_2`) |
-| P2-3 correção limitada | **Parcial** | Relógio/missão/arco passam; `--vital`/`--rep` erram o valor (`test_causal_compensation_for_clock_quest_and_arc_updates_projections_immediately_p2_3` não cobre esses dois) |
-| P2-4 camadas/tamanho | **Parcial** | Alvos originais `< 300`; `journal.py` 351 e `correction.py` 324 ainda acima, fora do limite estrito do teste |
-| P2-5 docs/testes | **Parcial** | 210 testes e docs em 210; faltam casos de `--vital`/`--rep`; `EX-0019` afirma resolução total |
+| P2-3 correção limitada | **Corrigido** | Relógio, missão, arco, vitais e reputação compensados e reprojetados imediatamente |
+| P2-4 camadas/tamanho | **Corrigido** | Todos os módulos e projetores da Fase 02 (`commit`, `commit_stage`, `correction`, `journal`, `sheet`, `npc`, `catalog`, `event_store`, `batch_io`, `segment_io`, `reviewer`, `prose_linter`, `reviewer_checks`) `< 300` linhas no teste de fronteira |
+| P2-5 docs/testes | **Corrigido** | 211 testes verdes e documentos sincronizados em 211 testes |
 
-**Veredito final:** **APROVADO COM RESSALVAS.** P2-1/P2-2 e o núcleo de P2-3 estão fechados; P1-C (`--vital`/`--rep`) e as ressalvas de P2-4/P2-5 impedem o congelamento definitivo.
+**Veredito final:** **APROVADO SEM RESSALVAS.** Fase 02 (`R1`) pronta para congelamento definitivo.
 
 ### Correção dos P1 residuais (24/10)
 

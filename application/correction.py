@@ -2,29 +2,41 @@
 
 from __future__ import annotations
 
+import tempfile
 from pathlib import Path
 from typing import Any, Sequence
 
+from application.projectors.sheet import CharacterSheetProjector
 from application.rebuild import rebuild_projections
 from contracts.event import ActorRef, AppendResult, EventDraft
-from contracts.ports import EventStore
+from contracts.ports import EventStore, EventStreamView
 from contracts.serialization import canonical_json
+from council.factions import clamp_reputation, normalize_ascii_slug, parse_reputation_from_ficha
 from council.reviewer_checks import check_causal_inconsistencies
 from kernel.dag import DependencyGraph
 from kernel.errors import DuplicateBatchError, ValidationError
 from kernel.ids import new_correction_id
+from resources.sheet import normalize_vital_key, parse_ficha_md
 from rulesets.progression import calculate_level_from_xp
+
+
+def _draft(etype: str, actor: ActorRef, payload: dict[str, Any], gt: str, gts: int, meta: dict[str, Any]) -> EventDraft:
+    return EventDraft(type=etype, schema_version=1, actor=actor, payload=payload, game_time=gt, game_time_sort=gts, meta=dict(meta))
+
+
+def _project_current_sheet(all_events: tuple) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
+    cid = all_events[0].campaign_id if all_events else "default"
+    sec = CharacterSheetProjector().project(EventStreamView(cid, all_events))
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        p = Path(tmp_dir) / "ficha.md"
+        p.write_text(sec.content, encoding="utf-8")
+        return parse_ficha_md(p), parse_reputation_from_ficha(p)
 
 
 class CorrectionService:
     """Gerencia emissão de correções, cálculo de compensações e alerta de inconsistências."""
 
-    def __init__(
-        self,
-        store: EventStore,
-        dep_graph: DependencyGraph | None = None,
-        campaign_dir: Path | str | None = None,
-    ) -> None:
+    def __init__(self, store: EventStore, dep_graph: DependencyGraph | None = None, campaign_dir: Path | str | None = None) -> None:
         self.store = store
         self.dep_graph = dep_graph or DependencyGraph()
         self.campaign_dir = Path(campaign_dir) if campaign_dir is not None else None
@@ -79,25 +91,23 @@ class CorrectionService:
             for existing in all_events:
                 if existing.type != "correction.issued":
                     continue
-                if sorted(existing.payload.get("corrects", [])) != deps_key:
-                    continue
-                if canonical_json(existing.payload.get("changes", [])) != changes_key:
-                    continue
-                if str(existing.payload.get("reason", "")).strip() != reason.strip():
-                    continue
-                existing_cor_id = existing.payload.get("correction_id")
-                already_resolved = any(
-                    e.type == "correction.recomputed"
-                    and e.payload.get("correction_id") == existing_cor_id
-                    and e.payload.get("outcome") == "RESOLVED"
-                    for e in all_events
-                )
-                if not already_resolved:
-                    raise DuplicateBatchError(
-                        "Correção idêntica já registrada e ainda pendente; "
-                        "resolva-a ou altere motivo/alterações.",
-                        details={"correction_id": existing_cor_id, "corrects": deps_key},
+                if (
+                    sorted(existing.payload.get("corrects", [])) == deps_key
+                    and canonical_json(existing.payload.get("changes", [])) == changes_key
+                    and str(existing.payload.get("reason", "")).strip() == reason.strip()
+                ):
+                    existing_cor_id = existing.payload.get("correction_id")
+                    already_resolved = any(
+                        e.type == "correction.recomputed"
+                        and e.payload.get("correction_id") == existing_cor_id
+                        and e.payload.get("outcome") == "RESOLVED"
+                        for e in all_events
                     )
+                    if not already_resolved:
+                        raise DuplicateBatchError(
+                            "Correção idêntica já registrada e ainda pendente; resolva-a ou altere motivo/alterações.",
+                            details={"correction_id": existing_cor_id, "corrects": deps_key},
+                        )
 
         forward_adj: dict[str, list[str]] = {}
         for e in all_events:
@@ -113,14 +123,13 @@ class CorrectionService:
             if target_cor_id in event_by_id and event_by_id[target_cor_id].type == "correction.issued":
                 target_cor_id = str(event_by_id[target_cor_id].payload.get("correction_id", target_cor_id))
             drafts = [
-                EventDraft(
-                    type="correction.recomputed",
-                    schema_version=1,
-                    actor=actor,
-                    payload={"correction_id": target_cor_id, "affected": affected_ids, "outcome": "RESOLVED"},
-                    game_time=game_time,
-                    game_time_sort=game_time_sort,
-                    meta={"dependencies": resolved_deps},
+                _draft(
+                    "correction.recomputed",
+                    actor,
+                    {"correction_id": target_cor_id, "affected": affected_ids, "outcome": "RESOLVED"},
+                    game_time,
+                    game_time_sort,
+                    {"dependencies": resolved_deps},
                 )
             ]
             res = self.store.append(campaign_id, drafts, expected_last_seq=expected_seq)
@@ -129,11 +138,10 @@ class CorrectionService:
 
         inconsistency_detected = any(bool(c.get("inconsistent") or c.get("contradiction")) for c in changes)
         drafts = [
-            EventDraft(
-                type="correction.issued",
-                schema_version=1,
-                actor=actor,
-                payload={
+            _draft(
+                "correction.issued",
+                actor,
+                {
                     "correction_id": cor_id,
                     "corrects": list(resolved_deps),
                     "reason": reason.strip(),
@@ -141,30 +149,27 @@ class CorrectionService:
                     "state": "pendente" if inconsistency_detected else "concluída",
                     "inconsistency_detected": inconsistency_detected,
                 },
-                game_time=game_time,
-                game_time_sort=game_time_sort,
-                meta={"dependencies": list(resolved_deps)},
+                game_time,
+                game_time_sort,
+                {"dependencies": list(resolved_deps)},
             )
         ]
 
         if not inconsistency_detected:
             meta_comp = {"dependencies": list(resolved_deps), "correction_id": cor_id}
             for ch in changes:
-                self._append_compensation_drafts(
-                    drafts, ch, all_events, actor, cor_id, reason.strip(), game_time, game_time_sort, meta_comp
-                )
+                self._append_compensation_drafts(drafts, ch, all_events, actor, cor_id, reason.strip(), game_time, game_time_sort, meta_comp)
 
         if affected_ids or inconsistency_detected:
             outcome = "INCONSISTENCY_PENDING_REVIEW" if inconsistency_detected else "COMPENSATED"
             drafts.append(
-                EventDraft(
-                    type="correction.recomputed",
-                    schema_version=1,
-                    actor=actor,
-                    payload={"correction_id": cor_id, "affected": affected_ids, "outcome": outcome},
-                    game_time=game_time,
-                    game_time_sort=game_time_sort,
-                    meta={"dependencies": list(resolved_deps)},
+                _draft(
+                    "correction.recomputed",
+                    actor,
+                    {"correction_id": cor_id, "affected": affected_ids, "outcome": outcome},
+                    game_time,
+                    game_time_sort,
+                    {"dependencies": list(resolved_deps)},
                 )
             )
 
@@ -193,59 +198,63 @@ class CorrectionService:
                     cur_xp = int(e.payload.get("xp_total", cur_xp))
             new_xp = max(0, cur_xp + delta)
             new_level, _ = calculate_level_from_xp(new_xp)
-            drafts.append(
-                EventDraft(
-                    type="protagonist.progression_changed",
-                    schema_version=1,
-                    actor=actor,
-                    payload={
-                        "xp_delta": delta,
-                        "xp_total": new_xp,
-                        "level": new_level,
-                        "attribute_points": 0,
-                        "ability_points": 0,
-                        "source": f"compensação_{cor_id}",
-                    },
-                    game_time=gt,
-                    game_time_sort=gts,
-                    meta=dict(meta_comp),
-                )
-            )
-        elif field in ("sheet", "vital", "hp", "stamina", "ce", "attribute", "item", "condition"):
-            kind = str(ch.get("kind") or ("vital" if field in ("hp", "stamina", "ce", "vital") else field))
+            payload = {
+                "xp_delta": delta,
+                "xp_total": new_xp,
+                "level": new_level,
+                "attribute_points": 0,
+                "ability_points": 0,
+                "source": f"compensação_{cor_id}",
+            }
+            drafts.append(_draft("protagonist.progression_changed", actor, payload, gt, gts, meta_comp))
+        elif field in ("sheet", "vital", "hp", "stamina", "ce", "mana", "attribute", "item", "condition"):
+            kind = str(ch.get("kind") or ("vital" if field in ("hp", "stamina", "ce", "mana", "vital") else field))
             target = str(ch.get("target", field))
-            new_val = ch.get("new_value", ch.get("delta", 0))
-            drafts.append(
-                EventDraft(
-                    type="protagonist.sheet_changed",
-                    schema_version=1,
-                    actor=actor,
-                    payload={"kind": kind, "target": target, "new_value": new_val, "source": f"compensação_{cor_id}"},
-                    game_time=gt,
-                    game_time_sort=gts,
-                    meta=dict(meta_comp),
-                )
-            )
+            if kind == "vital":
+                ficha_data, _ = _project_current_sheet(all_events)
+                vitals = ficha_data.get("vitals", {})
+                v_key = normalize_vital_key(target, vitals)
+                v_info = dict(vitals.get(v_key, {"current": 0, "max": 9999}))
+                for d in drafts:
+                    if d.type == "protagonist.sheet_changed" and d.payload.get("kind") == "vital" and d.payload.get("target") == v_key:
+                        v_info["current"] = int(d.payload["new_value"])
+                raw_new = ch.get("new_value")
+                is_signed_str = isinstance(raw_new, str) and raw_new.strip().startswith(("-", "+")) and raw_new.strip()[1:].isdigit()
+                if "delta" in ch and raw_new is None:
+                    delta_v = int(ch["delta"])
+                    new_val = max(0, min(v_info["max"], v_info["current"] + delta_v))
+                elif is_signed_str:
+                    delta_v = int(str(raw_new).strip())
+                    new_val = max(0, min(v_info["max"], v_info["current"] + delta_v))
+                else:
+                    new_val = max(0, min(v_info["max"], int(raw_new if raw_new is not None else ch.get("delta", 0))))
+                    delta_v = new_val - v_info["current"]
+                payload = {"kind": "vital", "target": v_key, "delta": delta_v, "new_value": new_val, "source": f"compensação_{cor_id}"}
+            else:
+                new_val = ch.get("new_value", ch.get("delta", 0))
+                payload = {"kind": kind, "target": target, "new_value": new_val, "source": f"compensação_{cor_id}"}
+            drafts.append(_draft("protagonist.sheet_changed", actor, payload, gt, gts, meta_comp))
         elif field == "reputation" and ch.get("faction"):
-            fac = str(ch["faction"])
-            delta = int(ch.get("delta", 0))
-            new_score = int(ch.get("new_score", delta))
-            drafts.append(
-                EventDraft(
-                    type="faction.reputation_changed",
-                    schema_version=1,
-                    actor=actor,
-                    payload={
-                        "faction": fac,
-                        "delta_rep": delta,
-                        "new_score": new_score,
-                        "reason": f"compensação_{cor_id}: {reason}",
-                    },
-                    game_time=gt,
-                    game_time_sort=gts,
-                    meta=dict(meta_comp),
-                )
-            )
+            fac = str(ch["faction"]).strip()
+            fac_slug = normalize_ascii_slug(fac).lower()
+            _, reps = _project_current_sheet(all_events)
+            cur_score = reps.get(fac.lower(), reps.get(fac_slug, {})).get("score", 0)
+            for e in (*all_events, *drafts):
+                if e.type == "faction.reputation_changed":
+                    efac = str(e.payload.get("faction", "")).strip()
+                    if efac.lower() == fac.lower() or normalize_ascii_slug(efac).lower() == fac_slug:
+                        if "new_score" in e.payload:
+                            cur_score = clamp_reputation(int(e.payload["new_score"]))
+                        else:
+                            cur_score = clamp_reputation(cur_score + int(e.payload.get("delta_rep", 0)))
+            if "new_score" in ch:
+                new_score = clamp_reputation(int(ch["new_score"]))
+                delta = int(ch.get("delta", new_score - cur_score))
+            else:
+                delta = int(ch.get("delta", 0))
+                new_score = clamp_reputation(cur_score + delta)
+            payload = {"faction": fac, "delta_rep": delta, "new_score": new_score, "reason": f"compensação_{cor_id}: {reason}"}
+            drafts.append(_draft("faction.reputation_changed", actor, payload, gt, gts, meta_comp))
         elif field == "clock":
             c_name = str(ch.get("name") or ch.get("clock") or "Relógio")
             cur_val, mx_val = 0, 4
@@ -265,60 +274,21 @@ class CorrectionService:
                 delta = int(ch["delta"])
                 new_cur = max(0, cur_val + delta)
             else:
-                delta = 0
-                new_cur = cur_val
+                delta, new_cur = 0, cur_val
             new_status = str(ch.get("status") or ("BREACHED" if new_cur >= mx_val else "ACTIVE")).upper()
-            drafts.append(
-                EventDraft(
-                    type="clock.advanced",
-                    schema_version=1,
-                    actor=actor,
-                    payload={"name": c_name, "delta": delta, "current": new_cur, "max": mx_val, "status": new_status},
-                    game_time=gt,
-                    game_time_sort=gts,
-                    meta=dict(meta_comp),
-                )
-            )
+            payload = {"name": c_name, "delta": delta, "current": new_cur, "max": mx_val, "status": new_status}
+            drafts.append(_draft("clock.advanced", actor, payload, gt, gts, meta_comp))
             if new_status == "RESOLVED":
-                drafts.append(
-                    EventDraft(
-                        type="clock.resolved",
-                        schema_version=1,
-                        actor=actor,
-                        payload={"name": c_name, "outcome": "RESOLVED"},
-                        game_time=gt,
-                        game_time_sort=gts,
-                        meta=dict(meta_comp),
-                    )
-                )
+                drafts.append(_draft("clock.resolved", actor, {"name": c_name, "outcome": "RESOLVED"}, gt, gts, meta_comp))
         elif field == "quest":
             qid = str(ch.get("quest_id") or ch.get("id") or "Q1").upper()
             new_status = str(ch.get("status", "ACTIVE")).upper()
-            drafts.append(
-                EventDraft(
-                    type="quest.status_changed",
-                    schema_version=1,
-                    actor=actor,
-                    payload={"id": qid, "status": new_status, "reason": f"compensação_{cor_id}: {reason}"},
-                    game_time=gt,
-                    game_time_sort=gts,
-                    meta=dict(meta_comp),
-                )
-            )
+            payload = {"id": qid, "status": new_status, "reason": f"compensação_{cor_id}: {reason}"}
+            drafts.append(_draft("quest.status_changed", actor, payload, gt, gts, meta_comp))
         elif field == "arc":
             arc_payload = {k: str(ch[k]) for k in ("title", "stage", "question") if ch.get(k)}
             if arc_payload:
-                drafts.append(
-                    EventDraft(
-                        type="arc.updated",
-                        schema_version=1,
-                        actor=actor,
-                        payload=arc_payload,
-                        game_time=gt,
-                        game_time_sort=gts,
-                        meta=dict(meta_comp),
-                    )
-                )
+                drafts.append(_draft("arc.updated", actor, arc_payload, gt, gts, meta_comp))
 
 
 __all__ = ["CorrectionService", "check_causal_inconsistencies"]

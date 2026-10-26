@@ -320,7 +320,7 @@ A árvore canônica, as portas de extensão, as regras de dependência e o kerne
 
 ### 7.1 Estado atual
 
-- 210 testes automatizados verdes (incluindo suíte de estabilidade, suíte de contratos com fakes e `JsonlEventStore`, validação de schema/registry/runtime, C1–C4 e todos os cenários da Fase 02/R1 com aprovação integral de QA).
+- 211 testes automatizados verdes (incluindo suíte de estabilidade, suíte de contratos com fakes e `JsonlEventStore`, validação de schema/registry/runtime, C1–C4 e todos os cenários da Fase 02/R1 com aprovação integral de QA).
 - Nenhum teste de comportamento narrativo ainda.
 
 ### 7.2 Cenários obrigatórios da Fase 08

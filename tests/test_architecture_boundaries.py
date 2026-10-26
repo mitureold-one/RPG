@@ -122,6 +122,11 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         strict_300_targets = (
             ROOT / "application" / "commit.py",
             ROOT / "application" / "commit_stage.py",
+            ROOT / "application" / "correction.py",
+            ROOT / "application" / "projectors" / "journal.py",
+            ROOT / "application" / "projectors" / "sheet.py",
+            ROOT / "application" / "projectors" / "npc.py",
+            ROOT / "contracts" / "catalog.py",
             ROOT / "adapters" / "persistence" / "event_store.py",
             ROOT / "adapters" / "persistence" / "batch_io.py",
             ROOT / "adapters" / "persistence" / "segment_io.py",

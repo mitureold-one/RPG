@@ -291,6 +291,80 @@ class CausalCorrectionTests(unittest.TestCase):
             finally:
                 helpers.CAMPAIGN_DIRS = orig_dirs
 
+    def test_vital_and_reputation_compensation_applies_relative_delta_and_absolute_values_p1_c(self) -> None:
+        from application.factions import cmd_faction
+        from council.factions import parse_reputation_from_ficha
+        from resources.sheet import parse_ficha_md
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            orig_dirs = helpers.CAMPAIGN_DIRS
+            helpers.CAMPAIGN_DIRS = [root]
+            try:
+                cid = "camp_p1_c"
+                init_campaign_from_templates(cid, title="Compensação Vital e Rep", protagonist_name="Lyra")
+                cdir = root / cid
+
+                cmd_faction(cid, add_name="FTest", desc="Facção de teste")
+                res_com = cmd_commit(
+                    cid,
+                    summary="Lyra enfrentou patrulheiros de FTest e sofreu desgaste.",
+                    cost="HP -5, CE -5",
+                    faction_rep="FTest:+1",
+                    force=True,
+                )
+                self.assertEqual(res_com.get("status"), "ok")
+
+                ficha_mid = parse_ficha_md(cdir / "ficha.md")
+                self.assertEqual(ficha_mid["vitals"]["hp"]["current"], 20)
+                self.assertEqual(ficha_mid["vitals"]["ce"]["current"], 25)
+                reps_mid = parse_reputation_from_ficha(cdir / "ficha.md")
+                self.assertEqual(reps_mid["ftest"]["score"], 1)
+
+                store = JsonlEventStore(cdir)
+                all_evts = tuple(store.read(cid))
+                sheet_ev = next(e for e in reversed(all_evts) if e.type == "protagonist.sheet_changed")
+                rep_ev = next(e for e in reversed(all_evts) if e.type == "faction.reputation_changed")
+
+                # 1. Compensação relativa: --vital hp:+2 (20 -> 22) e --rep FTest:-1 (1 -> 0)
+                res_cor1 = cmd_correct(
+                    cid,
+                    event=sheet_ev.event_id,
+                    reason="Custo de HP e ganho de reputação excedentes",
+                    vital="hp:+2",
+                    rep="FTest:-1",
+                )
+                self.assertEqual(res_cor1.get("status"), "ok")
+
+                ficha_after1 = parse_ficha_md(cdir / "ficha.md")
+                self.assertEqual(ficha_after1["vitals"]["hp"]["current"], 22)
+                reps_after1 = parse_reputation_from_ficha(cdir / "ficha.md")
+                self.assertEqual(reps_after1["ftest"]["score"], 0)
+
+                # 2. Compensação por sinônimo (mana:+3 -> CE 25 -> 28) e valor absoluto (hp:18 -> 18)
+                res_cor2 = cmd_correct(
+                    cid,
+                    event=rep_ev.event_id,
+                    reason="Recuperação parcial de mana",
+                    vital="mana:+3",
+                )
+                self.assertEqual(res_cor2.get("status"), "ok")
+                self.assertEqual(parse_ficha_md(cdir / "ficha.md")["vitals"]["ce"]["current"], 28)
+
+                res_cor3 = cmd_correct(
+                    cid,
+                    event=sheet_ev.event_id,
+                    reason="Ajuste absoluto de HP",
+                    vital="hp:18",
+                )
+                self.assertEqual(res_cor3.get("status"), "ok")
+                self.assertEqual(parse_ficha_md(cdir / "ficha.md")["vitals"]["hp"]["current"], 18)
+
+                self.assertEqual((cdir / "ficha.md").read_bytes(), (cdir / "projections" / "ficha.md").read_bytes())
+                self.assertEqual((cdir / "diario.md").read_bytes(), (cdir / "projections" / "diario.md").read_bytes())
+            finally:
+                helpers.CAMPAIGN_DIRS = orig_dirs
+
 
 if __name__ == "__main__":
     unittest.main()

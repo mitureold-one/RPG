@@ -1,6 +1,6 @@
 # RPGPRO — Arquitetura-Alvo e Kernel de Extensão
 
-**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5 e 02 (R0, R0.5 e R1) concluídas (210 testes verdes).
+**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5 e 02 (R0, R0.5 e R1) concluídas (211 testes verdes).
 **Dono:** este documento é a fonte canônica da árvore de módulos, das portas de extensão e das regras de dependência.
 **Relação com os demais documentos:** [`ROADMAP.md`](ROADMAP.md) governa fases e gates; [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md) governa comportamento; [`DECISOES_ARQUITETURA.md`](DECISOES_ARQUITETURA.md) guarda o racional histórico; [`EXECUCAO.md`](EXECUCAO.md) registra o que foi feito.
 
@@ -693,7 +693,7 @@ Os gates continuam definidos no [`ROADMAP.md`](ROADMAP.md). A arquitetura não o
 7. Replay idempotente; eventos antigos passam por upcasters.
 8. Configuração validada contra `config_schema`.
 9. Suíte de contrato por porta.
-10. 210 testes automatizados verdes após R0/R0.5/R1 e aprovação integral de QA; suíte de contrato verde.
+10. 211 testes automatizados verdes após R0/R0.5/R1 e aprovação integral de QA; suíte de contrato verde.
 11. Campanhas de teste em `tests/fixtures/campaigns/`, sem dependência das campanhas reais.
 12. `EXECUCAO.md` atualizado a cada etapa.
 13. `contracts/` e `kernel/` sem I/O e sem imports de `council`, `rulesets`, `resources`, `adapters` ou `interfaces`.
