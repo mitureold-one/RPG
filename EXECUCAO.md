@@ -839,6 +839,24 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+## EX-0033 — 2026-10-26 — Homologação final, commit e push da Fase 03 (Gate G3)
+
+- **Autor:** antigravity
+- **Tipo:** homologação + commit + push
+- **Status:** **concluído** (Fase 03 e Gate G3 formalmente aprovados e sincronizados com o upstream)
+- **Commit:** [`cf290bf`](https://github.com/mitureold-one/RPG/commit/cf290bf)
+- **Fecha:** pendências documentais de `EX-0032` e encerra a Fase 03.
+- **Escopo:** sincronização completa de status em `ROADMAP.md`, `ARCHITECTURE.md`, `checklists/g3-ratification.md`, restauração de `tasks.md` (T001–T038), emenda no `g3-decision-record.md` e renomeação do teste para `test_fr_ag_04_admission`.
+- **Evidência:**
+  - Commit `cf290bf` enviado para `https://github.com/mitureold-one/RPG.git` (`a6771fb..cf290bf main -> main`).
+  - Suíte completa de testes: 234 testes verdes em 67.8s.
+  - Fronteiras arquiteturais: 8/8 OK (< 300 linhas em `resources/`, < 100 linhas em `council/`).
+  - 17 critérios de aceitação AT01–AT17 ratificados e aprovados.
+- **Relações:** `EX-0031`, `EX-0032`, [`ROADMAP.md`](ROADMAP.md), [`ARCHITECTURE.md`](ARCHITECTURE.md).
+- **Pendências:** nenhuma. Fase 03 encerrada.
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.
