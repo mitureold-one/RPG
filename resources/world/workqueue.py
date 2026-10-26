@@ -98,7 +98,7 @@ def retry_items(
             _item(
                 record,
                 due_at_sort=int(record.get("retry_at_sort", to_sort)),
-                priority=50,
+                priority=int(record.get("priority", 50)),
                 payload=record.get("payload", {}),
                 attempts=attempts,
             )
@@ -143,6 +143,7 @@ def queue_document(
             "error": record["error"],
             "attempts": record["attempts"],
             "retry_at_sort": record["retry_at_sort"],
+            "priority": record.get("priority", 50),
             "payload": dict(record.get("payload") or {}),
             "permanent": record["attempts"] >= max_attempts,
         }

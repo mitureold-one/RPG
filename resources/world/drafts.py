@@ -104,6 +104,7 @@ def work_failed_draft(
             "error": error,
             "attempts": int(attempts),
             "retry_at_sort": int(retry_at_sort),
+            "priority": int(item.priority),
             "payload": dict(item.payload),
         },
     )

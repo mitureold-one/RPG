@@ -17,7 +17,7 @@ from application.transaction import (
     ensure_campaign_event_log,
     record_command_mutation,
 )
-from contracts.simulation import WorldView
+from contracts.simulation import TRIGGERS, WorldView
 from council import find_campaign
 from plugins.budget_policy import PriorityBudgetPolicy
 from plugins.simulation_policy import TimedSimulationPolicy
@@ -100,6 +100,14 @@ def cmd_world_tick(
     dry_run: bool = False,
 ) -> dict[str, Any]:
     """Executa um ciclo de simulação: tempo, trabalho devido, orçamento e retry."""
+    if trigger not in TRIGGERS:
+        return {"error": f"trigger inválido: '{trigger}' (use {', '.join(TRIGGERS)})"}
+    if isinstance(seed, bool) or not isinstance(seed, int):
+        return {"error": "seed deve ser inteiro."}
+    if budget is not None and (
+        isinstance(budget, bool) or not isinstance(budget, int) or budget < 1
+    ):
+        return {"error": "--budget deve ser inteiro >= 1."}
     try:
         info = find_campaign(campaign_id)
     except (ValueError, FileNotFoundError) as exc:

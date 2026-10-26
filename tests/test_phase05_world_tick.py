@@ -343,7 +343,7 @@ class Phase05WorldTickTests(unittest.TestCase):
         """C17: falha registra tentativas/backoff e vira permanente ao esgotar."""
         scheduled = cmd_schedule(
             "sim_camp", at="5 de Ventania de 304, 09:00",
-            kind="clock_advance", entity="Cerco",
+            kind="clock_advance", entity="Cerco", priority=70,
         )
         self.assertEqual(scheduled["status"], "scheduled")
         # Relógio deixa de estar ACTIVE antes de o agendamento vencer
@@ -377,6 +377,7 @@ class Phase05WorldTickTests(unittest.TestCase):
         self.assertEqual(len(queue["failed"]), 1)
         self.assertTrue(queue["failed"][0]["permanent"])
         self.assertEqual(queue["failed"][0]["attempts"], 3)
+        self.assertEqual(queue["failed"][0]["priority"], 70)
 
     def test_c17_invalid_schedule_rejected_without_mutation(self) -> None:
         """C17: agendamento inválido gera proposal.rejected e nenhum evento world.*."""
@@ -405,6 +406,16 @@ class Phase05WorldTickTests(unittest.TestCase):
         self.assertEqual(self.store.last_seq("sim_camp"), last_seq)
         self.assertEqual(queue_path.read_text(encoding="utf-8"), before)
         self.assertEqual(self._diario()["date_time"], "5 de Ventania de 304, 08:00")
+
+    def test_invalid_budget_and_trigger_are_rejected(self) -> None:
+        """FR-SIM-05/FR-SIM-08: orçamento e gatilho inválidos falham sem escrever."""
+        last_seq = self.store.last_seq("sim_camp")
+        for budget in (0, -1):
+            res = cmd_world_tick("sim_camp", minutes=60, budget=budget)
+            self.assertIn("error", res)
+        invalid_trigger = cmd_world_tick("sim_camp", minutes=60, trigger="bogus")
+        self.assertIn("error", invalid_trigger)
+        self.assertEqual(self.store.last_seq("sim_camp"), last_seq)
 
     def test_queue_command_reports_state(self) -> None:
         """queue lê a fila reconstruída sem mutar o log."""

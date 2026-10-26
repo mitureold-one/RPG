@@ -203,8 +203,11 @@ def cmd_queue(campaign_id: str) -> dict[str, Any]:
     camp_dir = Path(info["dir"])
     config = normalize_simulation(info.get("simulation") or {})
     store = create_event_store(camp_dir)
-    index = collect(tuple(store.read(campaign_id)))
-    document = queue_document(index, store.last_seq(campaign_id), config)
+    events = tuple(store.read(campaign_id))
+    domain_events = [event for event in events if not event.type.startswith("projection.")]
+    last_seq = domain_events[-1].seq if domain_events else 0
+    index = collect(events)
+    document = queue_document(index, last_seq, config)
     queue_file = camp_dir / "queue.json"
     if queue_file.exists():
         import json

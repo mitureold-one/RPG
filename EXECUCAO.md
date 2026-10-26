@@ -1075,6 +1075,27 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+## EX-0042 — 2026-10-26 — Hardening da Fase 05: validação de borda, prioridade no retry e `last_seq` da fila
+
+- **Autor:** implementador RPGPRO.
+- **Tipo:** correção + teste (hardening pós-implementação, antes do parecer final de QA).
+- **Status:** **concluído**.
+- **Corrige:** lacunas de borda encontradas por sonda própria durante a auditoria independente de `EX-0041`.
+- **Escopo:** `application/world_tick.py`, `application/world_schedule.py`, `resources/world/{drafts,queue,workqueue}.py`, `tests/test_phase05_world_tick.py`.
+- **O que foi feito:**
+  - **Validação de borda:** `world_tick` rejeita `--budget < 1`, `trigger` fora de `TRIGGERS` e `seed` não inteiro com erro explícito, sem gravar evento (antes, `--budget 0` levantava `ValueError` e `trigger` arbitrário era aceito via API).
+  - **Prioridade preservada no retry:** `world.work_failed` grava `priority`; `collect`/`retry_items`/`queue.json` releem a prioridade original, em vez de rebaixar para 50.
+  - **`queue` coerente com a projeção:** `cmd_queue` calcula `last_seq` sobre eventos não-`projection.*`, alinhado ao `QueueProjector`.
+  - **Teste novo:** `test_invalid_budget_and_trigger_are_rejected`; C17 passa a aferir `priority == 70` no retry de um agendamento prioritário.
+- **Evidência:**
+  - `python -m unittest tests.test_phase05_world_tick tests.test_phase05_policies` -> **28 testes OK**.
+  - `python -m unittest discover -s tests -p "test_*.py"` -> **278 testes OK** (0 falhas, 0 erros).
+  - Sonda manual: `world-tick --budget 0` devolve `{"error": "--budget deve ser inteiro >= 1."}` e `last_seq` não muda.
+- **Relações:** `EX-0041`; [`specs/015-phase-05-simulation/spec.md`](specs/015-phase-05-simulation/spec.md) FR-SIM-05/08/14.
+- **Pendências:** parecer final da auditoria independente de QA da Fase 05.
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.

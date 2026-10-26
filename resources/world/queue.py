@@ -78,6 +78,7 @@ def collect(events: Iterable[Any], initial: Mapping[str, Any] | None = None) -> 
                 "error": str(payload.get("error", "")),
                 "attempts": int(payload.get("attempts", 1)),
                 "retry_at_sort": int(payload.get("retry_at_sort", 0)),
+                "priority": int(payload.get("priority", 50)),
             }
         elif event_type == "world.work_completed" and work_id:
             completed.add(work_id)
@@ -150,6 +151,7 @@ def from_document(document: Mapping[str, Any] | None) -> dict[str, Any]:
                 "error": str(row.get("error", "")),
                 "attempts": int(row.get("attempts", 1)),
                 "retry_at_sort": int(row.get("retry_at_sort", 0)),
+                "priority": int(row.get("priority", 50)),
             }
     return {
         "scheduled": scheduled,
