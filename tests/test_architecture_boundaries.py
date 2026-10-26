@@ -149,13 +149,23 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             self.assertLess(p_len, 300, f"{p_file.relative_to(ROOT)} deve ter menos de 300 linhas (tem {p_len})")
 
         strict_300_targets = (
+            ROOT / "application" / "arbitration.py",
             ROOT / "application" / "commit.py",
             ROOT / "application" / "commit_stage.py",
             ROOT / "application" / "correction.py",
+            ROOT / "application" / "context" / "agents.py",
+            ROOT / "application" / "context" / "assembler.py",
+            ROOT / "application" / "context" / "knowledge.py",
+            ROOT / "application" / "context" / "providers.py",
+            ROOT / "application" / "context" / "query.py",
+            ROOT / "application" / "context" / "scene.py",
+            ROOT / "application" / "context" / "state.py",
+            ROOT / "application" / "prepare.py",
             ROOT / "application" / "projectors" / "journal.py",
             ROOT / "application" / "projectors" / "sheet.py",
             ROOT / "application" / "projectors" / "npc.py",
             ROOT / "application" / "projectors" / "faction.py",
+            ROOT / "application" / "projectors" / "state.py",
             ROOT / "contracts" / "catalog.py",
             ROOT / "adapters" / "persistence" / "event_store.py",
             ROOT / "adapters" / "persistence" / "batch_io.py",

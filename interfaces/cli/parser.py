@@ -37,6 +37,7 @@ def build_cli() -> argparse.ArgumentParser:
     p_prep.add_argument("--vs-stat", "--vs_stat", dest="vs_stat", default="", help="Atributo ou eixo psicológico do segundo NPC na disputa")
     p_prep.add_argument("--npc-variant", "--npc_variant", dest="npc_variant", default="normal", choices=["normal", "advantage", "disadvantage", "adv", "disadv"], help="Vantagem ou desvantagem do primeiro NPC na rolagem")
     p_prep.add_argument("--vs-variant", "--vs_variant", dest="vs_variant", default="normal", choices=["normal", "advantage", "disadvantage", "adv", "disadv"], help="Vantagem ou desvantagem do segundo NPC na rolagem")
+    p_prep.add_argument("--audience", default="", help="Override explícito da audiência epistêmica de consulta (ex: 'player', 'protagonist', 'gm')")
 
     p_com = sub.add_parser("commit", help="Registra as consequências do turno em ficha.md, npcs.md e diario.md")
     p_com.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
@@ -194,5 +195,12 @@ def build_cli() -> argparse.ArgumentParser:
     p_cor.add_argument("--contradiction", action="store_true", help="Sinaliza contradição com premissa posterior que requer resolução humana")
     p_cor.add_argument("--resolve", action="store_true", help="Resolve inconsistência causal pendente do evento indicado")
     p_cor.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
+
+    p_qry = sub.add_parser("query", help="Consulta pontual sob demanda ao estado persistente (claim, npc, faction, quest, clock)")
+    p_qry.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
+    p_qry.add_argument("--kind", required=True, choices=["claim", "npc", "faction", "quest", "clock"], help="Tipo de entidade a consultar")
+    p_qry.add_argument("--id", required=True, help="Identificador ou tag da entidade")
+    p_qry.add_argument("--audience", default="gm", help="Audiência epistêmica da consulta (gm, protagonist, player)")
+    p_qry.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
     return parser

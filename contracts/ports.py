@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Iterable, Protocol, Sequence, runtime_checkable
+from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence, runtime_checkable
 
+from contracts.context import ContextRequest, ContextSection
 from contracts.event import AppendResult, Event, EventDraft
 
 
@@ -168,6 +169,34 @@ class KnowledgeProvider(Protocol):
         ...
 
 
+@runtime_checkable
+class ContextStateView(Protocol):
+    """Porta para leitura imutável do cache derivado de estado da campanha."""
+
+    last_seq: int
+    stale: bool
+
+    def npcs(self) -> Mapping[str, Any]: ...
+    def factions(self) -> Mapping[str, Any]: ...
+    def knowledge(self) -> Sequence[Any]: ...
+    def recent_events(self, limit: int = 50) -> Sequence[Any]: ...
+    def quests(self) -> Sequence[Any]: ...
+    def clocks(self) -> Sequence[Any]: ...
+    def arc(self) -> Mapping[str, Any]: ...
+
+
+@runtime_checkable
+class ContextProvider(Protocol):
+    """Porta para provedores modulares de contexto (núcleo e causal)."""
+
+    key: str
+    layer: str
+    priority: int
+
+    def provide(self, request: ContextRequest, state: ContextStateView) -> ContextSection:
+        ...
+
+
 _EVENT_STORE_FACTORY: Callable[..., EventStore] | None = None
 
 
@@ -185,6 +214,8 @@ def create_event_store(base_dir: Any, **kwargs: Any) -> EventStore:
 __all__ = [
     "BehaviorPolicy",
     "Clock",
+    "ContextProvider",
+    "ContextStateView",
     "EventStore",
     "EventStreamView",
     "FactionContext",

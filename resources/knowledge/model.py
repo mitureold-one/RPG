@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal, Tuple, Optional
 
-VALID_HOLDER_KINDS = {"npc", "faction", "subgroup", "protagonist", "player"}
+from contracts.context import HolderRef, VALID_HOLDER_KINDS
 VALID_CLAIM_TYPES = {"occurrence", "state", "prediction", "normative", "counterfactual"}
 VALID_SOURCE_TYPES = {"event", "npc", "faction", "document", "inference", "system", "player", "protagonist", "subgroup"}
 VALID_CHANNELS = {"observation", "testimony", "document", "communication", "inference", "mechanism"}
@@ -24,19 +24,6 @@ VALID_VISIBILITY = {
     "protagonist_private",
     "player_meta",
 }
-
-
-@dataclass(frozen=True)
-class HolderRef:
-    """Identifica o sujeito epistêmico de forma tipada."""
-    kind: str
-    id: str
-
-    def __post_init__(self) -> None:
-        if self.kind not in VALID_HOLDER_KINDS:
-            raise ValueError(f"kind de holder inválido: '{self.kind}' (esperado: {VALID_HOLDER_KINDS})")
-        if not self.id or not isinstance(self.id, str):
-            raise ValueError("id do holder deve ser string não vazia")
 
 
 @dataclass(frozen=True)

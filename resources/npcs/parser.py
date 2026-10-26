@@ -102,9 +102,11 @@ def parse_npcs_md(npcs_path: Path) -> List[Dict[str, Any]]:
         faction = extract_md_field(body, ("Facção / Afiliação", "Facção", "Faccao / Afiliacao", "Faccao", "Afiliação", "Afiliacao"))
         bonds = extract_npc_bonds(body)
         is_stub = "Introduzido durante a crônica" in details or "Personagem em Cena" in details
+        location = extract_md_field(body, ("Local", "Localização", "Localizacao"))
         npcs.append({
             "name": name,
             "attitude": attitude,
+            "location": location,
             "faction": faction,
             "psychology": psychology,
             "will": will,

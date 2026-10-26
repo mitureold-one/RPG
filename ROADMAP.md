@@ -138,6 +138,8 @@ Entregue:
 
 ### Fase 04 — Contexto causal
 
+**Status:** **aprovada com remediação canônica de QA** — [`spec 013`](specs/013-phase-04-causal-context/spec.md) e [`spec 014`](specs/014-fix-phase-04-qa-review/spec.md) homologadas em 26/10/2026; 250 testes verdes (13 testes C01–C10 em `tests/test_phase04_causal_context.py` e `tests/test_phase04_state_cache.py`); sondas adversariais aprovadas; `EX-0036`.
+
 **Objetivo:** o `prepare` montar contexto por relevância causal, não por presença.
 
 **Entregáveis:**

@@ -37,6 +37,7 @@ def main():
             contest_npc=args.contest_npc, vs_npc=args.vs_npc,
             npc_stat=args.npc_stat, vs_stat=args.vs_stat,
             npc_variant=args.npc_variant, vs_variant=args.vs_variant,
+            audience=getattr(args, "audience", ""),
         )
         print(json.dumps(res, indent=2, ensure_ascii=False))
     elif args.cmd == "commit":
@@ -346,5 +347,43 @@ def main():
         print(json.dumps(res, indent=2, ensure_ascii=False))
         if res.get("error"):
             sys.exit(1)
+    elif args.cmd == "query":
+        from application.context.query import ContextQueryService
+        from resources.context.policy import resolve_mode_policy
+        try:
+            info = find_campaign(args.campaign)
+        except Exception as e:
+            print(json.dumps({"error": str(e)}, indent=2, ensure_ascii=False) if args.json else f"Erro: {e}")
+            sys.exit(1)
+        if not info:
+            err = f"Campanha '{args.campaign}' não encontrada."
+            print(json.dumps({"error": err}, indent=2, ensure_ascii=False) if args.json else f"Erro: {err}")
+            sys.exit(1)
+        camp_dir = info["ficha"].parent
+        prot_id = "protagonist"
+        if info.get("ficha") and Path(info["ficha"]).exists():
+            import re
+            m = re.search(r"\*\s*\*\*Nome:\*\*\s*([^\n\r*]+)", Path(info["ficha"]).read_text(encoding="utf-8"))
+            if m:
+                prot_id = m.group(1).strip()
+        policy = resolve_mode_policy(mode="gm", protagonist_id=prot_id, audience_override=args.audience)
+        service = ContextQueryService(args.campaign, camp_dir, audience=policy.audience)
+        res = service.query(args.kind, args.id)
+        if args.json:
+            out = {
+                "kind": res.kind,
+                "id": res.id,
+                "availability": res.availability,
+                "payload": dict(res.payload),
+                "sources": list(res.sources),
+                "reason": res.reason,
+            }
+            print(json.dumps(out, indent=2, ensure_ascii=False))
+        else:
+            if res.availability == "known":
+                print(f"[{res.kind.upper()}] {res.id}: Encontrado (conhecido)")
+                print(json.dumps(dict(res.payload), indent=2, ensure_ascii=False))
+            else:
+                print(f"[{res.kind.upper()}] {res.id}: {res.availability.upper()} ({res.reason or 'Indisponível'})")
     else:
         parser.print_help()

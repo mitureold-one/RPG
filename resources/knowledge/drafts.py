@@ -75,6 +75,22 @@ def make_knowledge_acquired_draft(
 ) -> EventDraft:
     """Cria um draft canônico de knowledge.acquired."""
     act = actor or _default_actor_for_holder(holder)
+    prov_payload = []
+    for p in provenance:
+        if hasattr(p, "source_type"):
+            prov_payload.append({
+                "source_type": p.source_type,
+                "source_id": p.source_id,
+                "channel": p.channel,
+                "acquired_at": p.acquired_at,
+                "acquired_at_sort": p.acquired_at_sort,
+                "confidence": p.confidence,
+                "derived_from": list(p.derived_from),
+                "supports": p.supports,
+            })
+        elif isinstance(p, dict):
+            prov_payload.append(dict(p))
+
     return EventDraft(
         type="knowledge.acquired",
         schema_version=1,
@@ -89,7 +105,7 @@ def make_knowledge_acquired_draft(
             "stance": stance,
             "confidence": confidence,
             "status": status,
-            "provenance": list(provenance),
+            "provenance": prov_payload,
             "acquired_at": game_time,
             "acquired_at_sort": game_time_sort,
             "visibility": visibility,
