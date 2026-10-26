@@ -552,6 +552,25 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 - **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md); EX-0019, EX-0020.
 - **Pendências:** nenhuma.
 
+## EX-0022 — 2026-10-26 — Ratificação do G3 (Contrato Epistêmico)
+
+- **Autor:** dono do projeto (decisão) + agente de QA/arquitetura DeepSeek Harness (transcrição), a pedido do usuário.
+- **Tipo:** documentação (ratificação de gate).
+- **Status:** concluído (G3 ratificado com emendas; Fase 03 liberada para especificação, não para implementação direta).
+- **Commit:** `15835f9`.
+- **Escopo:** gate G3 da Fase 03 — verdade canônica, alegações, crenças, proveniência, inferência, conhecimento coletivo, visibilidade, admissão e persistência.
+- **O que foi feito:**
+  - Criado [`specs/012-phase-03-agents/g3-decision-record.md`](specs/012-phase-03-agents/g3-decision-record.md) com G3-D01 a G3-D15 e AT01–AT17.
+  - Emendas incorporadas: identidade de alegação e resolvedor de verdade (G3-D10); `KnowledgeRecord` determinístico (G3-D11); proveniência por IDs (G3-D12); event log como verdade, replay e snapshot-cache (G3-D13); conhecimento coletivo/`KnowledgeView` (G3-D14); correção de fato separada de revisão de crença (G3-D15).
+  - Criado [`checklists/g3-ratification.md`](specs/012-phase-03-agents/checklists/g3-ratification.md) com decisões, critérios e condições.
+  - Atualizados `ROADMAP.md` (Fase 03 e gate G3), `ARCHITECTURE.md` (próximos passos) e `.specify/feature.json` para `specs/012-phase-03-agents`.
+- **Como:** decisão registrada a partir da proposta G3 do dono e das emendas de revisão; nenhum código de produção alterado.
+- **Evidência:**
+  - Arquivos citados; checklist de ratificação preenchido.
+  - `git status` limpo após o commit; suíte permanece **211 testes, OK** (sem alteração de código).
+- **Relações:** [`G3`](specs/012-phase-03-agents/g3-decision-record.md); [`ROADMAP.md`](ROADMAP.md) §3/§5; [`ARCHITECTURE.md`](ARCHITECTURE.md) §16; `EX-0021`.
+- **Pendências:** escrever `spec.md`, `plan.md` e `tasks.md` da Fase 03; planejar R2 antes de ampliar `narrator.py`/`factions.py`/`quests.py`.
+
 ---
 
 ## 5. Como registrar uma nova execução
