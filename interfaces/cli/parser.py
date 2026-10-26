@@ -203,4 +203,27 @@ def build_cli() -> argparse.ArgumentParser:
     p_qry.add_argument("--audience", default="gm", help="Audiência epistêmica da consulta (gm, protagonist, player)")
     p_qry.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
 
+    p_wt = sub.add_parser("world-tick", help="Executa um ciclo de simulação de mundo (tempo, relógios, planos, orçamento e retry)")
+    p_wt.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
+    p_wt.add_argument("--minutes", type=int, default=None, help="Minutos a avançar (ex: 10080 para +7 dias)")
+    p_wt.add_argument("--to", default="", help="Data alvo canônica (ex: '08 de Outubro de 300, 10:00')")
+    p_wt.add_argument("--trigger", default="manual", choices=["time", "travel", "rest", "critical_event", "schedule", "manual"], help="Acionador do ciclo")
+    p_wt.add_argument("--seed", type=int, default=0, help="Semente determinística (reservada para extensões)")
+    p_wt.add_argument("--budget", type=int, default=None, help="Teto duro de itens executados neste ciclo")
+    p_wt.add_argument("--dry-run", "--dry_run", dest="dry_run", action="store_true", help="Calcula o ciclo sem gravar eventos, projeções ou fila")
+    p_wt.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
+
+    p_sch = sub.add_parser("schedule", help="Agenda trabalho futuro de simulação (cena devida, relógio ou passo de plano)")
+    p_sch.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
+    p_sch.add_argument("--at", required=True, help="Data canônica do agendamento (ex: '10 de Outubro de 300, 18:00')")
+    p_sch.add_argument("--kind", required=True, choices=["clock_advance", "npc_plan_step", "faction_plan_step", "scene_due"], help="Tipo de trabalho agendado")
+    p_sch.add_argument("--entity", required=True, help="Entidade alvo (relógio, NPC, facção ou rótulo da cena)")
+    p_sch.add_argument("--payload", action="append", default=None, help="Par chave=valor (repetível; use ';' para vários)")
+    p_sch.add_argument("--priority", type=int, default=50, help="Prioridade 1–100 (padrão: 50)")
+    p_sch.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
+
+    p_q = sub.add_parser("queue", help="Inspeciona a fila de simulação (agendados, adiados e falhas)")
+    p_q.add_argument("--campaign", required=True, type=_campaign_arg, help="ID da pasta da campanha")
+    p_q.add_argument("--json", action="store_true", help="Exibe a saída em formato JSON")
+
     return parser

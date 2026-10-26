@@ -138,7 +138,7 @@ Entregue:
 
 ### Fase 04 — Contexto causal
 
-**Status:** **aprovada com ressalvas menores pelo QA** — [`spec 013`](specs/013-phase-04-causal-context/spec.md) e [`spec 014`](specs/014-fix-phase-04-qa-review/spec.md) homologadas em 26/10/2026; 250 testes verdes (16 testes da fase 04); sondas adversariais aprovadas; `EX-0039`.
+**Status:** **aprovada** em 26/10/2026 — [`spec 013`](specs/013-phase-04-causal-context/spec.md) e [`spec 014`](specs/014-fix-phase-04-qa-review/spec.md) homologadas; 250 testes verdes na época (16 testes da fase 04); ressalvas P3 fechadas em `EX-0040`.
 
 **Objetivo:** o `prepare` montar contexto por relevância causal, não por presença.
 
@@ -154,6 +154,8 @@ Entregue:
 **Critério de aceite:** antagonista distante com plano iminente entra no contexto; `prepare` não inventa fato ausente; jogador e protagonista recebem camadas diferentes; snapshot de payload estável.
 
 ### Fase 05 — Simulação
+
+**Status:** **aprovada** em 26/10/2026 — G4 ratificado ([`specs/015`](specs/015-phase-05-simulation/g4-decision-record.md)); `world_tick`, fila derivada do log, orçamento adaptativo, retry com backoff e agendamento futuro entregues; C11–C17 verdes e 277 testes na suíte completa (`EX-0041`).
 
 **Objetivo:** o mundo evoluir por tempo e eventos, com profundidade seletiva.
 
@@ -262,7 +264,7 @@ Não iniciar a fase inteira antes de resolver o gate correspondente.
 
 G1 não reabre o que o [`ARCHITECTURE.md`](ARCHITECTURE.md) já fixou: JSONL canônico, `evt_<ulid>` e o envelope do evento. Ele ratifica essas escolhas e fecha o que ainda está aberto. G2 é o dono exclusivo da política de correção e reconstrução; nenhum dos dois invade o escopo do outro.
 
-**Status em 26/10/2026:** Fase 02/R1 concluída e aprovada; G1, G2 e **G3 ratificados**; ver [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md), [`specs/011-close-phase02-qa-p2/spec.md`](specs/011-close-phase02-qa-p2/spec.md), [`G3`](specs/012-phase-03-agents/g3-decision-record.md) e [`EX-0021`](EXECUCAO.md). G4–G7 seguem abertos; a Fase 03 pode ser planejada.
+**Status em 26/10/2026:** Fases 02, 03, 04 e 05 concluídas e aprovadas; G1, G2, G3 e **G4 ratificados**; ver [`specs/010-phase-02-causal-history/spec.md`](specs/010-phase-02-causal-history/spec.md), [`specs/011-close-phase02-qa-p2/spec.md`](specs/011-close-phase02-qa-p2/spec.md), [`G3`](specs/012-phase-03-agents/g3-decision-record.md), [`G4`](specs/015-phase-05-simulation/g4-decision-record.md) e `EX-0021`/`EX-0041`. G5–G7 seguem abertos; a Fase 06 pode ser planejada.
 
 Enquanto um gate estiver aberto, a fase correspondente pode ter protótipo e testes de contrato, mas não deve ser declarada concluída.
 
@@ -304,7 +306,7 @@ A árvore canônica, as portas de extensão, as regras de dependência e o kerne
 | **R0.5** | Antes da Fase 02 | arquivar campanhas, criar fixtures, atualizar testes, apagar `campaigns/*` | suíte verde sem campanhas reais; `init-campaign` funciona |
 | **R1** | Com a Fase 02 (Concluído) | `ssot.py` → `resources/`; `EventStore` JSONL + índice; `Projector`s; `EventType`s e upcasters | nenhum arquivo > 300; evento ida-e-volta; rebuild de projeção; implementações aprovadas na suíte de contrato |
 | **R2** | Com a Fase 03/04 | `narrator.py` → `resources/npcs/`; `factions.py` → `resources/factions/`; `quests.py` → `resources/quests/`; `context/` | módulos < 300; sem ciclos; `BehaviorPolicy`/`FactionPolicy`/`ContextProvider` testados |
-| **R3** | Com a Fase 05/06 | `reviewer.py` → `review/`; `world/` com simulação, budget, diretor e estagnação | lints independentes; diretor determinístico; orçamento testado |
+| **R3** | Fases 05/06 | `world/` com `SimulationPolicy`, `BudgetPolicy` e fila (Fase 05, **Concluído**); `review/` + `DirectorPolicy`/`StagnationPolicy` (Fase 06) | lints independentes; diretor determinístico; orçamento testado |
 | **R4** | Com a Fase 07 | `memory/` e `knowledge/` | proveniência rastreável; resumos reconstruíveis |
 
 **R0 é a única refatoração que pode ser feita já**, porque é behavior-preserving e não depende dos gates. As demais acompanham as fases.
@@ -326,8 +328,8 @@ A árvore canônica, as portas de extensão, as regras de dependência e o kerne
 
 ### 7.1 Estado atual
 
-- 211 testes automatizados verdes (incluindo suíte de estabilidade, suíte de contratos com fakes e `JsonlEventStore`, validação de schema/registry/runtime, C1–C4 e todos os cenários da Fase 02/R1 com aprovação integral de QA).
-- Os testes de comportamento de agentes (Fase 03) ainda não existem.
+- 277 testes automatizados verdes (250 legados + 12 de aceite C11–C17 + 15 de política/cadência/tempo), incluindo suíte de estabilidade, suíte de contratos com fakes, `JsonlEventStore`, validação de schema/registry/runtime, C1–C4, Fases 03/04 e o eixo temporal da Fase 05.
+- Os testes de comportamento de agentes em cenário completo seguem na Fase 08 (G7).
 
 ### 7.2 Cenários obrigatórios da Fase 08
 
@@ -353,8 +355,9 @@ Cada cenário deve ter estado inicial, ação/tempo, comportamento esperado e as
 3. **R0.5 concluído:** arquivamento de campanhas em `archive/campaigns/`, fixtures em `tests/fixtures/campaigns/`, `campaigns/` limpo com `.gitkeep` (`EX-0008`).
 4. **Auditoria QA concluída:** correções de drift de calendário P1-A, contenção de `campaign_id` P2-1, all-or-nothing de templates P2-2, e lock transacional em plan/progress P2-3 (`EX-0009` / `QA-FASE-01.md`).
 5. **Fase 02/R1 concluída e aprovada (26/10/2026):** G1/G2, spec 010 (C1–C4), remediação P2 da spec 011, 211 testes e QA final aprovado (`EX-0021`).
-6. **G3 ratificado (26/10/2026):** abrir a spec 012 da Fase 03/Agentes com as emendas do [`G3`](specs/012-phase-03-agents/g3-decision-record.md); implementar somente após `spec.md`/`plan.md`/`tasks.md`.
-7. **R2 em paralelo à Fase 03/04:** decompor `narrator.py`, `factions.py`, `quests.py` e `context/` em módulos menores; depois seguir R3/R4.
+6. **G3 ratificado (26/10/2026):** spec 012 da Fase 03/Agentes homologada com as emendas do [`G3`](specs/012-phase-03-agents/g3-decision-record.md); implementação e QA concluídos (`EX-0033`).
+7. **Fase 04 concluída (26/10/2026):** contexto causal no `prepare`, cache `estado.json`, consulta sob demanda e remediação integral de QA (`EX-0039`/`EX-0040`).
+8. **G4 ratificado e Fase 05 concluída (26/10/2026):** `world_tick`, fila derivada do log, orçamento adaptativo, retry com backoff, agendamento futuro e `queue.json`; spec 015 e C11–C17 verdes (`EX-0041`). Próxima etapa: G5 e spec 016 (Fase 06/Direção).
 
 ---
 
@@ -375,4 +378,5 @@ Cada cenário deve ter estado inicial, ação/tempo, comportamento esperado e as
 - **22/10/2026:** auditoria arquitetural e narrativa; separação entre implementado, prompt-only e ausente.
 - **22/10/2026:** Fase 01 implementada (atomicidade, validação, parsing, idempotência, calendário).
 - **22/10/2026:** consolidação das diretrizes de mundo autônomo em [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md).
-- **22/10/2026:** roadmap revisado para história causal, agentes, contexto, simulação, direção e memória derivada.
+- **26/10/2026:** Fase 02, G3 e Fase 03 homologados; Fase 04 aprovada com ressalvas menores e P3 fechados.
+- **26/10/2026:** G4 ratificado (tick explícito, tempo inteiro, fila derivada do log, orçamento adaptativo, retry com backoff, R3 faseado) e Fase 05 implementada (`EX-0041`).

@@ -1,6 +1,6 @@
 # RPGPRO — Arquitetura-Alvo e Kernel de Extensão
 
-**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5, 02 e 03 (R0, R0.5, R1 e R2) concluídas e aprovadas com o Gate G3 homologado.
+**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5, 02, 03, 04 e 05 concluídas; Gates G1, G2, G3 e G4 homologados; R0, R0.5, R1, R2 e a parte `world/` do R3 entregues.
 **Dono:** este documento é a fonte canônica da árvore de módulos, das portas de extensão e das regras de dependência.
 **Relação com os demais documentos:** [`ROADMAP.md`](ROADMAP.md) governa fases e gates; [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md) governa comportamento; [`DECISOES_ARQUITETURA.md`](DECISOES_ARQUITETURA.md) guarda o racional histórico; [`EXECUCAO.md`](EXECUCAO.md) registra o que foi feito.
 
@@ -640,7 +640,7 @@ Mesmo padrão: contrato + implementação + registro + config + teste de contrat
 | **R0.5** | Antes da Fase 02 (Concluído) | arquivar campanhas em `archive/campaigns/`, criar fixtures em `tests/fixtures/`, atualizar testes, limpar `campaigns/` com `.gitkeep` | suíte verde sem campanhas reais; `init-campaign` funciona com verificação all-or-nothing |
 | **R1** | Fase 02 (Concluído) | `ssot.py` → `resources/`; `EventStore` JSONL + índice; `Projector`s; `EventType`s e upcasters | evento ida-e-volta; rebuild de projeção; implementações aprovadas na suíte de contrato; nenhum arquivo > 300 |
 | **R2** | Fases 03/04 | `narrator.py` → `resources/npcs/`; `factions.py` → `resources/factions/`; `quests.py` → `resources/quests/`; `context/` | módulos < 300; sem ciclos; `BehaviorPolicy`/`FactionPolicy`/`ContextProvider` testados |
-| **R3** | Fases 05/06 | `reviewer.py` → `review/`; `world/` com `SimulationPolicy`, `BudgetPolicy`, `DirectorPolicy`, `StagnationPolicy` | lints independentes; diretor determinístico; orçamento testado |
+| **R3** | Fases 05/06 | `world/` com `SimulationPolicy`, `BudgetPolicy` e fila (Concluído na Fase 05: `plugins/`, `resources/world/`, orquestração e `queue.json`); `review/` + `DirectorPolicy`/`StagnationPolicy` na Fase 06 | lints independentes; diretor determinístico; orçamento testado |
 | **R4** | Fase 07 | `memory/`, `knowledge/` | proveniência rastreável; resumos reconstruíveis |
 
 R0 é behavior-preserving. R1–R4 acompanham as fases; não são uma “refatoração geral” separada.
@@ -654,9 +654,9 @@ R0 é behavior-preserving. R1–R4 acompanham as fases; não são uma “refator
 | 01 | fundação de persistência/validação | — |
 | 01.5 | concluída: `CalendarProvider` de Valíria e `faction --rep` estrito; R0.5 cobre reset/fixtures | — |
 | 02 | event store, projeção, correções, fila | G1, G2 (ratificados em 23/10/2026) |
-| 03 | `BehaviorPolicy`, `FactionPolicy`, `KnowledgeProvider` | G3 |
-| 04 | `ContextProvider`, contexto causal | schema de evento/agente |
-| 05 | `SimulationPolicy`, `BudgetPolicy`, fila | G4 |
+| 03 | `BehaviorPolicy`, `FactionPolicy`, `KnowledgeProvider` | G3 (ratificado em 26/10/2026) |
+| 04 | `ContextProvider`, contexto causal | schema de evento/agente (concluída em 26/10/2026) |
+| 05 | `SimulationPolicy`, `BudgetPolicy`, fila derivada do log | G4 (ratificado em 26/10/2026) |
 | 06 | `DirectorPolicy`, `StagnationPolicy`, arcos flexíveis | G5 |
 | 07 | `MemoryProvider`, resumos derivados | G6 |
 | 08 | suíte de comportamento e migração | G7 |
@@ -707,6 +707,7 @@ Os gates continuam definidos no [`ROADMAP.md`](ROADMAP.md). A arquitetura não o
 3. Auditoria de QA da Fundação/R0/R0.5 concluída e itens P1/P2 resolvidos.
 4. Specs 010/011 concluídas: G1/G2 ratificados, C1–C4 e P2 aprovados; G3 ratificado em 26/10/2026.
 5. **R1 + Fase 02 concluídos e aprovados** em 26/10/2026 (211 testes; `EX-0021`).
-6. **G3 ratificado** em 26/10/2026; abrir a spec 012 (Fase 03/Agentes) com as emendas do [`G3`](specs/012-phase-03-agents/g3-decision-record.md); R2–R4 acompanham as fases seguintes.
+6. **Fases 03 e 04 concluídas** em 26/10/2026 (G3 homologado em [`G3`](specs/012-phase-03-agents/g3-decision-record.md); contexto causal em `EX-0040`).
+7. **G4 ratificado e Fase 05 concluída** em 26/10/2026: portas `SimulationPolicy`/`BudgetPolicy`, `resources/world/`, `plugins/simulation_policy.py`, `plugins/budget_policy.py`, `application/world_tick.py`, projeção `queue.json` e CLI `world-tick`/`schedule`/`queue` ([`G4`](specs/015-phase-05-simulation/g4-decision-record.md); `EX-0041`).
 
-Com G1/G2/G3 ratificados e C1–C4 aprovados, a Fase 02/R1 está concluída e a Fase 03 está liberada para especificação; a implementação exige spec/plan/tasks e R2.
+Com G1–G4 ratificados, as Fases 02–05 estão concluídas; a Fase 06 depende do G5 (modelo de arco, critérios do diretor e revelação) e a Fase 07 do G6.

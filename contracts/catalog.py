@@ -1,4 +1,4 @@
-"""contracts/catalog.py: Schemas de payload dos 38 tipos canônicos v1 de eventos (25 base + 13 da Fase 03)."""
+"""contracts/catalog.py: Schemas de payload dos 43 tipos canônicos v1 de eventos (25 base + 13 da Fase 03 + 5 da Fase 05)."""
 
 from __future__ import annotations
 
@@ -189,6 +189,46 @@ V1_EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
     "proposal.rejected": _obj(
         ["proposal_kind", "actor_id", "reasons"],
         {"proposal_kind": _S, "actor_id": _S, "reasons": _A, "payload_summary": _O},
+    ),
+    "world.ticked": _obj(
+        [
+            "tick_id", "from_game_time", "to_game_time", "elapsed_minutes",
+            "trigger", "budget_limit", "selected", "deferred",
+        ],
+        {
+            "tick_id": _S, "from_game_time": _S, "to_game_time": _S,
+            "elapsed_minutes": _I, "trigger": _S, "budget_limit": _I,
+            "selected": _I, "deferred": _I, "seed": _I, "queue_hash": _S,
+        },
+    ),
+    "world.scheduled": _obj(
+        ["work_id", "kind", "entity_kind", "entity_id", "due_game_time", "due_at_sort", "priority"],
+        {
+            "work_id": _S, "kind": _S, "entity_kind": _S, "entity_id": _S,
+            "due_game_time": _S, "due_at_sort": _I, "priority": _I,
+            "payload": _O, "priority_final": _I,
+        },
+    ),
+    "world.work_deferred": _obj(
+        ["work_id", "kind", "due_at_sort", "reason", "deferrals"],
+        {
+            "work_id": _S, "kind": _S, "due_at_sort": _I, "reason": _S,
+            "deferrals": _I, "entity_kind": _S, "entity_id": _S, "priority": _I,
+        },
+    ),
+    "world.work_completed": _obj(
+        ["work_id", "kind", "outcome"],
+        {
+            "work_id": _S, "kind": _S, "outcome": _O,
+            "entity_kind": _S, "entity_id": _S,
+        },
+    ),
+    "world.work_failed": _obj(
+        ["work_id", "kind", "error", "attempts", "retry_at_sort"],
+        {
+            "work_id": _S, "kind": _S, "error": _S, "attempts": _I,
+            "retry_at_sort": _I, "entity_kind": _S, "entity_id": _S, "payload": _O,
+        },
     ),
 }
 

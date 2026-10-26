@@ -66,6 +66,7 @@ def parse_regras_manifest(regras_path: Path) -> dict:
         "ruleset": DEFAULT_RULESET,
         "overrides": [],
         "calendar": {},
+        "simulation": {},
     }
     if not regras_path or not regras_path.is_file():
         return manifest
@@ -108,6 +109,11 @@ def parse_regras_manifest(regras_path: Path) -> dict:
                     valid_overrides.append(ov)
             manifest["overrides"] = valid_overrides
         manifest["calendar"] = _normalize_calendar(parsed.get("calendar"))
+        simulation_block = parsed.get("simulation")
+        if isinstance(simulation_block, dict):
+            manifest["simulation"] = {
+                str(key): value for key, value in simulation_block.items()
+            }
     else:
         # Fallback minimalista de chave-valor nativo (stdlib)
         m_sys = re.search(r"system:\s*([a-zA-Z0-9_\-]+)", yaml_content)
@@ -243,5 +249,6 @@ def find_campaign(campaign_id: str, *, allow_missing_projections: bool = False):
                 "system": system_name,
                 "overrides": manifest.get("overrides", []),
                 "calendar": manifest.get("calendar", {}),
+                "simulation": manifest.get("simulation", {}),
             }
     return None

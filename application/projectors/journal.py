@@ -100,6 +100,18 @@ class JournalProjector:
                 self._apply_faction_tick(tmp, p["clock_updates"])
             return
 
+        if t == "world.ticked":
+            self._apply_world_tick(tmp, ev, p)
+            return
+
+        if t == "world.work_completed":
+            self._apply_world_work(tmp, p, failed=False)
+            return
+
+        if t == "world.work_failed":
+            self._apply_world_work(tmp, p, failed=True)
+            return
+
         if t in ("clock.created", "clock.advanced", "clock.resolved"):
             name = str(p.get("name", ""))
             if t == "clock.created":
@@ -196,6 +208,20 @@ class JournalProjector:
             if str(p.get("outcome", "")) in ("RESOLVED", "COMPENSATED"):
                 pat = rf"(\*\s*\*\*\[Correção {re.escape(cor_id)}\]\*\*\s*Alvo:\s*`[^`]*`\s*\|\s*Estado:\s*)`[^`]+`"
                 tmp.write_text(re.sub(pat, r"\g<1>`concluída`", tmp.read_text(encoding="utf-8")), encoding="utf-8")
+
+    @staticmethod
+    def _apply_world_tick(tmp: Path, ev: Any, p: dict[str, Any]) -> None:
+        from application.projectors.world_journal import apply_world_tick
+
+        text = tmp.read_text(encoding="utf-8")
+        tmp.write_text(apply_world_tick(text, ev, p), encoding="utf-8")
+
+    @staticmethod
+    def _apply_world_work(tmp: Path, p: dict[str, Any], failed: bool) -> None:
+        from application.projectors.world_journal import apply_world_work
+
+        text = tmp.read_text(encoding="utf-8")
+        tmp.write_text(apply_world_work(text, p, failed), encoding="utf-8")
 
     @staticmethod
     def _apply_turn_committed(tmp: Path, ev: Any, p: dict[str, Any]) -> None:

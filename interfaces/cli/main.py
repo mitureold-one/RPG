@@ -385,5 +385,17 @@ def main(argv: list[str] | None = None):
                 print(json.dumps(dict(res.payload), indent=2, ensure_ascii=False))
             else:
                 print(f"[{res.kind.upper()}] {res.id}: {res.availability.upper()} ({res.reason or 'Indisponível'})")
+    elif args.cmd == "world-tick":
+        from interfaces.cli.world_cli import run_world_tick
+
+        sys.exit(run_world_tick(args))
+    elif args.cmd == "schedule":
+        from interfaces.cli.world_cli import run_schedule
+
+        sys.exit(run_schedule(args))
+    elif args.cmd == "queue":
+        from interfaces.cli.world_cli import run_queue
+
+        sys.exit(run_queue(args))
     else:
         parser.print_help()

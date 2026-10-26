@@ -401,7 +401,8 @@ def game_time_to_minutes(dt_str: str, calendar: dict | None = None, fallback_tur
             total_days = (year - 1) * year_days + prior_month_days + (day - 1)
             return max(0, total_days * 1440 + h * 60 + mins)
         month_num = MONTHS_MAP.get(m_name.lower(), 1)
-        total_days = (year - 1) * 365 + (month_num - 1) * 30 + (day - 1)
+        year_days = 360  # fallback conservador de 12 meses de 30 dias, consistente com minutes_to_game_time
+        total_days = (year - 1) * year_days + (month_num - 1) * 30 + (day - 1)
         return max(0, total_days * 1440 + h * 60 + mins)
 
     m_slash = re.search(r"(\d{1,2})/(\d{1,2})/(\d{1,4})(?:,\s*(\d{1,2}):(\d{2}))?", dt_str)
@@ -425,4 +426,141 @@ def game_time_to_minutes(dt_str: str, calendar: dict | None = None, fallback_tur
         return max(0, fallback_turn * 1440 + h * 60 + mins)
 
     return max(0, fallback_turn * 60)
+
+
+def validate_game_time(dt_str: str, calendar: dict | None = None) -> None:
+    """Valida que a data é interpretável sem ambiguidade de calendário.
+
+    Datas com mês nomeado exigem o mês no calendário declarado ou um mês
+    gregoriano conhecido; caso contrário a conversão seria silenciosamente
+    errada (mês desconhecido cairia em Janeiro).
+    """
+    if not isinstance(dt_str, str) or not dt_str.strip():
+        raise ValueError("data de jogo vazia ou inválida")
+    cal = _normalize_calendar(calendar) if calendar else {}
+    months = cal.get("months") or []
+    m_full = re.search(
+        r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ\-]+)\s+de\s+(\d{1,4})",
+        dt_str,
+        re.IGNORECASE,
+    )
+    if not m_full:
+        return
+    name = m_full.group(2)
+    if months:
+        if not any(str(month).casefold() == name.casefold() for month in months):
+            raise ValueError(
+                f"Mês '{name}' não consta no calendário da campanha. "
+                f"Ajuste 'calendar.months' em regras.md."
+            )
+        return
+    if MONTHS_MAP.get(name.lower()) is None:
+        raise ValueError(
+            f"Mês '{name}' não é gregoriano e a campanha não declara 'calendar.months' em regras.md."
+        )
+
+
+def minutes_to_game_time(
+    total_minutes: int,
+    template: str,
+    calendar: dict | None = None,
+) -> str:
+    """Converte minutos desde a época em data diegética no formato de ``template``.
+
+    Inversa canônica de :func:`game_time_to_minutes` para os formatos aceitos
+    (``Dia N, HH:MM``, ``DD/MM/AAAA, HH:MM`` e ``D de Mês de AAAA, HH:MM``).
+    Calendários declarados (``months``/``days_per_month``) governam datas com
+    mês nomeado; datas numéricas usam a aritmética convencional de 365/30 já
+    usada por :func:`game_time_to_minutes`. Função pura, sem I/O.
+    """
+    if isinstance(total_minutes, bool) or not isinstance(total_minutes, int):
+        raise ValueError("total_minutes deve ser inteiro")
+    if total_minutes < 0:
+        raise ValueError("total_minutes deve ser >= 0")
+    if not isinstance(template, str) or not template.strip():
+        raise ValueError("template deve ser texto não vazio")
+
+    cal = _normalize_calendar(calendar) if calendar else {}
+    months = cal.get("months") or []
+    days_per_month = cal.get("days_per_month") or []
+
+    total_days, rem_minutes = divmod(total_minutes, 1440)
+    hour, minute = divmod(rem_minutes, 60)
+
+    m_full = re.search(
+        r"(\d{1,2})\s+de\s+([A-Za-zçÇãÃõÕéÉêÊíÍóÓúÚ\-]+)\s+de\s+(\d{1,4})",
+        template,
+        re.IGNORECASE,
+    )
+    if m_full:
+        if months:
+            year_length = sum(days_per_month)
+            year = total_days // year_length + 1
+            day_of_year = total_days % year_length
+            month_idx = 0
+            remaining = day_of_year
+            while month_idx < len(months) and remaining >= days_per_month[month_idx]:
+                remaining -= days_per_month[month_idx]
+                month_idx += 1
+            if month_idx >= len(months):
+                month_idx = len(months) - 1
+                remaining = days_per_month[-1] - 1
+            day = remaining + 1
+            month_name = months[month_idx]
+        else:
+            year_length = 360
+            year = total_days // year_length + 1
+            day_of_year = total_days % year_length
+            month_num = min(12, day_of_year // 30 + 1)
+            day = day_of_year % 30 + 1
+            month_name = MONTHS_PT[month_num]
+        return f"{day} de {month_name} de {year}, {hour:02d}:{minute:02d}"
+
+    m_slash = re.search(r"(\d{1,2})/(\d{1,2})/(\d{1,4})", template)
+    if m_slash:
+        year_length, month_length = 365, 30
+        year = total_days // year_length + 1
+        day_of_year = total_days % year_length
+        month = min(12, day_of_year // month_length + 1)
+        day = day_of_year % month_length + 1
+        return f"{day:02d}/{month:02d}/{year}, {hour:02d}:{minute:02d}"
+
+    if re.search(r"(?:Dia|Day)\s+\d+", template, re.IGNORECASE):
+        day = total_days + 1
+        return f"Dia {day}, {hour:02d}:{minute:02d}"
+
+    raise ValueError(
+        f"Formato de data não reconhecido no template: '{template}'. Use 'Dia N, HH:MM', "
+        f"'DD/MM/AAAA, HH:MM' ou 'D de Mês de AAAA, HH:MM'."
+    )
+
+
+def advance_game_time(
+    dt_str: str,
+    minutes: int,
+    calendar: dict | None = None,
+) -> str:
+    """Avança ``dt_str`` em ``minutes`` minutos preservando a aritmética do calendário.
+
+    Usa :func:`game_time_to_minutes` + :func:`minutes_to_game_time` para garantir
+    ida-e-volta consistente (sem ``datetime`` gregoriano em calendários declarados).
+    """
+    if isinstance(minutes, bool) or not isinstance(minutes, int):
+        raise ValueError("minutes deve ser inteiro")
+    if minutes < 0:
+        raise ValueError("minutes deve ser >= 0")
+    base = game_time_to_minutes(dt_str, calendar=calendar)
+    return minutes_to_game_time(base + minutes, dt_str, calendar=calendar)
+
+
+__all__ = [
+    "MONTHS_MAP",
+    "MONTHS_PT",
+    "advance_game_time",
+    "advance_time_str",
+    "game_time_to_minutes",
+    "minutes_to_game_time",
+    "parse_time_increment",
+    "validate_game_time",
+]
 

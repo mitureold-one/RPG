@@ -84,6 +84,10 @@ def _serialized_campaign_mutation(func):
 
                 queue_path = camp_dir / "queue.jsonl"
                 queue_bytes = queue_path.read_bytes() if queue_path.exists() else None
+                queue_json_path = camp_dir / "queue.json"
+                queue_json_bytes = (
+                    queue_json_path.read_bytes() if queue_json_path.exists() else None
+                )
 
                 try:
                     return func(campaign_id, *args, **kwargs)
@@ -112,6 +116,17 @@ def _serialized_campaign_mutation(func):
                     else:
                         try:
                             queue_path.write_bytes(queue_bytes)
+                        except OSError:
+                            pass
+                    if queue_json_bytes is None:
+                        if queue_json_path.exists():
+                            try:
+                                queue_json_path.unlink()
+                            except OSError:
+                                pass
+                    else:
+                        try:
+                            queue_json_path.write_bytes(queue_json_bytes)
                         except OSError:
                             pass
                     raise

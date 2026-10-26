@@ -18,6 +18,8 @@ from application.prepare import cmd_prepare
 from application.progression import cmd_progress, cmd_quest
 from application.prose import cmd_check_prose
 from application.showrunner import cmd_arc, cmd_clock, cmd_correct, cmd_plan, cmd_rebuild
+from application.world_schedule import cmd_queue, cmd_schedule
+from application.world_tick import cmd_world_tick
 
 __all__ = [
     "cmd_arc",
@@ -30,8 +32,11 @@ __all__ = [
     "cmd_prepare",
     "cmd_progress",
     "cmd_quest",
+    "cmd_queue",
     "cmd_rebuild",
     "cmd_review",
+    "cmd_schedule",
+    "cmd_world_tick",
     "find_campaign",
     "init_campaign_from_templates",
     "upsert_npc_to_md",

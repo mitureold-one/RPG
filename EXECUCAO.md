@@ -1045,6 +1045,36 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+## EX-0041 — 2026-10-26 — Fase 05: gate G4, simulação de mundo por tempo, fila, orçamento e retry
+
+- **Autor:** implementador RPGPRO (modo orquestrador), a pedido do dono ao autorizar a Fase 05.
+- **Tipo:** gate + feature + refatoração parcial R3 + testes + documentação.
+- **Status:** **concluído** — G4 ratificado e Fase 05 implementada; **submetido à auditoria independente de QA**, sem autodeclaração de aprovação (ver [`specs/015-phase-05-simulation/qa-review.md`](specs/015-phase-05-simulation/qa-review.md)).
+- **Commit:** pendente nesta entrada; base `955e10f`.
+- **Escopo:** Fase 05 do [`ROADMAP.md`](ROADMAP.md) e R3 (`world/`) — [`specs/015-phase-05-simulation/`](specs/015-phase-05-simulation/).
+- **O que foi feito:**
+  - **G4 ratificado** ([`g4-decision-record.md`](specs/015-phase-05-simulation/g4-decision-record.md) + checklist): tick explícito e transacional, tempo em minutos inteiros, calendário declarado como autoridade, fila derivada do log (sem store paralelo), `work_id`/`tick_id` determinísticos, orçamento adaptativo com teto duro, prioridade fixa com anti-inanição, retry com backoff, profundidade seletiva, propostas validadas, 5 eventos `world.*`, R3 faseado.
+  - **Contratos e kernel:** `contracts/simulation.py` (WorkItem, TickRequest, TickBudget, TickDecision, WorldView, portas `SimulationPolicy`/`BudgetPolicy`), `contracts/simulation_rules.py` (helpers puros) e 5 schemas em `contracts/catalog.py` (43 tipos v1).
+  - **Tempo canônico:** `minutes_to_game_time`, `advance_game_time` e `validate_game_time` em `temporal/calendar.py`, com ida-e-volta nos três formatos e calendário 12×30.
+  - **Domínio:** `resources/world/{config,ids,cadence,drafts,queue,workqueue,resolve}.py` — cadência proporcional, saturação de relógio, progressão de passos sem encerrar plano (`plan_ready_for_resolution`), resolução determinística por kind, fila agregada e retry elegível.
+  - **Políticas:** `plugins/simulation_policy.py` (`TimedSimulationPolicy`) e `plugins/budget_policy.py` (`PriorityBudgetPolicy`), puras e sem I/O; registro possível via bootstrap (porta).
+  - **Aplicação:** `application/world_tick.py` (lote único, relatório, `--dry-run`, `status=idempotent`) e `application/world_schedule.py` (`schedule` validado com `proposal.rejected`, `queue` sem mutação).
+  - **Projeções:** `application/projectors/queue.py` (`queue.json` com hash determinístico e merge pós-snapshot) e `application/projectors/world_journal.py` (data canônica + `### Simulação de Mundo`); `campaign/locator.py` expõe o bloco `simulation:`; transação passou a restaurar `queue.json`.
+  - **CLI:** `world-tick`, `schedule` e `queue` em `interfaces/cli/world_cli.py` (JSON e legível), com `main.py` delegando.
+  - **Testes:** `tests/test_phase05_world_tick.py` (C11–C17, 12 testes) e `tests/test_phase05_policies.py` (15 testes puros); fronteiras atualizadas com os novos alvos `< 300`.
+- **Evidência:**
+  - Suíte completa: `python -m unittest discover -s tests -p "test_*.py"` -> **277 testes OK** (0 falhas, 0 erros).
+  - Fase 05: `python -m unittest tests.test_phase05_world_tick tests.test_phase05_policies` -> **27 testes OK**.
+  - Fronteiras: `python -m unittest tests.test_architecture_boundaries` -> **8 testes OK** (todos os módulos novos `< 300`; políticas sem I/O).
+  - Sonda manual de CLI em campanha de teste: `init-campaign` → `world-tick --minutes 10080` (data `+7d` exata, relógios saturados) → `schedule` (`scene_due`) → `world-tick --to` (disparo único) → reexecução (`idempotent`, 0 eventos) → `queue` (fila e hash).
+  - Teste de rebuild: `queue.json` mantém o mesmo hash após `rebuild --force` com auditoria.
+- **Relações:** [`ROADMAP.md`](ROADMAP.md) §3 (Fase 05), §5 (G4), §6.4 (R3); [`ARCHITECTURE.md`](ARCHITECTURE.md) §6.1, §9.3, §12; [`specs/015-phase-05-simulation/spec.md`](specs/015-phase-05-simulation/spec.md); `EX-0040`.
+- **Pendências:**
+  - auditoria independente de QA da Fase 05 (em curso; parecer em [`qa-review.md`](specs/015-phase-05-simulation/qa-review.md));
+  - `review/` (split de `council/reviewer.py`) permanece para a Fase 06 por decisão G4-D13.
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.

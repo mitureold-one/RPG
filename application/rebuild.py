@@ -13,6 +13,7 @@ from application.projectors import (
     FactionProjector,
     JournalProjector,
     NpcProjector,
+    QueueProjector,
     StateProjector,
 )
 from contracts.event import ActorRef, EventDraft
@@ -32,6 +33,7 @@ def default_projectors(
         CharacterSheetProjector(initial_text=init.get("ficha.md")),
         NpcProjector(initial_text=init.get("npcs.md")),
         StateProjector(initial_text=init.get("estado.json")),
+        QueueProjector(initial_text=init.get("queue.json")),
     ]
     if include_factions or "faccoes.md" in init:
         projectors.append(FactionProjector(initial_text=init.get("faccoes.md")))
