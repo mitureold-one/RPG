@@ -66,9 +66,9 @@ def resolve_mode_policy(
 
     # Override explícito de depuração (--audience)
     if aud_over:
-        if aud_over in ("universe", "system"):
+        if aud_over in ("universe", "system", "gm"):
             audience = HolderRef("universe", "gm")
-        elif aud_over in ("player", "human", "gm"):
+        elif aud_over in ("player", "human"):
             audience = HolderRef("player", player_id)
         elif aud_over in ("protagonist", "pc", "narrator", "writer"):
             audience = HolderRef("protagonist", protagonist_id)

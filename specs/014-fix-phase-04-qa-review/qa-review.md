@@ -7,6 +7,48 @@
 
 ---
 
+## Re-auditoria final — 26/10/2026 (EX-0038)
+
+**Commit auditado:** `bc8c2ff` (`fix(phase-04): sanar escopo residual ...`), worktree limpo.
+**Suíte:** **250 testes OK em 67,8 s**; fronteiras **8 OK**; fase 04 **16 OK**; `prepare.py` 287 linhas.
+**Sondas:** `probe_phase04.py`, `probe_phase04b.py` e `probe_phase04c.py`, todas sem crash e com os cenários esperados.
+
+**Veredito: APROVADO COM RESSALVAS MENORES.** Os 2 P0, todos os P1 e os 6 P2 anteriores foram fechados e verificados. Restam apenas P3 de acabamento/documentação; o Gate técnico da Fase 04 (C01–C10) está atendido.
+
+### 1. Fechados nesta rodada
+
+| Achado | Status | Evidência |
+| :--- | :---: | :--- |
+| P1 fallback focal | **Fechado** | `dinastia_cinzas`: `focal: ['Lady Vespera', 'Sylvia']`; fallback dos 2 primeiros presente |
+| P2-1 `unknown` × `inexistent` | **Fechado** | `clm_desconhecida` registrada sem registro → omissão `unknown` |
+| P2-2 GM universo | **Fechado** | modo `gm` usa `universe:gm`; `faction_internal` visível (`clm_segredo_fac` em `causal.items`) |
+| P2-3 núcleo com overrides/restrições | **Fechado** | `context.core` ruleset expõe `system`, `dc_ladder`, `tier_names`, `overrides`, `restrictions` |
+| P2-4 `query.entities` filtrado | **Fechado** | protagonista lista apenas entidades presentes/ativas/vinculadas |
+| P2-5 hash sensível a payload | **Fechado** | `_section_hash` inclui `payload` e `reason`; teste C09 confirma hashes diferentes |
+| P2-6 fatos por relevância | **Fechado** | `FactsCausalProvider` pontua por ação/presentes/local/recência e aplica limiar |
+| Mandato de missão | **Fechado** | C09 confirma `ALERTA CRÍTICO` a 1 passo da ruptura de relógio |
+| C06/C07/C09/C10 | **Fechado** | `unknown`/`unavailable` cobertos; parser CLI exercitado; matriz GM/Player/Narrador validada |
+
+### 2. P3 — ressalvas de acabamento
+
+1. **Cena com um único NPC presente e sem vontade/plano fica sem focal.** O fallback só entra com `len(scene_npcs) >= 2` (`application/context/scene.py:59-61`); o comportamento antigo selecionava esse único NPC. Cena de um só interlocutor perde `focal_npcs` e `mandatory_npc_updates`.
+2. **`--audience gm` em modo `narrator`/`writer`** continua mapeando para `player:player`; só o modo `gm` padrão usa `universe:gm`. O override explícito “gm” deveria ser universo.
+3. **C07 exercita o parser CLI, não a execução do comando `query`**; o caminho `main()` continua sem teste automatizado.
+4. **`ContextScene.game_time_sort`** recebe `last_turn_num`, não tempo de jogo (`application/prepare.py:212`).
+5. **Governança documental:** `ROADMAP.md` linha 141 já declara a Fase 04 “aprovada ... homologadas ... EX-0036”, antes do parecer final; a referência deve apontar para `EX-0039` e para este parecer.
+
+### 3. Reprodução
+
+```powershell
+$env:PYTHONPATH='.'
+python -m unittest discover tests
+python .tmp/probe_phase04.py
+python .tmp/probe_phase04b.py
+python .tmp/probe_phase04c.py
+```
+
+---
+
 ## 0. Veredito
 
 **Reprovado com escopo residual pequeno.** Os **2 P0 e 4 dos 5 P1** foram sanados e verificados; permanecem **1 P1** (fallback de atores focais, exigido por FR-FIX-06/SC-05) e **6 P2**. Há ainda um **P0 de governança**: o implementador alterou o veredito do parecer de QA (`specs/013-phase-04-causal-context/qa-review.md`) para “APROVADO APÓS REMEDIAÇÃO” sem auditoria independente; o parecer foi restaurado pelo QA.

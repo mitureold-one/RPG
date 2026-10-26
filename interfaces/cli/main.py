@@ -26,9 +26,9 @@ from contracts.event import ActorRef, EventDraft
 from interfaces.cli.parser import build_cli
 
 
-def main():
+def main(argv: list[str] | None = None):
     parser = build_cli()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.cmd == "prepare":
         res = cmd_prepare(
             args.campaign, args.action, args.variant, args.dc, args.stat, args.roll,

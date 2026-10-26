@@ -992,6 +992,36 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+## EX-0039 — 2026-10-26 — Re-auditoria final da Fase 04 (EX-0038): aprovação com ressalvas menores
+
+- **Autor:** agente de QA DeepSeek Harness, a pedido do usuário.
+- **Tipo:** auditoria + teste (nenhum código de produção alterado).
+- **Status:** **APROVADO COM RESSALVAS MENORES** — Gate técnico da Fase 04 (C01–C10) atendido; restam P3 de acabamento/documentação.
+- **Commit:** `bc8c2ff` (worktree limpo na auditoria).
+- **Corrige:** parecer de `EX-0037` ao verificar a remediação de `EX-0038`.
+- **Escopo:** fallback focal, `unknown` × `inexistent`, GM universo, overrides no núcleo, filtro de `query.entities`, hash com payload, relevância de fatos, mandato de missão e aprofundamento dos testes.
+- **Como:** suíte completa, fase 04, fronteiras, leitura do diff e sondas `.tmp/probe_phase04.py`, `b.py` e `c.py`.
+- **Evidência:**
+  - **Suíte:** **250 testes OK em 67,8 s**; fronteiras **8 OK**; fase 04 **16 OK**; `prepare.py` 287 linhas.
+  - **P1 focal fechado:** `dinastia_cinzas` → `focal: ['Lady Vespera', 'Sylvia']`.
+  - **P2-1:** claim registrada sem registro → omissão `unknown`.
+  - **P2-2:** modo `gm` usa `universe:gm`; `faction_internal` visível.
+  - **P2-3:** `context.core` ruleset inclui `overrides` e `restrictions`.
+  - **P2-4:** `query.entities` filtrado por audiência.
+  - **P2-5:** `_section_hash` inclui payload/reason.
+  - **P2-6:** fatos pontuados por ação/presentes/local/recência.
+  - **Mandato:** `ALERTA CRÍTICO` de relógio restaurado no C09.
+  - **C06/C07/C09/C10** aprofundados.
+- **Relações:** [`specs/014-fix-phase-04-qa-review/qa-review.md`](specs/014-fix-phase-04-qa-review/qa-review.md) (§ Re-auditoria final); [`specs/013-phase-04-causal-context/qa-review.md`](specs/013-phase-04-causal-context/qa-review.md); `EX-0037`, `EX-0038`.
+- **Pendências P3 (não bloqueantes):**
+  - cena com um único NPC presente e sem vontade/plano fica sem focal (`len(scene_npcs) >= 2`);
+  - `--audience gm` em `narrator`/`writer` mapeia `player:player`, não universo;
+  - C07 exercita o parser, não a execução de `main()`;
+  - `game_time_sort` usa `last_turn_num`;
+  - `ROADMAP.md` já declara a fase aprovada com referência a `EX-0036`; atualizar para `EX-0039` e este parecer.
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.

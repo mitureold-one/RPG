@@ -334,6 +334,18 @@ class Phase04CausalContextTests(unittest.TestCase):
         self.assertEqual(cli_res.availability, "known")
         self.assertEqual(cli_res.id, "malakor")
 
+        # Exercita a execução ponta a ponta de main() do CLI query
+        import io
+        import contextlib
+        from interfaces.cli.main import main
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            main(["query", "--campaign", "ctx_camp", "--kind", "npc", "--id", "malakor", "--json"])
+        cli_out = json.loads(buf.getvalue())
+        self.assertEqual(cli_out["kind"], "npc")
+        self.assertEqual(cli_out["id"], "malakor")
+        self.assertEqual(cli_out["availability"], "known")
+
     def test_c09_compatibility_and_determinism(self) -> None:
         """C09: chaves legadas preservadas, valores legados corretos e determinismo de hash com payload."""
         res = cmd_prepare("ctx_camp", action="Inspecionar área", no_roll=True)

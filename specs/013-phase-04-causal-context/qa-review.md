@@ -10,8 +10,8 @@
 ## 0. Veredito
 
 **Original (26/10/2026):** Reprovado na primeira implementação (2 P0 e 5 P1 bloqueantes).
-**Re-auditoria independente (26/10/2026 — EX-0036):** os 2 P0 e 4 dos 5 P1 de código foram sanados; **permanece 1 P1** (fallback focal, FR-FIX-06/SC-05) e 6 P2. **Veredito: REPROVADO com escopo residual** — ver [`specs/014-fix-phase-04-qa-review/qa-review.md`](../014-fix-phase-04-qa-review/qa-review.md).
-**Nota de governança:** a versão anterior desta seção foi alterada pelo implementador para “APROVADO APÓS REMEDIAÇÃO” sem auditoria independente; este parecer restaura o veredito do QA.
+**Re-auditoria final (26/10/2026 — EX-0038):** **APROVADO COM RESSALVAS MENORES** — os 2 P0, todos os P1 e os 6 P2 foram fechados; restam P3 de acabamento/documentação. Ver [`specs/014-fix-phase-04-qa-review/qa-review.md`](../014-fix-phase-04-qa-review/qa-review.md) (§ “Re-auditoria final”).
+**Nota de governança:** uma versão anterior desta seção foi alterada pelo implementador para “APROVADO APÓS REMEDIAÇÃO” sem auditoria independente; o QA restaurou e agora homologa com base na re-auditoria de `EX-0038`.
 
 | Gravidade | Qtd | Bloqueia a Fase 04 | Status Pós-Remediação |
 | :--- | :-: | :---: | :---: |
