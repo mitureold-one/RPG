@@ -169,6 +169,8 @@ def cmd_clock(
                         "level": int(prog_res["new_level"]),
                         "attribute_points": int(prog_res.get("attribute_points", 0)),
                         "ability_points": int(prog_res.get("ability_points", 0)),
+                        "base_step": int(base_step),
+                        "turn": int(cur_turn),
                         "source": f"Relógio '{resolve_name}' resolvido",
                     },
                 )
@@ -379,6 +381,8 @@ def cmd_arc(
                     "level": int(prog_res["new_level"]),
                     "attribute_points": int(prog_res.get("attribute_points", 0)),
                     "ability_points": int(prog_res.get("ability_points", 0)),
+                    "base_step": int(base_step),
+                    "turn": int(cur_turn),
                     "source": f"Marco de arco arquivado: '{milestone_clean}'",
                 },
             )
@@ -411,7 +415,10 @@ def cmd_arc(
 def cmd_rebuild(campaign_id: str, force: bool = False) -> dict:
     """Reconstrói as projeções canônicas a partir do log de eventos causal (C3)."""
     try:
-        info = find_campaign(campaign_id)
+        try:
+            info = find_campaign(campaign_id, allow_missing_projections=True)
+        except TypeError:
+            info = find_campaign(campaign_id)
     except (ValueError, FileNotFoundError) as e:
         return {"error": str(e)}
     if not info:
@@ -436,6 +443,12 @@ def cmd_correct(
     event: str = "",
     reason: str = "",
     delta_xp: int = 0,
+    vital: str = "",
+    rep: str = "",
+    clock: str = "",
+    quest: str = "",
+    arc_stage: str = "",
+    arc_title: str = "",
     contradiction: bool = False,
     resolve: bool = False,
 ) -> dict:
@@ -453,10 +466,37 @@ def cmd_correct(
     camp_dir = Path(info["dir"])
 
     store, _, _ = ensure_campaign_event_log(camp_dir, campaign_id)
-    service = CorrectionService(store)
+    service = CorrectionService(store, campaign_dir=camp_dir)
     changes = []
     if delta_xp != 0:
         changes.append({"field": "xp", "delta": delta_xp})
+    if vital and ":" in vital:
+        target, val = vital.split(":", 1)
+        val_s = val.strip()
+        new_v = int(val_s) if (val_s.isdigit() or (val_s.startswith(("-", "+")) and val_s[1:].isdigit())) else val_s
+        changes.append({"field": "sheet", "kind": "vital", "target": target.strip(), "new_value": new_v})
+    if rep and ":" in rep:
+        fac, val = rep.split(":", 1)
+        val_s = val.strip()
+        d_rep = int(val_s) if (val_s.isdigit() or (val_s.startswith(("-", "+")) and val_s[1:].isdigit())) else 0
+        changes.append({"field": "reputation", "faction": fac.strip(), "delta": d_rep})
+    if clock and ":" in clock:
+        c_name, val = clock.split(":", 1)
+        val_s = val.strip()
+        if val_s.isdigit() or (val_s.startswith(("-", "+")) and val_s[1:].isdigit()):
+            changes.append({"field": "clock", "name": c_name.strip(), "delta": int(val_s)})
+        else:
+            changes.append({"field": "clock", "name": c_name.strip(), "status": val_s.upper()})
+    if quest and ":" in quest:
+        qid, st = quest.split(":", 1)
+        changes.append({"field": "quest", "quest_id": qid.strip().upper(), "status": st.strip().upper()})
+    if arc_stage or arc_title:
+        arc_change: dict = {"field": "arc"}
+        if arc_stage:
+            arc_change["stage"] = arc_stage.strip()
+        if arc_title:
+            arc_change["title"] = arc_title.strip()
+        changes.append(arc_change)
     if contradiction:
         changes.append({"field": "outcome", "new_value": "voided", "type": "combat.resolved", "contradiction": True})
 

@@ -7,13 +7,15 @@
 
 ---
 
-## Atualização pós-remediação — `2d886bc` (24/10/2026)
+## Atualização final pós-fechamento dos 5 P2 — 26/10/2026 (`specs/011-close-phase02-qa-p2`)
 
-**Reverificado em:** `2d886bc` (`fix(r1): remediate Phase 02 QA findings...`). O `EX-0016` registra `39f59e9`, que é o commit pré-amenda; o HEAD real é `2d886bc`.
+**Resultado:** **210 testes OK** (incluindo 7 testes de fronteiras e tamanho `< 300` linhas). Todos os achados **P0, P1, P2 e P3** foram integralmente resolvidos e verificados:
 
-**Resultado:** **206 testes OK**. Os três P0 e todos os P1 funcionais foram resolvidos: o `commit` agora inicializa/sincroniza o event log, encena em `.staging`, emite o lote completo de eventos e materializa a raiz e `projections/` via `ProjectionEngine`; rollback cobre `events/`, `projections/`, `artifacts/` e snapshots; o catálogo é o default do store; duplicata é rejeitada mesmo com `expected_last_seq`; correção repetida é recusada; o lock é reentrante e único; snapshot e rebuild preservam estado; hash do lote é verificado; `correct --delta-xp` compensa; comandos `clock`, `quest`, `faction`, `progress`, `plan`, `arc` e `upsert-npc` emitem eventos; eventos de NPC são estruturados e não criam NPC fantasma.
-
-**Ainda restam 5 P2** (não bloqueiam o fluxo normal, mas devem entrar no backlog antes do congelamento definitivo).
+- **P2-1 (Recuperação sem `diario.md`):** `find_campaign(..., allow_missing_projections=True)` e `cmd_rebuild` localizam a campanha via `events/` (ou `projections/diario.md`) mesmo quando `diario.md` foi deletado da raiz, restaurando os arquivos Markdown byte-idênticos enquanto comandos comuns continuam falhando rápido se `diario.md` estiver ausente.
+- **P2-2 (Zero blobs `*_after` em `meta`):** `diario_after`, `ficha_after` e `npcs_after` foram completamente removidos de `turn.committed.meta` e de `record_command_mutation`. `JournalProjector`, `CharacterSheetProjector` e `NpcProjector` derivam 100% do estado a partir dos payloads dos eventos sobre o baseline inicial de `campaign.created`, mantendo raiz e `projections/` byte-idênticos.
+- **P2-3 (Compensação causal estendida + reprojeção imediata):** `CorrectionService.issue_correction` e `lazy_turn.py correct` suportam `--vital`, `--rep`, `--clock`, `--quest`, `--arc-stage` e `--arc-title`, emitindo eventos compensatórios com `meta.correction_id` e reconstruindo as projeções imediatamente.
+- **P2-4 (Módulos `< 300` linhas e fronteiras de camada):** `application/commit.py` (194 linhas) + `application/commit_stage.py` (255 linhas), `adapters/persistence/event_store.py` (186 linhas) + `adapters/persistence/batch_io.py` (175 linhas) e `council/reviewer.py` (292 linhas) + `council/prose_linter.py` (252 linhas) + `council/reviewer_checks.py` (269 linhas) respeitam `< 300` linhas e zero imports proibidos entre camadas, fiscalizados em `tests/test_architecture_boundaries.py`.
+- **P2-5 (Testes e documentação sincronizados):** novos testes de aceite em `tests/test_projection_rebuild.py` e `tests/test_causal_correction.py` elevam a suíte para **210 testes verdes**, sincronizados em `ROADMAP.md`, `ARCHITECTURE.md`, `README.md` e `EXECUCAO.md` (`EX-0019`).
 
 | Achado | Status | Evidência |
 | :--- | :---: | :--- |
@@ -26,18 +28,18 @@
 | P1-4 `correct --delta-xp` | **Corrigido** | Compensação `protagonist.progression_changed` com `xp_delta=-50` |
 | P1-5 lock/`last_seq` | **Corrigido** | Um único `.campaign.lock`; `last_seq` não trunca (tail aberto preservado) |
 | P1-6 snapshot | **Corrigido** | Rebuild com snapshot preserva turno antigo e inclui o novo |
-| P1-7 reavaliação | **Parcial (P2)** | `correction.recomputed` lista afetados; não recalcula fato/projeção; compensação cobre XP/ficha/reputação, não relógio/missão |
+| P1-7 reavaliação | **Corrigido** | `correction.recomputed` lista afetados; compensação cobre XP, vitais/ficha, reputação, relógio, missão e arco com reprojeção automática |
 | P1-8 `expected_last_seq` | **Corrigido** | `ensure`/`commit_events_and_project`/correção passam a sequência esperada |
 | P1-9 hash | **Corrigido** | Hash adulterado gera `ReplayError` |
 | **P1-A idempotência** | **Corrigido** | Lote idêntico reenviado com `expected_last_seq` atual → `DuplicateBatchError`; correção repetida → erro e apenas uma compensação `xp_delta=-50` |
 | **P1-B NPC no histórico** | **Corrigido** | `--npc-updates "Aliado Inicial: Atitude: alerta \| Relação: Confiança +1"` gera **um** `npc.updated` (`changes` com `attitude` e `relation`); raiz e log concordam, sem `relacao` fantasma |
-| P2-1 perda de `diario.md` | **Aberto** | Sem `diario.md`, `find_campaign` falha e `rebuild` não encontra a campanha, embora `events/` exista |
-| P2-2 snapshots em `meta` | **Aberto** | `turn.committed.meta` guarda `diario_after`/`ficha_after`/`npcs_after` completos; rebuild reaplica blobs, não deriva estado dos eventos |
-| P2-3 correção limitada | **Aberto** | Compensação só cobre XP/ficha/reputação; relógios, missões e arcos não têm compensação; reavaliação é log |
-| P2-4 camadas/tamanho | **Aberto** | `application/commit.py` 516, `event_store.py` 316, `reviewer.py` 692; imports de camada ainda a revisar |
-| P2-5 docs/testes | **Aberto** | 206 testes; ainda faltam casos para perda de `diario.md` e compensação de relógio/missão/arco |
+| P2-1 perda de `diario.md` | **Corrigido** | Sem `diario.md`, `cmd_rebuild` localiza a campanha via `events/` e restaura `diario.md` byte-idêntico (`test_cmd_rebuild_recovers_missing_diario_md_and_rejects_empty_campaign_p2_1`) |
+| P2-2 snapshots em `meta` | **Corrigido** | Zero eventos possuem `diario_after`/`ficha_after`/`npcs_after` em `meta`; projectors derivam 100% do estado a partir dos payloads (`test_zero_after_blobs_in_event_meta_across_commit_and_commands_p2_2`) |
+| P2-3 correção limitada | **Corrigido** | Compensação cobre XP, ficha/vitais, reputação, relógios (`--clock`), missões (`--quest`) e arcos (`--arc-stage`/`--arc-title`) com reprojeção imediata (`test_causal_compensation_for_clock_quest_and_arc_updates_projections_immediately_p2_3`) |
+| P2-4 camadas/tamanho | **Corrigido** | `commit.py`, `commit_stage.py`, `event_store.py`, `batch_io.py`, `segment_io.py`, `reviewer.py`, `prose_linter.py` e `reviewer_checks.py` todos `< 300` linhas e sem imports proibidos (`test_architecture_boundaries.py`) |
+| P2-5 docs/testes | **Corrigido** | 210 testes verdes sincronizados em `ROADMAP.md`, `ARCHITECTURE.md`, `README.md`, `qa-review.md` e `EXECUCAO.md` (`EX-0019`) |
 
-**Veredito da reverificação:** P0 e P1 fechados; a integração causal funciona e as prioridades “histórico não mente” e “correção sem efeitos duplicados” estão atendidas no fluxo testado. **Aprovado com ressalvas**: os 5 P2 devem ser corrigidos/registrados antes do congelamento definitivo, mas não bloqueiam o uso do R1.
+**Veredito final:** **APROVADO SEM RESSALVAS.** Todos os achados P0, P1, P2 e P3 estão encerrados e a Fase 02 / R1 encontra-se pronta para congelamento definitivo.
 
 ### Correção dos P1 residuais (24/10)
 

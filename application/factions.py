@@ -129,7 +129,17 @@ def cmd_faction(
                 actor=actor,
                 game_time=gt,
                 game_time_sort=gts,
-                payload={"faction": fn, "delta_rep": delta, "new_score": res["new_score"], "delta_favors": 0, "delta_debts": 0, "reason": rsn},
+                payload={
+                    "faction": fn,
+                    "delta_rep": delta,
+                    "new_score": res["new_score"],
+                    "delta_favors": 0,
+                    "delta_debts": 0,
+                    "favors": res.get("favors", 0),
+                    "debts": res.get("debts", 0),
+                    "turn": cur_turn,
+                    "reason": rsn,
+                },
             )
         )
     elif favor:
@@ -152,7 +162,17 @@ def cmd_faction(
                 actor=actor,
                 game_time=gt,
                 game_time_sort=gts,
-                payload={"faction": fn, "delta_rep": 0, "new_score": res["new_score"], "delta_favors": delta, "delta_debts": 0, "reason": rsn},
+                payload={
+                    "faction": fn,
+                    "delta_rep": 0,
+                    "new_score": res["new_score"],
+                    "delta_favors": delta,
+                    "delta_debts": 0,
+                    "favors": res.get("favors", 0),
+                    "debts": res.get("debts", 0),
+                    "turn": cur_turn,
+                    "reason": rsn,
+                },
             )
         )
     elif debt:
@@ -175,7 +195,17 @@ def cmd_faction(
                 actor=actor,
                 game_time=gt,
                 game_time_sort=gts,
-                payload={"faction": fn, "delta_rep": 0, "new_score": res["new_score"], "delta_favors": 0, "delta_debts": delta, "reason": rsn},
+                payload={
+                    "faction": fn,
+                    "delta_rep": 0,
+                    "new_score": res["new_score"],
+                    "delta_favors": 0,
+                    "delta_debts": delta,
+                    "favors": res.get("favors", 0),
+                    "debts": res.get("debts", 0),
+                    "turn": cur_turn,
+                    "reason": rsn,
+                },
             )
         )
     elif tick:
@@ -187,7 +217,12 @@ def cmd_faction(
                 actor=actor,
                 game_time=gt,
                 game_time_sort=gts,
-                payload={"command": "faction.tick", "status": "ok", "summary": "Tick off-screen de facções"},
+                payload={
+                    "command": "faction.tick",
+                    "status": "ok",
+                    "summary": "Tick off-screen de facções",
+                    "clock_updates": action_res.get("advancements", []),
+                },
             )
         )
 

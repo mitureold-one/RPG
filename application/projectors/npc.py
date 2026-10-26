@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import re
+import tempfile
+from pathlib import Path
+from typing import Any
 
 from contracts.ports import EventStreamView, ProjectionSection
+from council.narrator import apply_npc_updates_to_md, upsert_npc_to_md
 
 _DEFAULT_NPCS = """# Personagens Não-Jogáveis (NPCs)
 
@@ -23,30 +27,68 @@ class NpcProjector:
         self.initial_text = initial_text
 
     def project(self, view: EventStreamView) -> ProjectionSection:
-        text = self.initial_text if self.initial_text is not None else _DEFAULT_NPCS
+        init_txt = self.initial_text if self.initial_text is not None else _DEFAULT_NPCS
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir) / "npcs.md"
+            tmp.write_text(init_txt, encoding="utf-8")
 
-        for ev in view.events:
-            meta = ev.meta or {}
-            p = ev.payload
-            t = ev.type
+            for ev in view.events:
+                self._apply_event(tmp, ev)
 
-            if t == "projection.rebuilt":
-                continue
+            final_text = tmp.read_text(encoding="utf-8")
 
-            if t == "campaign.created":
-                baseline = meta.get("baseline", {})
-                if isinstance(baseline, dict) and "npcs.md" in baseline:
-                    text = str(baseline["npcs.md"])
-                continue
+        return ProjectionSection(
+            file=self.file,
+            section=self.section,
+            content=final_text.rstrip() + "\n",
+        )
 
-            if "npcs_after" in meta and meta["npcs_after"]:
-                text = str(meta["npcs_after"])
-                continue
+    @staticmethod
+    def _apply_event(tmp: Path, ev: Any) -> None:
+        meta = ev.meta or {}
+        p = ev.payload
+        t = ev.type
 
-            if t == "npc.updated":
-                npc_id = str(p.get("npc_id", ""))
-                changes = dict(p.get("changes") or {})
-                name = str(changes.get("name", npc_id))
+        if t == "projection.rebuilt":
+            return
+
+        if t == "campaign.created":
+            baseline = meta.get("baseline", {})
+            if isinstance(baseline, dict) and "npcs.md" in baseline:
+                tmp.write_text(str(baseline["npcs.md"]), encoding="utf-8")
+            return
+
+        if t == "command.executed":
+            if str(p.get("command", "")) == "sync" and isinstance(p.get("files"), dict) and "npcs.md" in p["files"]:
+                tmp.write_text(str(p["files"]["npcs.md"]), encoding="utf-8")
+            return
+
+        if t == "npc.updated":
+            npc_id = str(p.get("npc_id", ""))
+            changes = dict(p.get("changes") or {})
+            name = str(changes.get("name", npc_id))
+            mode = str(changes.get("mode", ""))
+
+            if mode == "turn_update" and "raw_update" in changes:
+                apply_npc_updates_to_md(tmp, f"{name}: {changes['raw_update']}")
+            elif mode == "upsert":
+                upsert_npc_to_md(
+                    tmp,
+                    name=name,
+                    classification=str(changes.get("classification", "")),
+                    role=str(changes.get("role", "")),
+                    faction=str(changes.get("faction", "")),
+                    attitude=str(changes.get("attitude", "")),
+                    psychology=str(changes.get("psychology", "")),
+                    will=str(changes.get("will", "")),
+                    weakness=str(changes.get("weakness", "")),
+                    dynamics=str(changes.get("dynamics", "")),
+                    appearance=str(changes.get("appearance", "")),
+                    bonds=str(changes.get("bonds", "")),
+                    relation=str(changes.get("relation", "")),
+                )
+            else:
+                text = tmp.read_text(encoding="utf-8")
                 status = str(changes.get("status", "Ativo"))
                 pat = re.compile(rf"###\s*{re.escape(name)}\b.*?(?=\n###|\n##|\Z)", re.IGNORECASE | re.DOTALL)
                 lines = [f"### {name}", f"* **ID:** {npc_id}", f"* **Status:** {status}"]
@@ -58,12 +100,7 @@ class NpcProjector:
                     text = pat.sub(block, text, count=1)
                 else:
                     text = text.rstrip() + "\n\n" + block
-
-        return ProjectionSection(
-            file=self.file,
-            section=self.section,
-            content=text.rstrip() + "\n",
-        )
+                tmp.write_text(text, encoding="utf-8")
 
 
 __all__ = ["NpcProjector"]

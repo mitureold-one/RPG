@@ -55,7 +55,10 @@ def _serialized_campaign_mutation(func):
 
     @functools.wraps(func)
     def wrapper(campaign_id, *args, **kwargs):
+        allow_missing = func.__name__ == "cmd_rebuild"
         try:
+            info = find_campaign(campaign_id, allow_missing_projections=allow_missing)
+        except TypeError:
             info = find_campaign(campaign_id)
         except (ValueError, FileNotFoundError) as exc:
             return {"error": str(exc)}
@@ -65,11 +68,12 @@ def _serialized_campaign_mutation(func):
         timeout = float(os.environ.get("RPGPRO_LOCK_TIMEOUT", "10.0"))
         try:
             with campaign_lock(camp_dir, timeout=timeout):
-                md_snapshots: dict[Path, str] = {}
+                md_snapshots: dict[Path, str | None] = {}
                 for key in ("ficha", "diario", "npcs", "mundo", "regras"):
                     path = info.get(key)
-                    if path and Path(path).exists():
-                        md_snapshots[Path(path)] = Path(path).read_text(encoding="utf-8")
+                    if path:
+                        p_obj = Path(path)
+                        md_snapshots[p_obj] = p_obj.read_text(encoding="utf-8") if p_obj.exists() else None
 
                 dir_existed: dict[str, bool] = {}
                 dir_snapshots: dict[str, dict[Path, bytes]] = {}
@@ -86,7 +90,11 @@ def _serialized_campaign_mutation(func):
                 except BaseException:
                     for path, content in md_snapshots.items():
                         try:
-                            atomic_write_text(path, content)
+                            if content is None:
+                                if path.exists():
+                                    path.unlink()
+                            else:
+                                atomic_write_text(path, content)
                         except OSError:
                             pass
                     for dname in _SNAPSHOT_DIRS:
@@ -201,13 +209,9 @@ def ensure_campaign_event_log(
                         "command": "sync",
                         "status": "ok",
                         "summary": "Sincronização de edição direta no SSOT",
+                        "files": dict(baseline),
                     },
-                    meta={
-                        "dependencies": [last_ev.event_id],
-                        "diario_after": baseline.get("diario.md", ""),
-                        "ficha_after": baseline.get("ficha.md", ""),
-                        "npcs_after": baseline.get("npcs.md", ""),
-                    },
+                    meta={"dependencies": [last_ev.event_id]},
                 )
             ],
             expected_last_seq=last_seq,
@@ -240,18 +244,14 @@ def record_command_mutation(
     prev_event_id: str,
     drafts: Sequence[EventDraft],
 ) -> AppendResult:
-    """Anexa estado resultante e dependências causais aos drafts de um comando e projeta."""
-    baseline = _read_campaign_baseline(camp_dir)
+    """Anexa dependências causais aos drafts de um comando (sem snapshots *_after em meta) e projeta."""
     enriched: list[EventDraft] = []
-    n = len(drafts)
     for idx, d in enumerate(drafts):
         meta = dict(d.meta or {})
         if "dependencies" not in meta:
             meta["dependencies"] = [prev_event_id] if (idx == 0 and prev_event_id) else ([f"batch:{idx - 1}"] if idx > 0 else [])
-        if idx == n - 1:
-            meta.setdefault("diario_after", baseline.get("diario.md", ""))
-            meta.setdefault("ficha_after", baseline.get("ficha.md", ""))
-            meta.setdefault("npcs_after", baseline.get("npcs.md", ""))
+        for k in ("diario_after", "ficha_after", "npcs_after"):
+            meta.pop(k, None)
         enriched.append(
             EventDraft(
                 type=d.type,

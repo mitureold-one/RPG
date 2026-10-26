@@ -96,8 +96,17 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             for module in _imported_roots(path):
                 self.assertNotIn(
                     module,
-                    {"council", "interfaces", "lazy_turn", "rulesets"},
+                    {"council", "interfaces", "lazy_turn", "rulesets", "application"},
                     f"{path.relative_to(ROOT)} importa módulo de domínio proibido '{module}'",
+                )
+
+    def test_council_does_not_import_application_or_cli(self) -> None:
+        for path in (ROOT / "council").rglob("*.py"):
+            for module in _imported_roots(path):
+                self.assertNotIn(
+                    module,
+                    {"application", "interfaces", "lazy_turn"},
+                    f"{path.relative_to(ROOT)} importa camada superior proibida '{module}'",
                 )
 
     def test_entry_point_and_file_size_limits(self) -> None:
@@ -109,6 +118,20 @@ class ArchitectureBoundaryTests(unittest.TestCase):
 
         ssot_len = len((ROOT / "council" / "ssot.py").read_text(encoding="utf-8").splitlines())
         self.assertLess(ssot_len, 100, f"council/ssot.py deve ter menos de 100 linhas (tem {ssot_len})")
+
+        strict_300_targets = (
+            ROOT / "application" / "commit.py",
+            ROOT / "application" / "commit_stage.py",
+            ROOT / "adapters" / "persistence" / "event_store.py",
+            ROOT / "adapters" / "persistence" / "batch_io.py",
+            ROOT / "adapters" / "persistence" / "segment_io.py",
+            ROOT / "council" / "reviewer.py",
+            ROOT / "council" / "prose_linter.py",
+            ROOT / "council" / "reviewer_checks.py",
+        )
+        for path in strict_300_targets:
+            size = len(path.read_text(encoding="utf-8").splitlines())
+            self.assertLess(size, 300, f"{path.relative_to(ROOT)} deve ter menos de 300 linhas (tem {size})")
 
         for package in ("application", "interfaces", "contracts", "kernel", "adapters", "temporal", "campaign", "resources"):
             for path in (ROOT / package).rglob("*.py"):

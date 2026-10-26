@@ -226,6 +226,71 @@ class CausalCorrectionTests(unittest.TestCase):
             finally:
                 helpers.CAMPAIGN_DIRS = orig_dirs
 
+    def test_causal_compensation_for_clock_quest_and_arc_updates_projections_immediately_p2_3(self) -> None:
+        from application.progression import cmd_quest
+        from application.showrunner import cmd_clock
+        from council.quests import parse_quests_from_diario
+        from resources.clocks import parse_clocks_from_diario
+        from resources.ledger import parse_arc_from_diario
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            orig_dirs = helpers.CAMPAIGN_DIRS
+            helpers.CAMPAIGN_DIRS = [root]
+            try:
+                cid = "camp_p2_3"
+                init_campaign_from_templates(cid, title="Compensação P2-3", protagonist_name="Doran")
+                cdir = root / cid
+
+                cmd_clock(cid, add_name="Invasão Sombria", max_steps=4, trigger="Ataque total")
+                cmd_clock(cid, advance_name="Invasão Sombria", advance_steps=2)
+                cmd_quest(cid, check_target="Q1:1")
+                cmd_quest(cid, complete_id="Q1", evidence="Relatório entregue")
+
+                store = JsonlEventStore(cdir)
+                all_evts = tuple(store.read(cid))
+                clk_ev = next(e for e in reversed(all_evts) if e.type == "clock.advanced")
+                q_ev = next(e for e in reversed(all_evts) if e.type == "quest.completed")
+
+                # 1. Compensa relógio (-1 passo) e arco via cmd_correct
+                res_cor1 = cmd_correct(
+                    cid,
+                    event=clk_ev.event_id,
+                    reason="Avanço de relógio excessivo no turno anterior",
+                    clock="Invasão Sombria:-1",
+                    arc_stage="Investigação",
+                    arc_title="Sombra nas Fronteiras",
+                )
+                self.assertEqual(res_cor1.get("status"), "ok")
+
+                clocks_now = parse_clocks_from_diario(cdir / "diario.md")
+                inv_clk = next(c for c in clocks_now if c["name"] == "Invasão Sombria")
+                self.assertEqual(inv_clk["current"], 1)
+                self.assertEqual(inv_clk["status"], "ACTIVE")
+
+                arc_now = parse_arc_from_diario(cdir / "diario.md")
+                self.assertEqual(arc_now["stage"], "Investigação")
+                self.assertEqual(arc_now["title"], "Sombra nas Fronteiras")
+
+                # 2. Compensa status de missão (Q1 de COMPLETED -> ACTIVE) via cmd_correct
+                res_cor2 = cmd_correct(
+                    cid,
+                    event=q_ev.event_id,
+                    reason="Missão concluída prematuramente",
+                    quest="Q1:ACTIVE",
+                )
+                self.assertEqual(res_cor2.get("status"), "ok")
+
+                quests_now = parse_quests_from_diario(cdir / "diario.md")
+                q1_now = next(q for q in quests_now if q["id"] == "Q1")
+                self.assertEqual(q1_now["status"], "ACTIVE")
+                self.assertEqual(
+                    (cdir / "diario.md").read_bytes(),
+                    (cdir / "projections" / "diario.md").read_bytes(),
+                )
+            finally:
+                helpers.CAMPAIGN_DIRS = orig_dirs
+
 
 if __name__ == "__main__":
     unittest.main()

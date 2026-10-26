@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import re
+import tempfile
+from pathlib import Path
 from typing import Any
 
 from contracts.ports import EventStreamView, ProjectionSection
-from rulesets.progression import (
-    DEFAULT_BASE_STEP,
-    calculate_level_from_xp,
-    calculate_level_up_bonuses,
+from council.factions import update_reputation_in_ficha
+from resources.progression import (
+    parse_progression_from_ficha,
+    spend_ability_point_in_ficha,
+    spend_attribute_point_in_ficha,
+    update_progression_in_ficha,
 )
+from resources.sheet import parse_ficha_md, upsert_ficha_feature
+from rulesets.progression import DEFAULT_BASE_STEP
 
 _DEFAULT_FICHA = """# Ficha do Protagonista
 
@@ -57,139 +63,113 @@ class CharacterSheetProjector:
         self.initial_text = initial_text
 
     def project(self, view: EventStreamView) -> ProjectionSection:
-        text = self.initial_text if self.initial_text is not None else _DEFAULT_FICHA
+        init_txt = self.initial_text if self.initial_text is not None else _DEFAULT_FICHA
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp = Path(tmp_dir) / "ficha.md"
+            tmp.write_text(init_txt, encoding="utf-8")
 
-        for ev in view.events:
-            meta = ev.meta or {}
-            p = ev.payload
-            t = ev.type
+            for ev in view.events:
+                self._apply_event(tmp, ev)
 
-            if t == "projection.rebuilt":
-                continue
-
-            if t == "campaign.created":
-                baseline = meta.get("baseline", {})
-                if isinstance(baseline, dict) and "ficha.md" in baseline:
-                    text = str(baseline["ficha.md"])
-                continue
-
-            if "ficha_after" in meta and meta["ficha_after"]:
-                text = str(meta["ficha_after"])
-                continue
-
-            if t == "protagonist.progression_changed":
-                xp_delta = int(p.get("xp_delta", 0))
-                xp_total = int(p.get("xp_total", 0))
-                text = self._apply_progression(text, xp_delta=xp_delta, xp_total=xp_total, payload=p)
-            elif t == "faction.reputation_changed":
-                fac = str(p.get("faction", ""))
-                score = int(p.get("new_score", 0))
-                favors = int(p.get("favors", 0))
-                debts = int(p.get("debts", 0))
-                text = self._upsert_faction(text, fac, score, favors, debts)
-            elif t == "turn.committed":
-                v = p.get("vitals", {})
-                if isinstance(v, dict):
-                    for k, val in v.items():
-                        text = self._update_vital(text, str(k), int(val))
-            elif t == "protagonist.sheet_changed":
-                kind = str(p.get("kind", ""))
-                target = str(p.get("target", ""))
-                val = p.get("new_value")
-                text = self._apply_sheet_change(text, kind, target, val, p.get("points_remaining"))
+            final_text = tmp.read_text(encoding="utf-8")
 
         return ProjectionSection(
             file=self.file,
             section=self.section,
-            content=text.rstrip() + "\n",
+            content=final_text.rstrip() + "\n",
         )
 
-    @staticmethod
-    def _parse_prog(text: str) -> dict[str, int]:
-        prog = {"level": 1, "xp": 0, "next_threshold": 250, "attribute_points": 0, "ability_points": 0}
-        m_sec = re.search(r"###\s*Progressão[^\n]*\n(.*?)(?=\n###|\Z)", text, re.IGNORECASE | re.DOTALL)
-        if not m_sec:
-            return prog
-        sec = m_sec.group(1)
-        for key, pat in (
-            ("level", r"\*\s*\*\*Nível:\*\*\s*(\d+)"),
-            ("xp", r"\*\s*\*\*(?:Experiência\s*\(XP\)|XP):\*\*\s*(\d+)"),
-            ("next_threshold", r"\*\s*\*\*Próximo Nível:\*\*\s*(\d+)"),
-            ("attribute_points", r"\*\s*\*\*Pontos de Atributo:\*\*\s*(\d+)"),
-            ("ability_points", r"\*\s*\*\*Pontos de Habilidade:\*\*\s*(\d+)"),
-        ):
-            m = re.search(pat, sec, re.IGNORECASE)
-            if m:
-                prog[key] = int(m.group(1))
-        return prog
+    def _apply_event(self, tmp: Path, ev: Any) -> None:
+        meta = ev.meta or {}
+        p = ev.payload
+        t = ev.type
 
-    @classmethod
-    def _apply_progression(
-        cls,
-        text: str,
-        xp_delta: int,
-        xp_total: int,
-        payload: dict[str, Any],
-        base_step: int = DEFAULT_BASE_STEP,
-    ) -> str:
-        cur = cls._parse_prog(text)
-        old_level = cur["level"]
-        new_xp = max(0, xp_total if "xp_total" in payload else cur["xp"] + xp_delta)
-        new_level, next_thresh = calculate_level_from_xp(new_xp, base_step=base_step)
+        if t == "projection.rebuilt":
+            return
 
-        if new_level >= old_level:
-            bonuses = calculate_level_up_bonuses(old_level, new_level)
-            attr_bonus = bonuses["attribute_points"]
-            abil_bonus = bonuses["ability_points"]
-            hp_add = bonuses["hp_bonus"]
-            sta_add = bonuses["stamina_bonus"]
-            ce_add = bonuses["energy_bonus"]
-        else:
-            rev = calculate_level_up_bonuses(new_level, old_level)
-            attr_bonus = -rev["attribute_points"]
-            abil_bonus = -rev["ability_points"]
-            hp_add = -rev["hp_bonus"]
-            sta_add = -rev["stamina_bonus"]
-            ce_add = -rev["energy_bonus"]
+        if t == "campaign.created":
+            baseline = meta.get("baseline", {})
+            if isinstance(baseline, dict) and "ficha.md" in baseline:
+                tmp.write_text(str(baseline["ficha.md"]), encoding="utf-8")
+            return
 
-        new_attr = max(0, cur["attribute_points"] + attr_bonus)
-        new_abil = max(0, cur["ability_points"] + abil_bonus)
+        if t == "command.executed":
+            if str(p.get("command", "")) == "sync" and isinstance(p.get("files"), dict) and "ficha.md" in p["files"]:
+                tmp.write_text(str(p["files"]["ficha.md"]), encoding="utf-8")
+            return
 
-        if new_level != old_level:
-            m_v_sec = re.search(r"(###\s*Vitais[^\n]*\n)(.*?)(?=\n###|\Z)", text, re.IGNORECASE | re.DOTALL)
-            if m_v_sec:
-                header_v = m_v_sec.group(1)
-                v_content = m_v_sec.group(2)
-
-                def repl_vital(m_vit):
-                    lbl = m_vit.group(1)
-                    cur_v = int(m_vit.group(2))
-                    mx_v = int(m_vit.group(3))
-                    low = lbl.lower()
-                    bonus = 0
-                    if "hp" in low or "vida" in low or "pv" in low:
-                        bonus = hp_add
-                    elif "stamina" in low or "fôlego" in low or "folego" in low or "fadiga" in low or "vigor" in low:
-                        bonus = sta_add
-                    elif "ce" in low or "energia" in low or "mp" in low or "mana" in low:
-                        bonus = ce_add
-                    return f"* **{lbl}:** {max(1, cur_v + bonus)} / {max(1, mx_v + bonus)}"
-
-                new_v_content = re.sub(r"\*\s*\*\*([^:*]+):\*\*\s*(\d+)\s*/\s*(\d+)", repl_vital, v_content)
-                text = text[: m_v_sec.start()] + header_v + new_v_content + text[m_v_sec.end() :]
-
-        prog_block = (
-            f"### Progressão\n"
-            f"* **Nível:** {new_level}\n"
-            f"* **Experiência (XP):** {new_xp}\n"
-            f"* **Próximo Nível:** {next_thresh}\n"
-            f"* **Pontos de Atributo:** {new_attr}\n"
-            f"* **Pontos de Habilidade:** {new_abil}\n"
-        )
-        m_p_sec = re.search(r"###\s*Progressão[^\n]*\n.*?(?=\n###|\Z)", text, re.IGNORECASE | re.DOTALL)
-        if m_p_sec:
-            return text[: m_p_sec.start()] + prog_block + text[m_p_sec.end() :]
-        return text.rstrip() + f"\n\n{prog_block}\n"
+        if t == "protagonist.progression_changed":
+            xp_delta = int(p.get("xp_delta", 0))
+            if xp_delta == 0 and "xp_total" in p:
+                cur_p = parse_progression_from_ficha(tmp)
+                xp_delta = int(p["xp_total"]) - cur_p["xp"]
+            base_step = int(p.get("base_step", DEFAULT_BASE_STEP))
+            update_progression_in_ficha(tmp, xp_add=xp_delta, base_step=base_step)
+        elif t == "faction.reputation_changed":
+            fac = str(p.get("faction", ""))
+            res = update_reputation_in_ficha(
+                tmp,
+                fac,
+                score_delta=int(p.get("delta_rep", 0)),
+                favors_delta=int(p.get("delta_favors", 0)),
+                debts_delta=int(p.get("delta_debts", 0)),
+                set_score=int(p["new_score"]) if "new_score" in p else None,
+                set_favors=int(p["favors"]) if "favors" in p else None,
+                set_debts=int(p["debts"]) if "debts" in p else None,
+            )
+            if res.get("error"):
+                score = int(p.get("new_score", 0))
+                favors = int(p.get("favors", p.get("delta_favors", 0)))
+                debts = int(p.get("debts", p.get("delta_debts", 0)))
+                tmp.write_text(self._upsert_faction(tmp.read_text(encoding="utf-8"), fac, score, favors, debts), encoding="utf-8")
+        elif t == "turn.committed":
+            if p.get("restored_vitals"):
+                ficha_data = parse_ficha_md(tmp)
+                ficha_text = tmp.read_text(encoding="utf-8")
+                for v in ficha_data.get("vitals", {}).values():
+                    if v["max"] > 0 and v["current"] < v["max"]:
+                        pattern = rf"(\*\s*\*\*{re.escape(v['label'])}:\*\*\s*)\d+(\s*/\s*{v['max']})"
+                        ficha_text = re.sub(pattern, rf"\g<1>{v['max']}\g<2>", ficha_text)
+                tmp.write_text(ficha_text, encoding="utf-8")
+            elif isinstance(p.get("vitals"), dict) and not p.get("costs"):
+                ficha_text = tmp.read_text(encoding="utf-8")
+                for k, val in p["vitals"].items():
+                    ficha_text = self._update_vital(ficha_text, str(k), int(val))
+                tmp.write_text(ficha_text, encoding="utf-8")
+        elif t == "protagonist.sheet_changed":
+            kind = str(p.get("kind", ""))
+            target = str(p.get("target", ""))
+            val = p.get("new_value")
+            pts_rem = p.get("points_remaining")
+            if kind == "attribute":
+                res = spend_attribute_point_in_ficha(tmp, target)
+                if res.get("error"):
+                    tmp.write_text(self._apply_sheet_change(tmp.read_text(encoding="utf-8"), kind, target, val, pts_rem), encoding="utf-8")
+            elif kind == "ability":
+                if p.get("training") or pts_rem is not None:
+                    res = spend_ability_point_in_ficha(tmp, target, str(p.get("training") or "Treino"))
+                    if res.get("error"):
+                        upsert_ficha_feature(tmp, ability=target)
+                else:
+                    upsert_ficha_feature(tmp, ability=target)
+            elif kind == "milestone":
+                upsert_ficha_feature(tmp, milestone=target)
+            elif kind == "item":
+                upsert_ficha_feature(tmp, item=target)
+            elif kind == "vital":
+                ficha_data = parse_ficha_md(tmp)
+                if target in ficha_data.get("vitals", {}):
+                    v = ficha_data["vitals"][target]
+                    if "delta" in p and p.get("source") == "commit_cost":
+                        new_val = max(0, min(v["max"], v["current"] + int(p["delta"])))
+                    else:
+                        new_val = max(0, min(v["max"], int(val)))
+                    pattern = rf"(\*\s*\*\*{re.escape(v['label'])}:\*\*\s*)\d+(\s*/\s*{v['max']})"
+                    tmp.write_text(re.sub(pattern, rf"\g<1>{new_val}\g<2>", tmp.read_text(encoding="utf-8")), encoding="utf-8")
+                else:
+                    tmp.write_text(self._update_vital(tmp.read_text(encoding="utf-8"), target, int(val)), encoding="utf-8")
+            else:
+                tmp.write_text(self._apply_sheet_change(tmp.read_text(encoding="utf-8"), kind, target, val, pts_rem), encoding="utf-8")
 
     @staticmethod
     def _update_vital(text: str, key: str, val: int) -> str:

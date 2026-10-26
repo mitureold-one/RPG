@@ -173,11 +173,13 @@ def get_campaign_system(campaign_id: str) -> str:
     return DEFAULT_RULESET
 
 
-def find_campaign(campaign_id: str):
+def find_campaign(campaign_id: str, *, allow_missing_projections: bool = False):
     """Localiza e valida a pasta da campanha em Markdown (SSOT).
     
     Falha alto (raise FileNotFoundError / ValueError) se a campanha existir mas for inválida,
     ausente de diario.md, sem schema_version declarado ou com ruleset desconhecido.
+    Quando allow_missing_projections=True (ex: rebuild), permite localizar a campanha a partir
+    de projections/diario.md ou events/*.jsonl mesmo que diario.md tenha sido removido da raiz.
     Retorna None se o diretório da campanha não existir.
     """
     clean_id = validate_campaign_id(campaign_id)
@@ -190,19 +192,37 @@ def find_campaign(campaign_id: str):
             raise ValueError(f"Caminho da campanha fora do diretório permitido: '{campaign_id}'.")
         if camp_dir.is_dir():
             diario_path = camp_dir / "diario.md"
-            if not diario_path.is_file():
+            version = CURRENT_SCHEMA_VERSION
+            if diario_path.is_file():
+                diario_text = diario_path.read_text(encoding="utf-8")
+                m_schema = re.search(r"schema_version:\s*(\d+)", diario_text)
+                if not m_schema:
+                    m_schema = re.search(r"<!--\s*schema_version:\s*(\d+)\s*-->", diario_text)
+                if not m_schema:
+                    raise ValueError(
+                        f"Campanha '{clean_id}' inválida: 'diario.md' não declara 'schema_version' (ex: 'schema_version: 1')."
+                    )
+                version = int(m_schema.group(1))
+            elif allow_missing_projections:
+                proj_diario = camp_dir / "projections" / "diario.md"
+                events_dir = camp_dir / "events"
+                has_events = events_dir.is_dir() and any(
+                    p.is_file() and p.stat().st_size > 0 for p in events_dir.glob("*.jsonl")
+                )
+                if proj_diario.is_file():
+                    proj_text = proj_diario.read_text(encoding="utf-8")
+                    m_schema = re.search(r"schema_version:\s*(\d+)", proj_text)
+                    version = int(m_schema.group(1)) if m_schema else CURRENT_SCHEMA_VERSION
+                elif has_events:
+                    version = CURRENT_SCHEMA_VERSION
+                else:
+                    raise FileNotFoundError(
+                        f"Campanha '{clean_id}' corrompida: 'diario.md' e 'events/' não encontrados em {camp_dir}."
+                    )
+            else:
                 raise FileNotFoundError(
                     f"Campanha '{clean_id}' corrompida: 'diario.md' não encontrado em {camp_dir}."
                 )
-            diario_text = diario_path.read_text(encoding="utf-8")
-            m_schema = re.search(r"schema_version:\s*(\d+)", diario_text)
-            if not m_schema:
-                m_schema = re.search(r"<!--\s*schema_version:\s*(\d+)\s*-->", diario_text)
-            if not m_schema:
-                raise ValueError(
-                    f"Campanha '{clean_id}' inválida: 'diario.md' não declara 'schema_version' (ex: 'schema_version: 1')."
-                )
-            version = int(m_schema.group(1))
             if version > CURRENT_SCHEMA_VERSION:
                 raise ValueError(
                     f"Campanha '{clean_id}' incompatível: schema_version {version} é superior à versão suportada pelo motor ({CURRENT_SCHEMA_VERSION})."

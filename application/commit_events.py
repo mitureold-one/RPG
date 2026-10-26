@@ -37,6 +37,14 @@ def build_commit_event_drafts(
     diario_after_path: Path,
     npcs_after_path: Path,
     vitals_after: dict[str, int],
+    vitals_line: str = "",
+    state_shift: str = "",
+    alerts: list[str] | None = None,
+    restored_vitals: bool = False,
+    time_changed: bool = True,
+    location_changed: bool = False,
+    present_changed: bool = False,
+    base_step: int = 250,
 ) -> list[EventDraft]:
     actor_gm = ActorRef(kind="agent", id="narrative_engine")
     actor_rule = ActorRef(kind="system", id="ruleset")
@@ -97,6 +105,7 @@ def build_commit_event_drafts(
                     "kind": "vital",
                     "target": k,
                     "new_value": vitals_after.get(k, dv),
+                    "delta": int(dv),
                     "source": "commit_cost",
                 },
                 meta={"dependencies": ["batch:1"]},
@@ -126,7 +135,11 @@ def build_commit_event_drafts(
         from council.narrator import parse_npc_update_fields, split_npc_updates
 
         for npc_name, raw_update in split_npc_updates(npc_updates):
-            changes = {"name": npc_name}
+            changes: dict[str, Any] = {
+                "name": npc_name,
+                "mode": "turn_update",
+                "raw_update": raw_update,
+            }
             changes.update(parse_npc_update_fields(raw_update))
             drafts.append(
                 EventDraft(
@@ -159,6 +172,8 @@ def build_commit_event_drafts(
 
     # 5. quest.*
     for qe in quest_events:
+        q_payload = dict(qe["payload"])
+        q_payload.setdefault("turn", next_turn)
         drafts.append(
             EventDraft(
                 type=qe["type"],
@@ -166,7 +181,7 @@ def build_commit_event_drafts(
                 actor=actor_gm,
                 game_time=new_dt,
                 game_time_sort=base_sort,
-                payload=qe["payload"],
+                payload=q_payload,
                 meta={"dependencies": ["batch:1"]},
             )
         )
@@ -187,6 +202,8 @@ def build_commit_event_drafts(
                     "level": int(xe.get("level", prog_now["level"])),
                     "attribute_points": int(prog_now["attribute_points"]),
                     "ability_points": int(prog_now["ability_points"]),
+                    "base_step": int(base_step),
+                    "turn": next_turn,
                     "source": str(xe.get("source", "commit")),
                 },
                 meta={"dependencies": ["batch:1"]},
@@ -195,6 +212,8 @@ def build_commit_event_drafts(
 
     # 7. faction.reputation_changed
     for fe in faction_events:
+        f_payload = dict(fe)
+        f_payload.setdefault("turn", next_turn)
         drafts.append(
             EventDraft(
                 type="faction.reputation_changed",
@@ -202,7 +221,7 @@ def build_commit_event_drafts(
                 actor=actor_gm,
                 game_time=new_dt,
                 game_time_sort=base_sort,
-                payload=fe,
+                payload=f_payload,
                 meta={"dependencies": ["batch:1"]},
             )
         )
@@ -244,11 +263,8 @@ def build_commit_event_drafts(
             )
         )
 
-    # 10. turn.committed
+    # 10. turn.committed (sem snapshots *_after em meta!)
     preceding_deps = [f"batch:{i}" for i in range(len(drafts))]
-    ficha_txt = ficha_after_path.read_text(encoding="utf-8") if ficha_after_path.exists() else ""
-    diario_txt = diario_after_path.read_text(encoding="utf-8") if diario_after_path.exists() else ""
-    npcs_txt = npcs_after_path.read_text(encoding="utf-8") if npcs_after_path.exists() else ""
 
     drafts.append(
         EventDraft(
@@ -262,16 +278,18 @@ def build_commit_event_drafts(
                 "summary": summary.strip(),
                 "scene_type": scene_type,
                 "location": new_loc,
-                "present": [p.strip() for p in new_pres.split(",") if p.strip()],
+                "present": new_pres,
                 "vitals": vitals_after,
+                "vitals_line": vitals_line,
                 "costs": dict(deltas),
+                "state_shift": state_shift.strip(),
+                "alerts": list(alerts or []),
+                "restored_vitals": bool(restored_vitals),
+                "time_changed": bool(time_changed),
+                "location_changed": bool(location_changed),
+                "present_changed": bool(present_changed),
             },
-            meta={
-                "dependencies": preceding_deps,
-                "diario_after": diario_txt,
-                "ficha_after": ficha_txt,
-                "npcs_after": npcs_txt,
-            },
+            meta={"dependencies": preceding_deps},
         )
     )
 

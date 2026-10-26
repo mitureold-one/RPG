@@ -105,10 +105,14 @@ def cmd_quest(
                     game_time=gt,
                     game_time_sort=gts,
                     payload={
-                        "id": str(res.get("id", "Q1")),
+                        "id": str(res.get("quest_id") or res.get("id") or "Q1"),
                         "title": add_title.strip(),
                         "type": quest_type.upper(),
                         "objectives": [objective.strip()] if objective else [],
+                        "contractor": faction.strip(),
+                        "clock": clock.strip(),
+                        "reward": reward.strip(),
+                        "phase": phase.strip(),
                     },
                 )
             )
@@ -130,7 +134,13 @@ def cmd_quest(
                     actor=actor,
                     game_time=gt,
                     game_time_sort=gts,
-                    payload={"id": qid, "status": "ACTIVE", "reason": f"Objetivo adicionado: {obj_txt}"},
+                    payload={
+                        "id": qid,
+                        "action": "add_objective",
+                        "objective": obj_txt,
+                        "status": "ACTIVE",
+                        "reason": f"Objetivo adicionado: {obj_txt}",
+                    },
                 )
             )
     elif check_target:
@@ -160,7 +170,11 @@ def cmd_quest(
                     actor=actor,
                     game_time=gt,
                     game_time_sort=gts,
-                    payload={"id": qid, "xp_awarded": int(res.get("xp_paid") or 0)},
+                    payload={
+                        "id": qid,
+                        "xp_awarded": int(res.get("xp_paid") or 0),
+                        "evidence": evidence.strip(),
+                    },
                 )
             )
     elif fail_id:
@@ -188,7 +202,7 @@ def cmd_quest(
                     actor=actor,
                     game_time=gt,
                     game_time_sort=gts,
-                    payload={"id": qid, "status": "BLOCKED", "reason": reason},
+                    payload={"id": qid, "action": "block", "status": "BLOCKED", "reason": reason},
                 )
             )
     elif unblock_id:
@@ -202,7 +216,7 @@ def cmd_quest(
                     actor=actor,
                     game_time=gt,
                     game_time_sort=gts,
-                    payload={"id": qid, "status": "ACTIVE"},
+                    payload={"id": qid, "action": "unblock", "status": "ACTIVE"},
                 )
             )
     elif abandon_id:
@@ -216,7 +230,7 @@ def cmd_quest(
                     actor=actor,
                     game_time=gt,
                     game_time_sort=gts,
-                    payload={"id": qid, "status": "ABANDONED", "reason": reason},
+                    payload={"id": qid, "action": "abandon", "status": "ABANDONED", "reason": reason},
                 )
             )
     elif reopen_id:
@@ -230,7 +244,7 @@ def cmd_quest(
                     actor=actor,
                     game_time=gt,
                     game_time_sort=gts,
-                    payload={"id": qid, "status": "ACTIVE", "reason": reason},
+                    payload={"id": qid, "action": "reopen", "status": "ACTIVE", "reason": reason},
                 )
             )
 
@@ -294,7 +308,13 @@ def cmd_progress(
                     actor=ActorRef(kind="agent", id="narrative_engine"),
                     game_time=gt,
                     game_time_sort=gts,
-                    payload={"kind": "attribute", "target": spend_attr.strip(), "new_value": res.get("new_value"), "source": "spend_attr"},
+                    payload={
+                        "kind": "attribute",
+                        "target": spend_attr.strip(),
+                        "new_value": res.get("new_value"),
+                        "points_remaining": int(res.get("remaining_points", 0)),
+                        "source": "spend_attr",
+                    },
                 )
             )
     elif spend_ability:
@@ -307,7 +327,14 @@ def cmd_progress(
                     actor=ActorRef(kind="agent", id="narrative_engine"),
                     game_time=gt,
                     game_time_sort=gts,
-                    payload={"kind": "ability", "target": spend_ability.strip(), "new_value": spend_ability.strip(), "source": "spend_ability"},
+                    payload={
+                        "kind": "ability",
+                        "target": spend_ability.strip(),
+                        "new_value": spend_ability.strip(),
+                        "training": training.strip(),
+                        "points_remaining": int(res.get("remaining_points", 0)),
+                        "source": "spend_ability",
+                    },
                 )
             )
     elif award:
@@ -324,7 +351,7 @@ def cmd_progress(
         res["source"] = code
         res["xp_granted"] = xp_gain
 
-        src_txt = reason or f"Concessão avulsa: {code}"
+        src_txt = reason or f"Concessão avulso: {code}" if False else (reason or f"Concessão avulsa: {code}")
         append_xp_ledger_entry(diario_path, xp_gain, reason=src_txt, turn=cur_turn)
         drafts.append(
             EventDraft(
@@ -339,6 +366,8 @@ def cmd_progress(
                     "level": int(res["new_level"]),
                     "attribute_points": int(res.get("attribute_points", 0)),
                     "ability_points": int(res.get("ability_points", 0)),
+                    "base_step": int(base_step),
+                    "turn": int(cur_turn),
                     "source": src_txt,
                 },
             )

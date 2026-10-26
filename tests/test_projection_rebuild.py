@@ -229,6 +229,88 @@ class ProjectionRebuildTests(unittest.TestCase):
             finally:
                 helpers.CAMPAIGN_DIRS = orig_dirs
 
+    def test_cmd_rebuild_recovers_missing_diario_md_and_rejects_empty_campaign_p2_1(self) -> None:
+        from application.showrunner import cmd_clock, cmd_rebuild
+        from council.reviewer import cmd_review
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            orig_dirs = helpers.CAMPAIGN_DIRS
+            helpers.CAMPAIGN_DIRS = [root]
+            try:
+                cid = "camp_p2_1"
+                init_campaign_from_templates(cid, title="Recuperação P2-1", protagonist_name="Lira")
+                cdir = root / cid
+                cmd_commit(cid, summary="Lira patrulha as muralhas.", cost="HP -2, time +15m", force=True)
+
+                expected_diario = (cdir / "diario.md").read_bytes()
+                (cdir / "diario.md").unlink()
+                shutil.rmtree(cdir / "projections", ignore_errors=True)
+
+                # Comandos normais falham rápido quando diario.md está ausente
+                res_clk = cmd_clock(cid, list_clocks=True)
+                self.assertIn("error", res_clk)
+
+                # cmd_rebuild localiza a campanha via events/ e restaura diario.md byte-idêntico
+                res_reb = cmd_rebuild(cid, force=True)
+                self.assertEqual(res_reb.get("status"), "ok")
+                self.assertTrue((cdir / "diario.md").exists())
+                self.assertEqual((cdir / "diario.md").read_bytes(), expected_diario)
+                self.assertEqual(cmd_review(cid)["ssot_status"], "CLEAN")
+
+                # Se diario.md e events/ estiverem ambos ausentes, cmd_rebuild retorna erro explícito
+                empty_cid = "camp_empty_corrupted"
+                (root / empty_cid).mkdir(parents=True, exist_ok=True)
+                res_empty = cmd_rebuild(empty_cid, force=True)
+                self.assertIn("error", res_empty)
+            finally:
+                helpers.CAMPAIGN_DIRS = orig_dirs
+
+    def test_zero_after_blobs_in_event_meta_across_commit_and_commands_p2_2(self) -> None:
+        from application.factions import cmd_faction
+        from application.progression import cmd_progress, cmd_quest
+        from application.showrunner import cmd_arc, cmd_clock, cmd_plan, cmd_rebuild
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            orig_dirs = helpers.CAMPAIGN_DIRS
+            helpers.CAMPAIGN_DIRS = [root]
+            try:
+                cid = "camp_p2_2"
+                init_campaign_from_templates(cid, title="Pura Projeção P2-2", protagonist_name="Seren")
+                cdir = root / cid
+
+                cmd_clock(cid, add_name="Cerco da Fortaleza", max_steps=4, trigger="Portões cedem")
+                cmd_clock(cid, advance_name="Cerco da Fortaleza", advance_steps=1)
+                cmd_quest(cid, add_title="Defender o Portão", quest_type="MAIN", objective="Reforçar barricadas")
+                cmd_plan(cid, add_beat="Vigília noturna nas ameias", scene_type="interlude", actors="Seren")
+                cmd_arc(cid, stage="Escalada", milestone="Primeira onda repelida")
+                cmd_progress(cid, award="50", reason="Bônus tático")
+                cmd_faction(cid, add_name="Guarda Real", tag="guarda_real", power=3, scale="regional", desc="Defensores")
+                cmd_faction(cid, rep="guarda_real:+1", reason="Auxílio na muralha")
+                cmd_commit(
+                    cid,
+                    summary="Seren coordena os arqueiros na muralha norte.",
+                    cost="Stamina -2, time +20m",
+                    state_shift="A muralha norte foi assegurada.",
+                    quest_progress="Q2:1",
+                    force=True,
+                )
+
+                store = JsonlEventStore(cdir)
+                events = tuple(store.read(cid))
+                self.assertGreater(len(events), 8)
+                for ev in events:
+                    for forbidden_key in ("diario_after", "ficha_after", "npcs_after"):
+                        self.assertNotIn(forbidden_key, ev.meta, f"{forbidden_key} encontrado em {ev.type}")
+
+                res_reb = cmd_rebuild(cid, force=True)
+                self.assertEqual(res_reb.get("status"), "ok")
+                for fname in ("diario.md", "ficha.md", "npcs.md"):
+                    self.assertEqual((cdir / fname).read_bytes(), (cdir / "projections" / fname).read_bytes())
+            finally:
+                helpers.CAMPAIGN_DIRS = orig_dirs
+
 
 if __name__ == "__main__":
     unittest.main()
