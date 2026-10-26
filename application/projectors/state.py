@@ -45,6 +45,7 @@ class StateProjector:
         base_npcs: dict[str, Any] = {}
         base_factions: dict[str, Any] = {}
         base_knowledge: dict[str, Any] = {}
+        base_registered_claims: set[str] = set()
         base_recent: list[dict[str, Any]] = []
         base_last_seq = 0
 
@@ -64,6 +65,9 @@ class StateProjector:
                     rid = k.get("record_id")
                     if rid:
                         base_knowledge[str(rid)] = k
+                for rc in base_data.get("registered_claims", []):
+                    if rc:
+                        base_registered_claims.add(str(rc))
                 base_recent = list(base_data.get("recent_events", []))
             except Exception:
                 pass
@@ -86,10 +90,20 @@ class StateProjector:
         for k, v in dk_items:
             if k:
                 base_knowledge[k] = _serialize_dataclass(v)
+        if hasattr(delta_knowledge, "registered_claims"):
+            for rc in delta_knowledge.registered_claims:
+                if rc:
+                    base_registered_claims.add(str(rc))
+        for ev in domain_events:
+            if ev.type == "knowledge.claim_registered":
+                cid = (ev.payload or {}).get("claim_id")
+                if cid:
+                    base_registered_claims.add(str(cid))
 
         npcs_list = [base_npcs[k] for k in sorted(base_npcs.keys())]
         factions_list = [base_factions[k] for k in sorted(base_factions.keys())]
         knowledge_list = [base_knowledge[k] for k in sorted(base_knowledge.keys())]
+        registered_claims_list = sorted(base_registered_claims)
 
         # Resumo dos eventos recentes
         new_recent: list[dict[str, Any]] = []
@@ -133,6 +147,7 @@ class StateProjector:
             "npcs": npcs_list,
             "factions": factions_list,
             "knowledge": knowledge_list,
+            "registered_claims": registered_claims_list,
             "recent_events": combined_recent,
         }
         raw_canonical = canonical_json(payload_to_hash).encode("utf-8")
@@ -145,6 +160,7 @@ class StateProjector:
             "npcs": npcs_list,
             "factions": factions_list,
             "knowledge": knowledge_list,
+            "registered_claims": registered_claims_list,
             "recent_events": combined_recent,
         }
 

@@ -34,7 +34,7 @@ class Phase04CausalContextTests(unittest.TestCase):
             "* **Data & Local:** 01/10/300 10:00 — Fortaleza Vermelha\n"
             "* **Presentes:** Aemon, Bob O Guarda.\n\n"
             "### Missões & Objetivos\n"
-            "* **[Q1] [MAIN] Proteger o Reino** | Status: ACTIVE | Contratante: Rei | Alvo: Malakor\n"
+            "* **[Q1] [MAIN] Proteger o Reino** | Status: ACTIVE | Contratante: Rei | Alvo: Malakor | Relógio: Golpe da Guarda\n"
             "  * [ ] Defender o portão\n\n"
             "### Relógios de Ameaça & Prazos\n"
             "* **[Golpe da Guarda]:** 3/4 (Gatilho: Golpe) [ACTIVE]\n\n"
@@ -146,16 +146,39 @@ class Phase04CausalContextTests(unittest.TestCase):
         ev_rel = make_npc_relationship_updated_draft(
             "malakor", "Aemon", "01/10/300 08:30", 7, trust=-2, rivalry=2
         )
+        ev_unk = make_claim_registered_draft(
+            claim_id="clm_desconhecida",
+            proposition={"subject": "artefato", "predicate": "localizacao", "object": "cripta"},
+            claim_type="state",
+            game_time="01/10/300 08:30",
+            game_time_sort=7,
+        )
+        ev_sec_reg = make_claim_registered_draft(
+            claim_id="clm_segredo_fac",
+            proposition={"subject": "MALAKOR", "predicate": "conspiracao", "object": "ativa"},
+            claim_type="state",
+            game_time="01/10/300 08:35",
+            game_time_sort=8,
+        )
+        ev_sec_acq = make_knowledge_acquired_draft(
+            record_id="knw_segredo_01",
+            holder=HolderRef("faction", "MALAKOR"),
+            claim_id="clm_segredo_fac",
+            game_time="01/10/300 08:35",
+            game_time_sort=8,
+            visibility="faction_internal",
+            provenance=[prov5],
+        )
         ev6 = EventDraft(
             type="turn.committed",
             schema_version=1,
             actor=actor,
             game_time="01/10/300 09:00",
-            game_time_sort=8,
+            game_time_sort=9,
             payload={"turn": 1, "action": "Aemon vigia o portão", "summary": "Portão reforçado com barricadas de ferro.", "changes": []},
         )
 
-        stored = self.store.append("ctx_camp", [ev0, ev1, ev2, ev3, ev4, ev5, ev_rel, ev6])
+        stored = self.store.append("ctx_camp", [ev0, ev1, ev2, ev3, ev4, ev5, ev_rel, ev_unk, ev_sec_reg, ev_sec_acq, ev6])
         self.ev6_id = stored.events[-1].event_id
 
         # Configura ambiente apontando CAMPAIGN_DIRS temporário
@@ -256,20 +279,25 @@ class Phase04CausalContextTests(unittest.TestCase):
         self.assertIsNotNone(corr_item, "A correção deve constar como consequência")
 
     def test_c06_strict_omissions_classification(self) -> None:
-        """C06: entidades ou alegações inexistentes viram omissões inexistent sem alucinação."""
-        res = cmd_prepare("ctx_camp", action="Aemon pergunta por clm_fantasma e por npc_invisivel", no_roll=True)
-        omissions = res["context_omissions"]
+        """C06: classificação rigorosa de omissões (inexistent, unknown, unavailable)."""
+        # 1. Inexistent: menção a claim e npc inexistentes no repositório
+        res_inex = cmd_prepare("ctx_camp", action="Aemon pergunta por clm_fantasma e por npc_invisivel", no_roll=True)
+        om_inex = {o["reference"]: o["availability"] for o in res_inex["context_omissions"]}
+        self.assertEqual(om_inex.get("clm_fantasma"), "inexistent")
+        self.assertEqual(om_inex.get("npc_invisivel"), "inexistent")
 
-        om_claim = next((o for o in omissions if o["reference"] == "clm_fantasma"), None)
-        self.assertIsNotNone(om_claim)
-        self.assertEqual(om_claim["availability"], "inexistent")
+        # 2. Unknown: menção a claim registrada no mundo mas cujo conhecimento ninguém adquiriu
+        res_unk = cmd_prepare("ctx_camp", action="Investigar clm_desconhecida", no_roll=True)
+        om_unk = {o["reference"]: o["availability"] for o in res_unk["context_omissions"]}
+        self.assertEqual(om_unk.get("clm_desconhecida"), "unknown")
 
-        om_npc = next((o for o in omissions if o["reference"] == "npc_invisivel"), None)
-        self.assertIsNotNone(om_npc)
-        self.assertEqual(om_npc["availability"], "inexistent")
+        # 3. Unavailable: menção a player_meta em modo narrativo (oculto por sigilo epistêmico)
+        res_unav = cmd_prepare("ctx_camp", action="Procurar clm_tesouro", mode="narrator", no_roll=True)
+        om_unav = {o["reference"]: o["availability"] for o in res_unav["context_omissions"]}
+        self.assertEqual(om_unav.get("clm_tesouro"), "unavailable")
 
     def test_c07_on_demand_query_service_and_visibility(self) -> None:
-        """C07: ContextQueryService responde consultas de claim, npc, faction, quest e clock."""
+        """C07: ContextQueryService e CLI query respondem claim, npc, faction, quest e clock."""
         policy_gm = resolve_mode_policy("gm")
         service_gm = ContextQueryService("ctx_camp", self.camp_dir, audience=policy_gm.audience)
 
@@ -295,8 +323,19 @@ class Phase04CausalContextTests(unittest.TestCase):
         q_claim_pc = service_pc.claim("clm_tesouro")
         self.assertEqual(q_claim_pc.availability, "unavailable")
 
+        # Exercita o parser e comando CLI 'query'
+        from interfaces.cli.parser import build_cli
+        parser = build_cli()
+        args = parser.parse_args(["query", "--campaign", "ctx_camp", "--kind", "npc", "--id", "malakor", "--json"])
+        self.assertEqual(args.cmd, "query")
+        self.assertEqual(args.kind, "npc")
+        self.assertEqual(args.id, "malakor")
+        cli_res = service_gm.query(args.kind, args.id)
+        self.assertEqual(cli_res.availability, "known")
+        self.assertEqual(cli_res.id, "malakor")
+
     def test_c09_compatibility_and_determinism(self) -> None:
-        """C09: chaves legadas preservadas e determinismo absoluto."""
+        """C09: chaves legadas preservadas, valores legados corretos e determinismo de hash com payload."""
         res = cmd_prepare("ctx_camp", action="Inspecionar área", no_roll=True)
         # Chaves legadas essenciais presentes
         for key in (
@@ -307,17 +346,41 @@ class Phase04CausalContextTests(unittest.TestCase):
         ):
             self.assertIn(key, res, f"Chave legada '{key}' deve permanecer no payload")
 
+        # Compara valores legados: alerta crítico de relógio presente no mandato de missão
+        quest_mandate = res["step_1_quest_context"]["quest_pressure_mandate"]
+        self.assertIn("ALERTA CRÍTICO: O relógio 'Golpe da Guarda'", quest_mandate)
+        self.assertIn("a 1 passo da ruptura iminente", quest_mandate)
+
         # Chaves novas presentes
         self.assertIn("context_version", res)
         self.assertIn("source_last_seq", res)
         self.assertIn("context", res)
         self.assertIn("context_omissions", res)
 
+        # Verifica determinismo de hash de seção com sensibilidade a mudanças de payload
+        from application.context.assembler import _section_hash
+        from contracts.context import ContextItem
+        it_a = ContextItem("claim", "clm_t", "l", "causal", 100, ("r",), "known", {"stance": "believed"})
+        it_b = ContextItem("claim", "clm_t", "l", "causal", 100, ("r",), "known", {"stance": "disbelieved"})
+        hash_a = _section_hash((it_a,), ())
+        hash_b = _section_hash((it_b,), ())
+        self.assertNotEqual(hash_a, hash_b, "Mudança de payload DEVE alterar o hash de seção")
+
     def test_c10_modes_policies_and_r2_boundaries(self) -> None:
-        """C10: modo reviewer retorna auditoria; modos narrator/writer/architect aplicam audiências."""
-        p_narrator = cmd_prepare("ctx_camp", action="Avançar", mode="narrator", no_roll=True)
+        """C10: matriz epistêmica de vazamento entre camadas (GM, Player, Protagonista)."""
+        # 1. GM vê o universo (inclusive segredos de facção)
+        p_gm = cmd_prepare("ctx_camp", action="Investigar clm_segredo_fac", mode="gm", no_roll=True)
+        gm_claims = [i["id"] for i in p_gm["context"]["causal"]["items"] if i["kind"] == "claim"]
+        self.assertIn("clm_segredo_fac", gm_claims, "GM deve ver alegações faction_internal")
+        self.assertEqual(p_gm["context"]["audience"], "universe:gm")
+
+        # 2. Narrador / Escritor é estritamente isolado da mente do jogador e de segredos internos
+        p_narrator = cmd_prepare("ctx_camp", action="Investigar clm_segredo_fac e clm_tesouro", mode="narrator", no_roll=True)
         self.assertEqual(p_narrator["context"]["audience"], "protagonist:Aemon")
         self.assertEqual(p_narrator["context"]["purpose"], "narration")
+        narr_claims = [i["id"] for i in p_narrator["context"]["causal"]["items"] if i["kind"] == "claim"]
+        self.assertNotIn("clm_segredo_fac", narr_claims)
+        self.assertNotIn("clm_tesouro", narr_claims)
 
         p_writer = cmd_prepare("ctx_camp", action="Avançar", mode="writer", no_roll=True)
         self.assertEqual(p_writer["context"]["audience"], "protagonist:Aemon")

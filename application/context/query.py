@@ -62,6 +62,7 @@ class ContextQueryService:
             holder=target_holder,
             audience=self.audience,
             purpose=self.purpose,
+            registered_claims=set(self.state.registered_claims()),
         )
         res = view.query_claim(claim_id, target_holder=target_holder)
         if res.availability == "known" and res.record is not None:

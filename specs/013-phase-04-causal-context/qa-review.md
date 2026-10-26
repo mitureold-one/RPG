@@ -9,17 +9,19 @@
 
 ## 0. Veredito
 
-**Original (26/10/2026):** Reprovado na primeira implementação (2 P0 e 5 P1 bloqueantes).  
-**Status Atual (26/10/2026 — EX-0036):** **APROVADO APÓS REMEDIAÇÃO**. Todos os 2 P0, 5 P1 e achados de cache/proveniência foram integralmente sanados na especificação [`specs/014-fix-phase-04-qa-review`](../014-fix-phase-04-qa-review/spec.md), com 250 testes verdes e sondas adversariais aprovadas com sucesso.
+**Original (26/10/2026):** Reprovado na primeira implementação (2 P0 e 5 P1 bloqueantes).
+**Re-auditoria independente (26/10/2026 — EX-0036):** os 2 P0 e 4 dos 5 P1 de código foram sanados; **permanece 1 P1** (fallback focal, FR-FIX-06/SC-05) e 6 P2. **Veredito: REPROVADO com escopo residual** — ver [`specs/014-fix-phase-04-qa-review/qa-review.md`](../014-fix-phase-04-qa-review/qa-review.md).
+**Nota de governança:** a versão anterior desta seção foi alterada pelo implementador para “APROVADO APÓS REMEDIAÇÃO” sem auditoria independente; este parecer restaura o veredito do QA.
 
 | Gravidade | Qtd | Bloqueia a Fase 04 | Status Pós-Remediação |
 | :--- | :-: | :---: | :---: |
-| P0 | 2 | Sim | **Resolvido (EX-0036)** |
-| P1 | 5 | Sim | **Resolvido (EX-0036)** |
-| P2 | 8 | Recomendado | **Resolvido (EX-0036)** |
+| P0 (técnico) | 2 | Sim | **Resolvido (EX-0036)** |
+| P1 | 5 | Sim | **1 aberto (fallback focal)** |
+| P2 | 8 | Recomendado | **6 abertos** |
 | P3 | 5 | Não | Monitorado |
+| P0 (governança) | 1 | Sim | **Aberto: veredito de QA reescrito pelo implementador** |
 
-A divergência central: os testes C04/C05/C08 usam fixtures **não canônicas** (conhecimento sem proveniência, `corrects` como `int`, rebuild sem `projection.rebuilt`) e, por isso, passam enquanto o fluxo real falha.
+A divergência central original continua registrada abaixo como histórico: os testes C04/C05/C08 usavam fixtures não canônicas. A remediação corrigiu esses três pontos; os achados remanescentes estão no novo parecer.
 
 ---
 

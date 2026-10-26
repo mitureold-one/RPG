@@ -180,7 +180,7 @@ def cmd_prepare(
     mandates_by_type = STRUCTURAL_SCENE_MANDATES
 
     progression_data = build_progression_data(info["ficha"])
-    quest_context, active_quests_summary = build_quest_context(info["diario"])
+    quest_context, active_quests_summary = build_quest_context(info["diario"], diario_data=diario)
     commit_hint = build_commit_hint(
         campaign_id, focal_npcs, contest_data, roll_data, scene_type, active_quests_summary
     )
@@ -222,7 +222,8 @@ def cmd_prepare(
         purpose=policy.purpose,
         focus=tuple([f.strip() for f in focus.split() if f.strip()]) if focus else (),
     )
-    providers = default_context_providers(ruleset, system_name, ficha, diario, all_npcs)
+    overrides_list = get_campaign_overrides(campaign_id) or info.get("overrides", [])
+    providers = default_context_providers(ruleset, system_name, ficha, diario, all_npcs, overrides=overrides_list)
     turn_context = ContextAssembler(providers).assemble(context_request, state)
 
     payload = {

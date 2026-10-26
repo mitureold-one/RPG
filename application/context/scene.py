@@ -58,7 +58,11 @@ def resolve_scene_actors(
         for n in scene_npcs:
             if n.get("will") or n.get("plan"):
                 focal_names.add(str(n.get("name", "")))
-                break
+                if len(focal_names) >= 2:
+                    break
+        if not focal_names and len(scene_npcs) >= 2:
+            for n in scene_npcs[:2]:
+                focal_names.add(str(n.get("name", "")))
 
     focal_npcs: list[dict[str, Any]] = []
     background_npcs: list[dict[str, Any]] = []
@@ -163,19 +167,71 @@ def build_progression_data(ficha_path: Any) -> dict[str, Any]:
     return progression_data
 
 
-def build_quest_context(diario_path: Any) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Extrai sumário de missões ativas e mandato de pressão."""
-    from council import parse_quests_from_diario
+def build_quest_context(
+    diario_path: Any,
+    diario_data: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Extrai sumário de missões ativas e mandato de pressão com alertas de relógios críticos."""
+    from council import parse_quests_from_diario, parse_diario_md
+
     all_quests = parse_quests_from_diario(diario_path)
-    active_quests_summary = [q for q in all_quests if str(q.get("status", "")).upper() == "ACTIVE"]
-    quest_mandate = "Nenhuma missão ativa."
-    if active_quests_summary:
+    active_quests = [q for q in all_quests if str(q.get("status", "")).upper() == "ACTIVE"]
+
+    diario = dict(diario_data or {})
+    if not diario and (hasattr(diario_path, "read_text") or isinstance(diario_path, str)):
+        try:
+            diario = parse_diario_md(diario_path)
+        except Exception:
+            diario = {}
+
+    clock_map = {str(c.get("name", "")).lower(): c for c in diario.get("clocks", []) if isinstance(c, dict)}
+    critical_quest_alerts: list[str] = []
+    active_quests_summary: list[dict[str, Any]] = []
+
+    for q in active_quests:
+        clk_name = str(q.get("clock", "")).strip()
+        is_clk_crit = False
+        c_obj = clock_map.get(clk_name.lower()) if clk_name else None
+        if c_obj:
+            curr = int(c_obj.get("current", 0))
+            c_max = int(c_obj.get("max", 4))
+            if curr >= c_max - 1 and str(c_obj.get("status", "")).upper() == "ACTIVE":
+                is_clk_crit = True
+                critical_quest_alerts.append(
+                    f"ALERTA CRÍTICO: O relógio '{c_obj.get('name')}' vinculado à missão '{q.get('title')}' está em "
+                    f"{c_obj.get('progress', '')} (a 1 passo da ruptura iminente). A cena DEVE gerar atrito extremo sobre esta missão."
+                )
+        pending_objs = [
+            o["text"] if isinstance(o, dict) else str(o)
+            for o in q.get("objectives", [])
+            if not (isinstance(o, dict) and o.get("done"))
+        ]
+        active_quests_summary.append({
+            "id": q.get("id", ""),
+            "title": q.get("title", ""),
+            "type": q.get("type", "SIDE"),
+            "phase": q.get("phase", ""),
+            "contractor": q.get("contractor", ""),
+            "clock": clk_name,
+            "clock_status": c_obj.get("status", "NONE") if c_obj else "NONE",
+            "clock_progress": c_obj.get("progress", "") if c_obj else "",
+            "clock_critical": is_clk_crit,
+            "pending_objectives": pending_objs,
+            "reward": q.get("reward", ""),
+        })
+
+    if critical_quest_alerts:
+        quest_mandate = " ".join(critical_quest_alerts)
+    elif active_quests_summary:
         first_q = active_quests_summary[0]
         quest_mandate = (
             f"PRESSÃO DE MISSÃO: O protagonista está engajado em '{first_q['title']}' ({first_q['id']}) "
-            f"para o contratante '{first_q['contractor']}'. Próximo objetivo: '{first_q['objectives'][0] if first_q['objectives'] else 'avançar na investigação'}'. "
+            f"para o contratante '{first_q['contractor']}'. Próximo objetivo: '{first_q['pending_objectives'][0] if first_q['pending_objectives'] else 'avançar na investigação'}'. "
             f"Se a ação atual se conectar a isso, avance a missão com --quest-progress '{first_q['id']}:1'."
         )
+    else:
+        quest_mandate = "Nenhuma missão ativa no momento; o protagonista pode buscar novos objetivos ou investigar o cenário."
+
     return {
         "active_quests": active_quests_summary,
         "quest_pressure_mandate": quest_mandate,

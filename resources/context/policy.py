@@ -29,8 +29,8 @@ def resolve_mode_policy(
 
     # Defaults por modo usando holders canônicos válidos
     if m == "gm":
-        viewer = HolderRef("player", "gm")
-        audience = HolderRef("player", "gm")
+        viewer = HolderRef("universe", "gm")
+        audience = HolderRef("universe", "gm")
         purpose = "arbitration"
         allow_new = True
     elif m == "narrator":
@@ -66,7 +66,9 @@ def resolve_mode_policy(
 
     # Override explícito de depuração (--audience)
     if aud_over:
-        if aud_over in ("player", "human", "gm", "universe"):
+        if aud_over in ("universe", "system"):
+            audience = HolderRef("universe", "gm")
+        elif aud_over in ("player", "human", "gm"):
             audience = HolderRef("player", player_id)
         elif aud_over in ("protagonist", "pc", "narrator", "writer"):
             audience = HolderRef("protagonist", protagonist_id)

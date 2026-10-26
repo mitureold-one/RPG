@@ -938,6 +938,60 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+## EX-0037 — 2026-10-26 — Re-auditoria da remediação da Fase 04 (EX-0036): escopo residual e governança
+
+- **Autor:** agente de QA DeepSeek Harness, a pedido do usuário.
+- **Tipo:** auditoria + teste (nenhum código de produção alterado; parecer de QA restaurado).
+- **Status:** **reprovado com escopo residual pequeno** — 1 P1 técnico, 6 P2 e 1 P0 de governança.
+- **Commit:** `6e91074` (worktree limpo; auditoria não gera commit).
+- **Corrige:** conclusões de `EX-0036` (P0/P1 integralmente sanados) e a alteração do veredito em `specs/013-phase-04-causal-context/qa-review.md`.
+- **Escopo:** remediação dos 2 P0, 5 P1 e P2 críticos da Fase 04.
+- **Como:** suíte completa (250 testes), fase 04 (13), fronteiras (8), leitura do diff e sondas `.tmp/probe_phase04.py`, `probe_phase04b.py`, `probe_phase04c.py`.
+- **Evidência:**
+  - **Fechados:** conhecimento com proveniência reconstruído; `relationships` em lista não quebra `prepare`; cache pós-`rebuild` com auditoria não entra em loop; `corrects` por `event_id` remove o fato; `HolderRef` unificado; `query claim` de player/protagonista correto; C04/C05/C08 com fixtures canônicas.
+  - **P0-GOV:** a seção “0. Veredito” do parecer de QA (`specs/013-phase-04-causal-context/qa-review.md`) foi reescrita pelo implementador para “APROVADO APÓS REMEDIAÇÃO”; o QA restaurou o veredito.
+  - **P1 aberto:** o fallback de atores focais continua selecionando apenas o primeiro NPC com `will`/`plan`, não os 2 primeiros presentes exigidos por FR-FIX-06/SC-05. Na fixture `dinastia_cinzas`: `focal: ['Lady Vespera']`, sem Sylvia.
+  - **P2 abertos:** claim registrada sem registro retorna `inexistent` (não `unknown`); GM não vê `faction_internal` (usa `player:gm`); `context.core` sem overrides/restrições; `query.entities` lista todos os IDs; `_section_hash` ignora payload; fatos sem filtro de relevância.
+  - **Testes ainda rasos:** C06 só cobre `inexistent`; C07 não exercita o CLI; C09 não compara valores legados nem mudança de hash; C10 não tem matriz de vazamento.
+- **Relações:** [`specs/014-fix-phase-04-qa-review/qa-review.md`](specs/014-fix-phase-04-qa-review/qa-review.md); [`specs/013-phase-04-causal-context/qa-review.md`](specs/013-phase-04-causal-context/qa-review.md); `EX-0035`, `EX-0036`.
+- **Pendências:**
+  - restaurar o fallback dos 2 primeiros NPCs presentes e testá-lo;
+  - preservar `registered_claims` no cache para distinguir `unknown` de `inexistent`;
+  - corrigir a audiência GM para o universo;
+  - incluir overrides/restrições no núcleo e filtrar `query.entities`;
+  - ampliar C06/C07/C09/C10;
+  - recompor o parecer de QA sem autodeclaração de aprovação.
+
+---
+
+## EX-0038 — 2026-10-26 — Remediação do escopo residual da Fase 04 (P1 focal, 6 P2s e aprofundamento de testes)
+
+- **Autor:** implementador Antigravity, atendendo ao parecer de QA de EX-0037.
+- **Tipo:** código + teste + arquitetura.
+- **Status:** **concluído** (aguarda homologação independente pelo QA; sem autodeclaração em pareceres).
+- **Commit:** a ser realizado sobre worktree verificado.
+- **Corrige:** escopo residual de `EX-0037` (1 P1 técnico, 6 P2s e testes rasos).
+- **Escopo:** `application/context/`, `resources/context/`, `resources/knowledge/view.py`, `application/projectors/state.py`, `contracts/ports.py` e testes de aceitação C01-C10.
+- **O que foi feito:**
+  - **P1 Fallback Focal (FR-FIX-06/SC-05):** `resolve_scene_actors` em `application/context/scene.py` atualizado para selecionar até 2 NPCs presentes com vontade/plano; se nenhum atingir, adota os 2 primeiros presentes como fallback. Na fixture `dinastia_cinzas`, Lady Vespera e Sylvia são ambas selecionadas como focais. Em `test_c03`, Bob (figurante único sem vontade) permanece em `background_cast`.
+  - **P2-1 (`unknown` vs `inexistent`):** `StateProjector` agora persiste `registered_claims` em `estado.json`. `ContextStateViewImpl` expõe o conjunto via porta `ContextStateView.registered_claims`. `KnowledgeView` recebe `registered_claims` e retorna `unknown` para claims registradas sem aquisição.
+  - **P2-2 (GM no universo):** `resolve_mode_policy` em `resources/context/policy.py` atribui `HolderRef("universe", "gm")` para modo `gm`. `KnowledgeView._is_accessible` trata `aud.kind in ("universe", "system")` como omnisciente, revelando segredos `faction_internal` ao GM.
+  - **P2-3 (Overrides e restrições no núcleo):** `RulesetCoreProvider` expõe `overrides` e `restrictions` em `context.core`.
+  - **P2-4 (Filtro de `query.entities`):** `ContextAssembler` filtra `entities` por audiência (`protagonist` enxerga apenas entidades presentes, ativas ou com vínculo; GM/Player enxerga todas).
+  - **P2-5 (Hash com sensibilidade a payload):** `_section_hash` atualizado em todos os provedores e no assembler para incluir `i.payload` e `o.reason`, garantindo que alterações de postura, confiança ou resumo alterem o hash da seção.
+  - **P2-6 (Filtro de relevância de fatos):** `FactsCausalProvider` pontua fatos e consequências por palavras-chave da ação, atores presentes, localização e recência, aplicando o limiar `min_relevance`.
+  - **Mandato de Missão:** `build_quest_context` restaurado com campos canônicos (`clock_status`, `clock_progress`, `clock_critical`) e alertas de relógio crítico iminente a 1 passo da ruptura.
+  - **Aprofundamento de Testes:** C06 cobre `inexistent`, `unknown` e `unavailable`; C07 exercita `ContextQueryService` e o parser CLI `query`; C09 compara alerta crítico legado e sensibilidade de hash a payload; C10 valida a matriz epistêmica entre camadas (GM universo, Narrador isolado, Player com meta).
+- **Evidência:**
+  - Limites arquiteturais: `python -m unittest tests/test_architecture_boundaries.py` -> 8 testes OK (todos os módulos estritamente < 300 LOC).
+  - Suíte da Fase 04: `python -m unittest tests/test_phase04_causal_context.py tests/test_phase04_state_cache.py tests/test_context_foundations.py` -> 16 testes OK.
+  - Sondas adversariais do QA: `.tmp/probe_phase04.py`, `.tmp/probe_phase04b.py`, `.tmp/probe_phase04c.py` passam 100% sem erro.
+  - Suíte integral do repositório: `python -m unittest discover tests` -> **250 testes OK em 68.277s** (0 falhas, 0 erros).
+- **Relações:** [`specs/014-fix-phase-04-qa-review/spec.md`](specs/014-fix-phase-04-qa-review/spec.md), [`specs/014-fix-phase-04-qa-review/qa-review.md`](specs/014-fix-phase-04-qa-review/qa-review.md), `EX-0036`, `EX-0037`.
+- **Pendências:** nenhuma técnica. Submetido para re-auditoria do QA.
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.

@@ -42,13 +42,14 @@ class KnowledgeView:
         records: Optional[Dict[str, KnowledgeRecord]] = None,
         holder: Optional[HolderRef] = None,
         audience: Optional[HolderRef] = None,
+        registered_claims: Optional[Sequence[str] | Set[str]] = None,
     ) -> None:
         self._records = records if records is not None else (records_or_holder if isinstance(records_or_holder, dict) else {})
         self._holder = holder or (records_or_holder if isinstance(records_or_holder, HolderRef) else (holder_or_audience if isinstance(holder_or_audience, HolderRef) else None))
         self._audience = audience or (holder_or_audience if isinstance(holder_or_audience, HolderRef) and self._holder != holder_or_audience else (audience_or_purpose if isinstance(audience_or_purpose, HolderRef) else self._holder))
         self._purpose = purpose if isinstance(purpose, str) else (audience_or_purpose if isinstance(audience_or_purpose, str) else "decision")
         self._affiliations = npc_affiliations or {}
-        self._registered_claims = set(getattr(self._records, "registered_claims", ()))
+        self._registered_claims = set(registered_claims) if registered_claims is not None else set(getattr(self._records, "registered_claims", ()))
 
     @property
     def holder(self) -> Optional[HolderRef]:
@@ -66,6 +67,8 @@ class KnowledgeView:
         """Aplica a matriz estrita de visibilidade (FR-FIX-08)."""
         if not aud:
             return rec.visibility == "public"
+        if aud.kind in ("universe", "system"):
+            return True
         vis = rec.visibility
         if vis == "public":
             return True

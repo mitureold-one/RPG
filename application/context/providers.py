@@ -21,8 +21,8 @@ from contracts.serialization import canonical_json
 
 def _section_hash(items: Sequence[ContextItem], omissions: Sequence[ContextOmission]) -> str:
     payload = {
-        "items": [(i.kind, i.id, i.score, i.availability) for i in items],
-        "omissions": [(o.kind, o.reference, o.availability) for o in omissions],
+        "items": [(i.kind, i.id, i.score, i.availability, i.payload) for i in items],
+        "omissions": [(o.kind, o.reference, o.availability, o.reason) for o in omissions],
     }
     raw = canonical_json(payload).encode("utf-8")
     return f"sha256:{hashlib.sha256(raw).hexdigest()[:16]}"
@@ -35,9 +35,10 @@ class RulesetCoreProvider:
     layer = "core"
     priority = 10
 
-    def __init__(self, ruleset: Any = None, system_name: str = "") -> None:
+    def __init__(self, ruleset: Any = None, system_name: str = "", overrides: Sequence[str] | None = None) -> None:
         self._ruleset = ruleset
         self._system_name = system_name
+        self._overrides = list(overrides or [])
 
     def provide(self, request: ContextRequest, state: ContextStateView) -> ContextSection:
         sys_name = self._system_name or getattr(self._ruleset, "name", "d20_dirty")
@@ -45,6 +46,11 @@ class RulesetCoreProvider:
             "system": sys_name,
             "dc_ladder": getattr(self._ruleset, "dc_ladder", {}),
             "tier_names": getattr(self._ruleset, "tier_names", ()),
+            "overrides": self._overrides,
+            "restrictions": [
+                o for o in self._overrides
+                if any(w in str(o.get("rule", o) if isinstance(o, dict) else o).lower() for w in ("restrição", "proibido", "limite", "bloqueio"))
+            ],
         }
         item = ContextItem(
             kind="ruleset",
@@ -252,13 +258,14 @@ def default_context_providers(
     ficha: Mapping[str, Any] | None = None,
     diario: Mapping[str, Any] | None = None,
     all_npcs: Sequence[Mapping[str, Any]] | None = None,
+    overrides: Sequence[str] | None = None,
 ) -> list[ContextProvider]:
     """Retorna a suíte padrão dos 9 provedores modulares de contexto."""
     from application.context.agents import FactionCausalProvider, NpcCausalProvider
     from application.context.knowledge import FactsCausalProvider, KnowledgeCausalProvider
 
     return [
-        RulesetCoreProvider(ruleset=ruleset, system_name=system_name),
+        RulesetCoreProvider(ruleset=ruleset, system_name=system_name, overrides=overrides),
         ProtagonistCoreProvider(ficha=ficha),
         SceneCoreProvider(diario=diario),
         QuestCausalProvider(),

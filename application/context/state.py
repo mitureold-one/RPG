@@ -28,6 +28,7 @@ class ContextStateViewImpl:
         quests: Sequence[Any] = (),
         clocks: Sequence[Any] = (),
         arc: Mapping[str, Any] | None = None,
+        registered_claims: Sequence[str] = (),
     ) -> None:
         self.last_seq = int(last_seq)
         self.stale = bool(stale)
@@ -38,6 +39,7 @@ class ContextStateViewImpl:
         self._quests = tuple(quests)
         self._clocks = tuple(clocks)
         self._arc = dict(arc or {})
+        self._registered_claims = tuple(registered_claims)
 
     def npcs(self) -> Mapping[str, Any]:
         return self._npcs
@@ -47,6 +49,9 @@ class ContextStateViewImpl:
 
     def knowledge(self) -> Sequence[Any]:
         return self._knowledge
+
+    def registered_claims(self) -> Sequence[str]:
+        return self._registered_claims
 
     def recent_events(self, limit: int = 50) -> Sequence[Any]:
         return self._recent_events[-limit:]
@@ -171,6 +176,7 @@ class ContextStateViewImpl:
 
         knowledge_raw = data.get("knowledge", [])
         recent_raw = data.get("recent_events", [])
+        registered_raw = data.get("registered_claims", [])
 
         # Extrai quests, clocks e arc do diário
         diario = dict(diario_data or {})
@@ -204,6 +210,7 @@ class ContextStateViewImpl:
             quests=quests,
             clocks=clocks,
             arc=arc,
+            registered_claims=registered_raw,
         )
 
 

@@ -21,8 +21,8 @@ from resources.context.relevance import select
 
 def _section_hash(items: Sequence[ContextItem], omissions: Sequence[ContextOmission]) -> str:
     payload = {
-        "items": [(i.kind, i.id, i.score, i.availability) for i in items],
-        "omissions": [(o.kind, o.reference, o.availability) for o in omissions],
+        "items": [(i.kind, i.id, i.score, i.availability, i.payload) for i in items],
+        "omissions": [(o.kind, o.reference, o.availability, o.reason) for o in omissions],
     }
     raw = canonical_json(payload).encode("utf-8")
     return f"sha256:{hashlib.sha256(raw).hexdigest()[:16]}"
@@ -126,15 +126,37 @@ class ContextAssembler:
             hash=_section_hash(selected_causal, ()),
         )
 
+        if request.audience.kind in ("universe", "system", "player", "human"):
+            consultable_npcs = tuple(sorted(state.npcs().keys()))
+            consultable_factions = tuple(sorted(state.factions().keys()))
+            consultable_quests = tuple(sorted(getattr(q, "id", "") if hasattr(q, "id") else q.get("id", "") for q in state.quests() if (hasattr(q, "id") or "id" in q)))
+            consultable_clocks = tuple(sorted(getattr(c, "name", "") if hasattr(c, "name") else c.get("name", "") for c in state.clocks() if (hasattr(c, "name") or "name" in c)))
+        else:
+            all_known = (*core_items, *selected_causal)
+            known_npc_ids = {it.id for it in all_known if it.kind == "npc"}
+            for p in request.scene.present:
+                p_low = p.lower().strip()
+                for nid, nstate in state.npcs().items():
+                    name = str(getattr(nstate, "name", "") if hasattr(nstate, "name") else nstate.get("name", "")).lower()
+                    if nid.lower() in p_low or (name and name in p_low):
+                        known_npc_ids.add(nid)
+            consultable_npcs = tuple(sorted(k for k in state.npcs().keys() if k in known_npc_ids))
+
+            known_fac_ids = {it.id for it in all_known if it.kind == "faction"}
+            consultable_factions = tuple(sorted(k for k in state.factions().keys() if k in known_fac_ids))
+
+            consultable_quests = tuple(sorted(getattr(q, "id", "") if hasattr(q, "id") else q.get("id", "") for q in state.quests() if ((hasattr(q, "id") or "id" in q) and str(getattr(q, "status", "") if hasattr(q, "status") else q.get("status", "")).upper() == "ACTIVE")))
+            consultable_clocks = tuple(sorted(getattr(c, "name", "") if hasattr(c, "name") else c.get("name", "") for c in state.clocks() if ((hasattr(c, "name") or "name" in c) and str(getattr(c, "status", "") if hasattr(c, "status") else c.get("status", "")).upper() != "RESOLVED")))
+
         query_handles = ContextQueryHandles(
             holder=request.viewer,
             audience=request.audience,
             purpose=request.purpose,
             entities={
-                "npc": tuple(sorted(state.npcs().keys())),
-                "faction": tuple(sorted(state.factions().keys())),
-                "quest": tuple(sorted(getattr(q, "id", "") if hasattr(q, "id") else q.get("id", "") for q in state.quests() if (hasattr(q, "id") or "id" in q))),
-                "clock": tuple(sorted(getattr(c, "name", "") if hasattr(c, "name") else c.get("name", "") for c in state.clocks() if (hasattr(c, "name") or "name" in c))),
+                "npc": consultable_npcs,
+                "faction": consultable_factions,
+                "quest": consultable_quests,
+                "clock": consultable_clocks,
             },
             commands=(
                 "query claim <id>",

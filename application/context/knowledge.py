@@ -20,8 +20,8 @@ from resources.knowledge.view import KnowledgeView
 
 def _section_hash(items: Sequence[ContextItem], omissions: Sequence[ContextOmission]) -> str:
     payload = {
-        "items": [(i.kind, i.id, i.score, i.availability) for i in items],
-        "omissions": [(o.kind, o.reference, o.availability) for o in omissions],
+        "items": [(i.kind, i.id, i.score, i.availability, i.payload) for i in items],
+        "omissions": [(o.kind, o.reference, o.availability, o.reason) for o in omissions],
     }
     raw = canonical_json(payload).encode("utf-8")
     return f"sha256:{hashlib.sha256(raw).hexdigest()[:16]}"
@@ -43,38 +43,25 @@ def _dict_to_knowledge_record(d: Mapping[str, Any]) -> KnowledgeRecord | None:
         if isinstance(p, ProvenanceRef):
             prov_list.append(p)
         elif isinstance(p, dict):
-            source_type = str(p.get("source_type") or "event")
-            source_id = str(p.get("source_id") or p.get("source_event_id") or "")
-            channel = str(p.get("channel") or ("observation" if p.get("method") == "direct_observation" else "observation"))
-            acquired_at = str(p.get("acquired_at") or d.get("acquired_at", "01/01 00:00"))
-            acquired_at_sort = int(p.get("acquired_at_sort") or d.get("acquired_at_sort", 0))
-            confidence = int(p.get("confidence") if p.get("confidence") is not None else (p.get("reliability") or 10000))
-            derived_from = tuple(str(x) for x in p.get("derived_from", ()))
-            supports = bool(p.get("supports", True))
             prov_list.append(
                 ProvenanceRef(
-                    source_type=source_type,
-                    source_id=source_id,
-                    channel=channel,
-                    acquired_at=acquired_at,
-                    acquired_at_sort=acquired_at_sort,
-                    confidence=confidence,
-                    derived_from=derived_from,
-                    supports=supports,
+                    source_type=str(p.get("source_type") or "event"),
+                    source_id=str(p.get("source_id") or p.get("source_event_id") or ""),
+                    channel=str(p.get("channel") or ("observation" if p.get("method") == "direct_observation" else "observation")),
+                    acquired_at=str(p.get("acquired_at") or d.get("acquired_at", "01/01 00:00")),
+                    acquired_at_sort=int(p.get("acquired_at_sort") or d.get("acquired_at_sort", 0)),
+                    confidence=int(p.get("confidence") if p.get("confidence") is not None else (p.get("reliability") or 10000)),
+                    derived_from=tuple(str(x) for x in p.get("derived_from", ())),
+                    supports=bool(p.get("supports", True)),
                 )
             )
 
-    awareness = str(d.get("awareness", "known"))
-    if awareness not in ("known", "unknown"):
-        awareness = "known" if awareness in ("aware", "true") else "unknown"
-
-    stance = str(d.get("stance", "believed"))
-    if stance not in ("believed", "disbelieved", "uncertain"):
-        stance = "believed" if stance in ("believes_true", "true") else "uncertain"
-
-    status = str(d.get("status", "current"))
-    if status not in ("current", "outdated", "contested", "refuted"):
-        status = "current" if status in ("active", "valid") else "outdated"
+    aw = str(d.get("awareness", "known"))
+    awareness = aw if aw in ("known", "unknown") else ("known" if aw in ("aware", "true") else "unknown")
+    st = str(d.get("stance", "believed"))
+    stance = st if st in ("believed", "disbelieved", "uncertain") else ("believed" if st in ("believes_true", "true") else "uncertain")
+    stat = str(d.get("status", "current"))
+    status = stat if stat in ("current", "outdated", "contested", "refuted") else ("current" if stat in ("active", "valid") else "outdated")
 
     return KnowledgeRecord(
         record_id=str(d["record_id"]),
@@ -122,6 +109,7 @@ class KnowledgeCausalProvider:
             holder=target_holder,
             audience=audience,
             purpose=request.purpose,
+            registered_claims=set(state.registered_claims()),
         )
 
         # Detecta referências explícitas a claims na ação ou no foco
@@ -202,77 +190,92 @@ class FactsCausalProvider:
             payload = ev.get("payload", {}) if isinstance(ev, dict) else getattr(ev, "payload", {})
             if etype == "correction.issued":
                 target_seq = payload.get("corrects") or payload.get("target_event")
-                if isinstance(target_seq, (list, tuple, set)):
-                    for s in target_seq:
-                        if s:
-                            corrected_events.add(s)
-                            corrected_events.add(str(s))
-                elif target_seq:
-                    corrected_events.add(target_seq)
-                    corrected_events.add(str(target_seq))
+                for s in (target_seq if isinstance(target_seq, (list, tuple, set)) else [target_seq]):
+                    if s:
+                        corrected_events.update((s, str(s)))
 
-        facts_count = 0
-        consequences_count = 0
+        act_lower = f"{request.action} {' '.join(request.focus)}".lower()
+        present_lower = [p.lower() for p in request.scene.present]
+        loc_lower = request.scene.location.lower()
 
-        for ev in reversed(recent):
+        candidate_facts: list[ContextItem] = []
+        candidate_consequences: list[ContextItem] = []
+
+        for idx, ev in enumerate(reversed(recent)):
             seq = ev.get("seq", 0) if isinstance(ev, dict) else getattr(ev, "seq", 0)
             event_id = ev.get("event_id", "") if isinstance(ev, dict) else getattr(ev, "id", "")
             etype = ev.get("type", "") if isinstance(ev, dict) else getattr(ev, "type", "")
-            summary = ev.get("summary", "") if isinstance(ev, dict) else getattr(ev, "summary", "")
+            summary = str(ev.get("summary", "") if isinstance(ev, dict) else getattr(ev, "summary", ""))
             payload = ev.get("payload", {}) if isinstance(ev, dict) else getattr(ev, "payload", {})
+            refs = [str(r).lower() for r in (ev.get("refs", []) if isinstance(ev, dict) else getattr(ev, "refs", []))]
 
             if etype == "correction.issued":
-                if consequences_count < request.limits.max_consequences:
-                    items.append(
-                        ContextItem(
-                            kind="consequence",
-                            id=f"correction_{seq}",
-                            label=f"Correção: {summary or 'Correção de fato'}",
-                            layer="causal",
-                            score=150,
-                            reasons=("correcao_emitida",),
-                            availability="known",
-                            payload={"seq": seq, "summary": summary, "changes": payload.get("changes", [])},
-                            sources=(f"evt_{seq}",),
-                        )
-                    )
-                    consequences_count += 1
-                continue
-
-            if seq in corrected_events or str(seq) in corrected_events or (event_id and event_id in corrected_events):
-                # Fato corrigido não entra como vigente!
-                continue
-
-            if etype in ("turn.committed", "action.resolved") and facts_count < request.limits.max_facts:
-                items.append(
+                candidate_consequences.append(
                     ContextItem(
-                        kind="fact",
-                        id=f"fact_{seq}",
-                        label=f"Fato ({seq}): {summary}",
+                        kind="consequence",
+                        id=f"correction_{seq}",
+                        label=f"Correção: {summary or 'Correção de fato'}",
                         layer="causal",
-                        score=100,
-                        reasons=("fato_recente",),
+                        score=180,
+                        reasons=("correcao_emitida",),
                         availability="known",
-                        payload={"seq": seq, "summary": summary, "type": etype},
+                        payload={"seq": seq, "summary": summary, "changes": payload.get("changes", [])},
                         sources=(f"evt_{seq}",),
                     )
                 )
-                facts_count += 1
-            elif etype in ("clock.advanced", "faction.reputation_changed", "npc.plan_updated") and consequences_count < request.limits.max_consequences:
-                items.append(
+                continue
+
+            if seq in corrected_events or str(seq) in corrected_events or (event_id and event_id in corrected_events):
+                continue
+
+            sum_low = summary.lower()
+            score = max(20, 70 - idx * 5)
+            reasons = ["fato_recente"]
+
+            if any(w in sum_low for w in act_lower.split() if len(w) > 3):
+                score += 80
+                reasons.append("mencionado_na_acao")
+            if any(p in sum_low or any(p in r for r in refs) for p in present_lower if len(p) > 2):
+                score += 50
+                reasons.append("ator_em_cena")
+            if loc_lower and loc_lower in sum_low:
+                score += 30
+                reasons.append("mesmo_local")
+
+            if etype in ("turn.committed", "action.resolved"):
+                if score >= request.limits.min_relevance:
+                    candidate_facts.append(
+                        ContextItem(
+                            kind="fact",
+                            id=f"fact_{seq}",
+                            label=f"Fato ({seq}): {summary}",
+                            layer="causal",
+                            score=score,
+                            reasons=tuple(reasons),
+                            availability="known",
+                            payload={"seq": seq, "summary": summary, "type": etype},
+                            sources=(f"evt_{seq}",),
+                        )
+                    )
+            elif etype in ("clock.advanced", "faction.reputation_changed", "npc.plan_updated"):
+                candidate_consequences.append(
                     ContextItem(
                         kind="consequence",
                         id=f"consequence_{seq}",
                         label=f"Consequência ({etype}): {summary}",
                         layer="causal",
-                        score=120,
+                        score=score + 30,
                         reasons=("consequencia_recente",),
                         availability="known",
                         payload={"seq": seq, "type": etype, "summary": summary},
                         sources=(f"evt_{seq}",),
                     )
                 )
-                consequences_count += 1
+
+        candidate_facts.sort(key=lambda x: (x.score, x.id), reverse=True)
+        candidate_consequences.sort(key=lambda x: (x.score, x.id), reverse=True)
+        items.extend(candidate_consequences[: request.limits.max_consequences])
+        items.extend(candidate_facts[: request.limits.max_facts])
 
         return ContextSection(
             key=self.key,

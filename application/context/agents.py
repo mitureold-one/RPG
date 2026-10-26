@@ -19,8 +19,8 @@ from resources.context.relevance import score_faction, score_npc
 
 def _section_hash(items: Sequence[ContextItem], omissions: Sequence[ContextOmission]) -> str:
     payload = {
-        "items": [(i.kind, i.id, i.score, i.availability) for i in items],
-        "omissions": [(o.kind, o.reference, o.availability) for o in omissions],
+        "items": [(i.kind, i.id, i.score, i.availability, i.payload) for i in items],
+        "omissions": [(o.kind, o.reference, o.availability, o.reason) for o in omissions],
     }
     raw = canonical_json(payload).encode("utf-8")
     return f"sha256:{hashlib.sha256(raw).hexdigest()[:16]}"
