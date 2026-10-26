@@ -1022,6 +1022,29 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+## EX-0040 — 2026-10-26 — Fechamento dos P3 da Fase 04 e homologação final
+
+- **Autor:** implementador RPGPRO, a partir das ressalvas de `EX-0039`.
+- **Tipo:** código + teste + documentação (nenhum evento novo; sem alteração de contrato).
+- **Status:** **concluído** — Fase 04 homologada sem pendências bloqueantes.
+- **Commit:** pendente nesta entrada; worktree sobre `bc8c2ff`.
+- **Corrige:** os P3 não bloqueantes listados em `EX-0039`.
+- **Escopo:** `interfaces/cli/main.py`, `resources/context/policy.py`, `tests/test_phase04_causal_context.py`, `specs/013.../qa-review.md`, `ROADMAP.md`.
+- **O que foi feito:**
+  - **P3-2 (`--audience gm`):** `resolve_mode_policy` passa a mapear `gm` para `HolderRef("universe", "gm")` também nos modos `narrator`/`writer`, fechando a assimetria de visibilidade do GM; `player`/`human` continuam mapeando para `player`.
+  - **P3-3 (C07 exercitava só o parser):** `main(argv)` aceita argv explícito e o teste C07 executa `main(["query", ...])` de ponta a ponta, comparando o JSON impresso com o serviço.
+  - **P3-1 (NPC único sem vontade não vira focal):** comportamento **mantido por desenho** e registrado como decisão: o fallback focal exige elenco de cena com 2+ NPCs; cena com um único figurante usa `scene_cast`, não `focal`, preservando C03 (presença não é suficiência). Um NPC único com vontade/plano continua focal.
+  - **P3-4 (`game_time_sort` com `last_turn_num`):** documentado como fallback intencional apenas para datas não reconhecidas; formatos canônicos (`Dia N`, `DD/MM/AAAA`, `D de Mês de A`) derivam o sort da data, não do turno.
+  - **P3-5 (ROADMAP desatualizado):** Fase 04 passa a referenciar `EX-0039`/`EX-0040`.
+- **Evidência:**
+  - `python -m unittest tests.test_phase04_causal_context tests.test_phase04_state_cache tests.test_architecture_boundaries` -> **21 testes OK**.
+  - Guia completo: `python -m unittest discover -s tests -p "test_*.py"` -> **250 testes OK** (0 falhas, 0 erros).
+  - C07 agora executa `main()` real; `--audience gm` em `narrator`/`writer` devolve audiência de universo.
+- **Relações:** [`specs/013-phase-04-causal-context/qa-review.md`](specs/013-phase-04-causal-context/qa-review.md); [`specs/014-fix-phase-04-qa-review/qa-review.md`](specs/014-fix-phase-04-qa-review/qa-review.md); [`ROADMAP.md`](ROADMAP.md) §3 (Fase 04); `EX-0038`, `EX-0039`.
+- **Pendências:** nenhuma bloqueante na Fase 04. A Fase 05 depende do gate G4 (ver `specs/015-phase-05-simulation/`).
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.
