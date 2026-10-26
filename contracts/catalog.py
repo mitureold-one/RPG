@@ -1,4 +1,4 @@
-"""contracts/catalog.py: Schemas de payload dos 25 tipos canônicos v1 de eventos."""
+"""contracts/catalog.py: Schemas de payload dos 38 tipos canônicos v1 de eventos (25 base + 13 da Fase 03)."""
 
 from __future__ import annotations
 
@@ -119,6 +119,76 @@ V1_EVENT_SCHEMAS: dict[str, dict[str, Any]] = {
     "projection.rebuilt": _obj(
         ["from_seq", "to_seq", "projection_version", "hash"],
         {"from_seq": _I, "to_seq": _I, "projection_version": _I, "hash": _S},
+    ),
+    "knowledge.claim_registered": _obj(
+        ["claim_id", "proposition", "claim_type"],
+        {
+            "claim_id": _S, "proposition": _O, "claim_type": _S,
+            "valid_from": _IN, "valid_to": _IN, "source_event_id": _SN, "fact_ref": _SN,
+        },
+    ),
+    "knowledge.acquired": _obj(
+        ["record_id", "holder", "claim_id", "awareness", "stance", "confidence", "provenance"],
+        {
+            "record_id": _S, "holder": _O, "claim_id": _S, "awareness": _S,
+            "stance": _S, "confidence": _I, "status": _SN, "provenance": _A,
+            "acquired_at": _SN, "acquired_at_sort": _IN, "visibility": _SN,
+        },
+    ),
+    "knowledge.inferred": _obj(
+        ["record_id", "holder", "claim_id", "stance", "confidence", "derived_from"],
+        {
+            "record_id": _S, "holder": _O, "claim_id": _S, "stance": _S,
+            "confidence": _I, "derived_from": _A, "method": _SN, "status": _SN,
+            "provenance": _A, "acquired_at": _SN, "acquired_at_sort": _IN, "visibility": _SN,
+        },
+    ),
+    "knowledge.revised": _obj(
+        ["record_id", "holder", "claim_id", "stance", "confidence", "status", "reason"],
+        {
+            "record_id": _S, "holder": _O, "claim_id": _S, "stance": _S,
+            "confidence": _I, "status": _S, "reason": _S, "supersedes": _A,
+            "provenance": _A, "acquired_at": _SN, "acquired_at_sort": _IN, "visibility": _SN,
+        },
+    ),
+    "knowledge.shared": _obj(
+        ["record_id", "from_holder", "to_holder", "claim_id", "scope", "confidence"],
+        {
+            "record_id": _S, "from_holder": _O, "to_holder": _O, "claim_id": _S,
+            "scope": _S, "confidence": _I, "stance": _SN, "visibility": _SN,
+        },
+    ),
+    "npc.promoted": _obj(
+        ["npc_id", "from_tier", "to_tier"],
+        {"npc_id": _S, "from_tier": _S, "to_tier": _S, "goals": _A, "capabilities": _A, "resources": _O, "location": _S, "condition": _S},
+    ),
+    "npc.goal_updated": _obj(
+        ["npc_id", "goal_id", "description", "horizon", "priority", "status"],
+        {"npc_id": _S, "goal_id": _S, "description": _S, "horizon": _S, "priority": _I, "status": _S, "reason": _SN},
+    ),
+    "npc.plan_updated": _obj(
+        ["npc_id", "plan_id", "goal_id", "title", "steps", "status"],
+        {"npc_id": _S, "plan_id": _S, "goal_id": _S, "title": _S, "steps": _A, "status": _S, "alternatives": _A, "completion_conditions": _A},
+    ),
+    "npc.relationship_updated": _obj(
+        ["npc_id", "target_id"],
+        {"npc_id": _S, "target_id": _S, "trust": _I, "rivalry": _I, "dependency": _I, "debt": _I, "loyalty": _I, "note": _S},
+    ),
+    "faction.updated": _obj(
+        ["tag", "name"],
+        {"tag": _S, "name": _S, "leadership": _O, "collective_goals": _A, "resources": _O, "influence": _O, "limitations": _A, "internal_conflicts": _A},
+    ),
+    "faction.subgroup_updated": _obj(
+        ["faction_tag", "subgroup_id", "name", "leader_id", "stance_towards_leadership"],
+        {"faction_tag": _S, "subgroup_id": _S, "name": _S, "leader_id": _S, "stance_towards_leadership": _S, "agenda": _S, "members": _A, "resources": _O},
+    ),
+    "faction.plan_updated": _obj(
+        ["faction_tag", "plan_id", "title", "steps", "status"],
+        {"faction_tag": _S, "plan_id": _S, "title": _S, "steps": _A, "status": _S, "goal_id": _SN, "actor_subgroup_id": _SN},
+    ),
+    "proposal.rejected": _obj(
+        ["proposal_kind", "actor_id", "reasons"],
+        {"proposal_kind": _S, "actor_id": _S, "reasons": _A, "payload_summary": _O},
     ),
 }
 

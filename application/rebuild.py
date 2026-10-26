@@ -10,6 +10,7 @@ from typing import Any, Mapping
 from application.projection_engine import ProjectionEngine
 from application.projectors import (
     CharacterSheetProjector,
+    FactionProjector,
     JournalProjector,
     NpcProjector,
 )
@@ -20,13 +21,19 @@ from contracts.serialization import canonical_json
 SNAPSHOT_INTERVAL = 500
 
 
-def default_projectors(initial_files: Mapping[str, str] | None = None) -> list[Projector]:
+def default_projectors(
+    initial_files: Mapping[str, str] | None = None,
+    include_factions: bool = True,
+) -> list[Projector]:
     init = initial_files or {}
-    return [
+    projectors: list[Projector] = [
         JournalProjector(initial_text=init.get("diario.md")),
         CharacterSheetProjector(initial_text=init.get("ficha.md")),
         NpcProjector(initial_text=init.get("npcs.md")),
     ]
+    if include_factions or "faccoes.md" in init:
+        projectors.append(FactionProjector(initial_text=init.get("faccoes.md")))
+    return projectors
 
 
 def save_snapshot(campaign_dir: Path | str, last_seq: int, files: Mapping[str, str]) -> Path:

@@ -101,6 +101,39 @@ class NpcProjector:
                 else:
                     text = text.rstrip() + "\n\n" + block
                 tmp.write_text(text, encoding="utf-8")
+            return
+
+        if t == "npc.promoted":
+            name = str(p.get("name") or p.get("npc_id", ""))
+            to_tier = str(p.get("to_tier", "major")).capitalize()
+            if name:
+                apply_npc_updates_to_md(tmp, f"{name}: Tier: {to_tier} (Agente Autônomo)")
+            return
+
+        if t in ("npc.goal_updated", "npc.goal_set"):
+            name = str(p.get("npc_id", ""))
+            desc = str(p.get("description", ""))
+            if name and desc:
+                apply_npc_updates_to_md(tmp, f"{name}: Objetivo: {desc}")
+            return
+
+        if t == "npc.plan_updated":
+            name = str(p.get("npc_id", ""))
+            plan_id = str(p.get("plan_id", ""))
+            steps = p.get("steps", [])
+            summary = f"Plano {plan_id} ({len(steps)} passos)"
+            if name:
+                apply_npc_updates_to_md(tmp, f"{name}: Plano: {summary}")
+            return
+
+        if t in ("npc.relationship_updated", "npc.relationship_mutated"):
+            name = str(p.get("npc_id", ""))
+            target = str(p.get("target_id", ""))
+            trust = p.get("trust", 0)
+            rivalry = p.get("rivalry", 0)
+            if name and target:
+                apply_npc_updates_to_md(tmp, f"{name}: Relação [{target}]: Confiança {trust:+d}, Rivalidade {rivalry}")
+            return
 
 
 __all__ = ["NpcProjector"]

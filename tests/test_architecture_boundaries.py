@@ -109,6 +109,23 @@ class ArchitectureBoundaryTests(unittest.TestCase):
                     f"{path.relative_to(ROOT)} importa camada superior proibida '{module}'",
                 )
 
+    def test_plugins_have_no_io_and_are_pure(self) -> None:
+        for path in (ROOT / "plugins").rglob("*.py"):
+            for module in _imported_roots(path):
+                self.assertNotIn(
+                    module,
+                    FORBIDDEN_IO_IMPORTS | {"lazy_turn", "interfaces"},
+                    f"{path.relative_to(ROOT)} importa camada/módulo proibido '{module}'",
+                )
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "open"
+                ):
+                    self.fail(f"{path.relative_to(ROOT)} chama open() em plugin puro")
+
     def test_entry_point_and_file_size_limits(self) -> None:
         entry = len((ROOT / "lazy_turn.py").read_text(encoding="utf-8").splitlines())
         self.assertLess(entry, 200, "lazy_turn.py deve ter menos de 200 linhas")
@@ -119,6 +136,18 @@ class ArchitectureBoundaryTests(unittest.TestCase):
         ssot_len = len((ROOT / "council" / "ssot.py").read_text(encoding="utf-8").splitlines())
         self.assertLess(ssot_len, 100, f"council/ssot.py deve ter menos de 100 linhas (tem {ssot_len})")
 
+        for facade_name in ("quests.py", "narrator.py", "factions.py"):
+            facade_len = len((ROOT / "council" / facade_name).read_text(encoding="utf-8").splitlines())
+            self.assertLess(facade_len, 100, f"council/{facade_name} deve ser fachada reexportadora com menos de 100 linhas (tem {facade_len})")
+
+        for r_file in (ROOT / "resources").rglob("*.py"):
+            r_len = len(r_file.read_text(encoding="utf-8").splitlines())
+            self.assertLess(r_len, 300, f"{r_file.relative_to(ROOT)} deve ter menos de 300 linhas (tem {r_len})")
+
+        for p_file in (ROOT / "plugins").rglob("*.py"):
+            p_len = len(p_file.read_text(encoding="utf-8").splitlines())
+            self.assertLess(p_len, 300, f"{p_file.relative_to(ROOT)} deve ter menos de 300 linhas (tem {p_len})")
+
         strict_300_targets = (
             ROOT / "application" / "commit.py",
             ROOT / "application" / "commit_stage.py",
@@ -126,6 +155,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             ROOT / "application" / "projectors" / "journal.py",
             ROOT / "application" / "projectors" / "sheet.py",
             ROOT / "application" / "projectors" / "npc.py",
+            ROOT / "application" / "projectors" / "faction.py",
             ROOT / "contracts" / "catalog.py",
             ROOT / "adapters" / "persistence" / "event_store.py",
             ROOT / "adapters" / "persistence" / "batch_io.py",
@@ -138,7 +168,7 @@ class ArchitectureBoundaryTests(unittest.TestCase):
             size = len(path.read_text(encoding="utf-8").splitlines())
             self.assertLess(size, 300, f"{path.relative_to(ROOT)} deve ter menos de 300 linhas (tem {size})")
 
-        for package in ("application", "interfaces", "contracts", "kernel", "adapters", "temporal", "campaign", "resources"):
+        for package in ("application", "interfaces", "contracts", "kernel", "adapters", "temporal", "campaign", "resources", "plugins"):
             for path in (ROOT / package).rglob("*.py"):
                 size = len(path.read_text(encoding="utf-8").splitlines())
                 self.assertLess(size, 600, f"{path.relative_to(ROOT)} tem {size} linhas (limite de falha: 600)")

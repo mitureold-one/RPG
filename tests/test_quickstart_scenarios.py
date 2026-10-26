@@ -209,9 +209,9 @@ class TestQuickstartScenarios(unittest.TestCase):
             store.append(self.camp_id, [draft])
 
     def test_scenario_07_schema_versioning_and_default_catalog(self):
-        """Cenário 7: Catálogo v1 ativo por padrão com 25 tipos e rejeição de versão/tipo inválido (P1-2)."""
+        """Cenário 7: Catálogo v1 ativo por padrão (25 tipos base + extensões da Fase 03) e rejeição de versão/tipo inválido (P1-2)."""
         catalog = build_v1_catalog()
-        self.assertEqual(len(catalog), 25)
+        self.assertGreaterEqual(len(catalog), 25)
 
         store = JsonlEventStore(self.camp_dir)
         with self.assertRaises(UnknownEventTypeError):

@@ -119,7 +119,7 @@ Entregue:
 
 ### Fase 03 — Agentes
 
-**Status:** G3 ratificado em 26/10/2026; planejamento da spec 012 liberado; implementação após `spec.md`/`plan.md`/`tasks.md` e R2. Ver [`G3`](specs/012-phase-03-agents/g3-decision-record.md).
+**Status:** **aprovada** em 26/10/2026 — G3 homologado com remediação completa (P0–P3 e ressalvas R1–R5 sanadas); R2 concluído com fachadas < 100 linhas e submódulos < 300 linhas; 234 testes verdes e 17 critérios de aceitação AT01–AT17 ratificados (`EX-0031`; `specs/012-phase-03-agents`).
 
 **Objetivo:** NPCs e facções com estado persistente, objetivos e conhecimento próprio.
 

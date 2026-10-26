@@ -1,6 +1,6 @@
 # RPGPRO — Arquitetura-Alvo e Kernel de Extensão
 
-**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5 e 02 (R0, R0.5 e R1) concluídas e aprovadas (211 testes verdes; Fase 02 aprovada em 26/10/2026).
+**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5, 02 e 03 (R0, R0.5, R1 e R2) concluídas e aprovadas com o Gate G3 homologado.
 **Dono:** este documento é a fonte canônica da árvore de módulos, das portas de extensão e das regras de dependência.
 **Relação com os demais documentos:** [`ROADMAP.md`](ROADMAP.md) governa fases e gates; [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md) governa comportamento; [`DECISOES_ARQUITETURA.md`](DECISOES_ARQUITETURA.md) guarda o racional histórico; [`EXECUCAO.md`](EXECUCAO.md) registra o que foi feito.
 

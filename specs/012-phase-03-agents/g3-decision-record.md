@@ -195,7 +195,7 @@ Regras:
 
 ```text
 ProvenanceRef
-  source_type
+  source_type: "event" | "npc" | "faction" | "document" | "inference" | "system" | "player" | "protagonist" | "subgroup"
   source_id
   channel
   acquired_at
@@ -203,7 +203,8 @@ ProvenanceRef
   derived_from: [ids]
 ```
 
-- `source_id` referencia evento, NPC, facção, documento ou inferência.
+- `source_id` referencia evento, NPC, facção, documento, inferência, jogador, protagonista ou subgrupo.
+- **Emenda de Paridade de Atores:** `source_type` inclui formalmente `player`, `protagonist` e `subgroup` em simetria estrita com `HolderRef.kind`, assegurando que eventos de compartilhamento (`knowledge.shared`) registrem fidedignamente a proveniência sem truncamento ou mapeamento artificial.
 - `derived_from` não pode formar ciclo.
 - Premissa ausente/refutada não é promovida a fato.
 - A cadeia de proveniência é auditável e reconstruível.

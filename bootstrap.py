@@ -12,6 +12,8 @@ from contracts.ports import create_event_store, register_event_store_factory
 from kernel.event_catalog import build_v1_catalog
 from kernel.registry import Registry
 from kernel.runtime import Runtime
+from plugins.agent_policies import StrategicFactionPolicy, UtilityBehaviorPolicy
+from resources.knowledge.view import DefaultKnowledgeProvider
 
 register_event_store_factory(JsonlEventStore)
 
@@ -34,6 +36,14 @@ def build_runtime(
         resolved_registry = Registry()
         for evt_type in build_v1_catalog().values():
             resolved_registry.register("event_type", evt_type.type, evt_type)
+
+        # Registra portas padrão de políticas e provedor epistêmico da Fase 03
+        b_pol = UtilityBehaviorPolicy()
+        f_pol = StrategicFactionPolicy()
+        k_prov = DefaultKnowledgeProvider()
+        resolved_registry.register("behavior_policy", b_pol.name, b_pol)
+        resolved_registry.register("faction_policy", f_pol.name, f_pol)
+        resolved_registry.register("knowledge_provider", k_prov.name, k_prov)
 
     if not resolved_registry.is_frozen:
         resolved_registry.freeze()

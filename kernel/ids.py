@@ -70,4 +70,30 @@ def new_work_id() -> str:
     return f"wrk_{_next_ulid()}"
 
 
-__all__ = ["new_batch_id", "new_correction_id", "new_event_id", "new_work_id"]
+def new_claim_id() -> str:
+    """Devolve um identificador novo no formato ``clm_<ulid>``."""
+
+    return f"clm_{_next_ulid()}"
+
+
+def new_knowledge_id() -> str:
+    """Devolve um identificador novo no formato ``knw_<ulid>``."""
+
+    return f"knw_{_next_ulid()}"
+
+
+def new_plan_id() -> str:
+    """Devolve um identificador novo no formato ``pln_<ulid>``."""
+
+    return f"pln_{_next_ulid()}"
+
+
+__all__ = [
+    "new_batch_id",
+    "new_claim_id",
+    "new_correction_id",
+    "new_event_id",
+    "new_knowledge_id",
+    "new_plan_id",
+    "new_work_id",
+]

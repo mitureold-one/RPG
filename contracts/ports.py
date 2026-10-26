@@ -91,6 +91,83 @@ class Clock(Protocol):
         ...
 
 
+@dataclass(frozen=True)
+class Intent:
+    """Proposta de ação, plano, objetivo ou revisão epistêmica de um agente."""
+    actor_kind: str
+    actor_id: str
+    intent_kind: str
+    description: str
+    target_id: str | None = None
+    required_claims: tuple[str, ...] = ()
+    required_capabilities: tuple[str, ...] = ()
+    required_resources: dict[str, int] | None = None
+    location: str | None = None
+    acts_for_faction: str | None = None
+    meta: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class ReactionContext:
+    """Visão imutável entregue a uma BehaviorPolicy."""
+    campaign_id: str
+    game_time: str
+    game_time_sort: int
+    npc_state: Any
+    knowledge_view: Any
+    present_actors: tuple[str, ...] = ()
+    seed: int = 0
+
+
+@dataclass(frozen=True)
+class FactionContext:
+    """Visão imutável entregue a uma FactionPolicy."""
+    campaign_id: str
+    game_time: str
+    game_time_sort: int
+    faction_state: Any
+    knowledge_view: Any
+    active_clocks: tuple[dict[str, Any], ...] = ()
+    seed: int = 0
+
+
+@runtime_checkable
+class BehaviorPolicy(Protocol):
+    """Porta para políticas determinísticas de comportamento de NPC."""
+    name: str
+    version: str
+
+    def propose(self, ctx: ReactionContext) -> tuple[Intent, ...]:
+        ...
+
+
+@runtime_checkable
+class FactionPolicy(Protocol):
+    """Porta para políticas determinísticas de facção e subgrupos."""
+    name: str
+    version: str
+
+    def propose(self, ctx: FactionContext) -> tuple[Intent, ...]:
+        ...
+
+
+@runtime_checkable
+class KnowledgeProvider(Protocol):
+    """Porta para consulta de conhecimento/crença e construção de KnowledgeView."""
+    name: str
+
+    def build_view(
+        self,
+        events: Sequence[Event],
+        holder_kind: str,
+        holder_id: str,
+        audience_kind: str = "self",
+        audience_id: str = "",
+        purpose: str = "decision",
+    ) -> Any:
+        ...
+
+
 _EVENT_STORE_FACTORY: Callable[..., EventStore] | None = None
 
 
@@ -106,11 +183,17 @@ def create_event_store(base_dir: Any, **kwargs: Any) -> EventStore:
 
 
 __all__ = [
+    "BehaviorPolicy",
     "Clock",
     "EventStore",
     "EventStreamView",
+    "FactionContext",
+    "FactionPolicy",
+    "Intent",
+    "KnowledgeProvider",
     "ProjectionSection",
     "Projector",
+    "ReactionContext",
     "create_event_store",
     "register_event_store_factory",
 ]

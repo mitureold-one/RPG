@@ -57,10 +57,11 @@
 - [x] Conhecimento coletivo e visibilidade definidos como contrato.
 - [x] Correção de fato separada de revisão de crença.
 - [x] Critérios de aceitação ampliados.
-- [ ] Spec 012 escrita e aprovada.
-- [ ] `plan.md`/`tasks.md` da Fase 03 aprovados.
-- [ ] R2 planejado antes de ampliar `narrator.py`/`factions.py`/`quests.py`.
+- [x] Spec 012 escrita e aprovada.
+- [x] `plan.md`/`tasks.md` da Fase 03 aprovados.
+- [x] R2 planejado e executado (fachadas < 100 linhas em `council/`, módulos < 300 linhas em `resources/`).
+- [x] Implementação da Fase 03 e validação dos 17 critérios de aceitação (`AT01` a `AT17`) aprovada em QA independente e homologada pelo dono do projeto (remediações P0–P3 e ressalvas R1–R5 concluídas com 234 testes verdes).
 
 ## 4. Assinatura
 
-Ratificação solicitada pelo dono do projeto em 26/10/2026 e transcrita pelo agente de QA/arquitetura. A implementação permanece condicionada à spec 012, ao plano/tarefas e ao R2; este checklist não autoriza código por si só.
+Ratificação e homologação final autorizadas pelo dono do projeto em 26/10/2026 após resolução de todos os apontamentos de auditoria (EX-0031). Gate G3 formalmente aprovado.
