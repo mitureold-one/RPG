@@ -98,3 +98,5 @@ flowchart TD
 - [X] T026 Escrever `quickstart.md` reproduzível e validar os comandos manualmente em campanha de teste.
 - [X] T027 Atualizar `ROADMAP.md` (Fase 05 aprovada), `ARCHITECTURE.md` (§12 R3 faseado) e `EXECUCAO.md` (entrada da fase).
 - [X] T028 Commitar a fase com mensagem `feat(phase-05): world tick, fila, orçamento e retry (Gate G4)`.
+- [X] T029 Remediar os achados recuperados da auditoria interrompida: estado sequencial entre itens do mesmo ciclo (P0), agendamento duplicado idempotente (P1), ordem da fila por `priority_final`, remoção de `max_depth` e mês fora do calendário com erro (P2); testes de regressão.
+- [X] T030 Registrar `EX-0043` e `qa-review.md` e submeter a Fase 05 à re-auditoria independente.

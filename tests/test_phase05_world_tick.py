@@ -417,6 +417,71 @@ class Phase05WorldTickTests(unittest.TestCase):
         self.assertIn("error", invalid_trigger)
         self.assertEqual(self.store.last_seq("sim_camp"), last_seq)
 
+    def test_deferred_plus_new_work_keeps_state_monotonic(self) -> None:
+        """Regressão: débito adiado + trabalho novo no mesmo tick não regride estado."""
+        self._advance(7 * 1440, trigger="time", budget=1)
+        second = self._advance(2880, trigger="time", budget=8)
+        self.assertEqual(second["status"], "ok")
+
+        clock = self._clock("Cerco")
+        self.assertEqual(clock["current"], 4)
+        self.assertEqual(clock["status"], "BREACHED")
+
+        plan_events = [
+            e for e in self.store.read("sim_camp") if e.type == "npc.plan_updated"
+        ]
+        statuses = [step["status"] for step in plan_events[-1].payload["steps"]]
+        self.assertEqual(statuses, ["completed", "completed"])
+
+        faction_events = [
+            e for e in self.store.read("sim_camp") if e.type == "faction.plan_updated"
+        ]
+        faction_statuses = [step["status"] for step in faction_events[-1].payload["steps"]]
+        self.assertEqual(faction_statuses, ["completed", "completed"])
+
+    def test_duplicate_schedule_is_idempotent(self) -> None:
+        """Regressão: reagendar o mesmo trabalho não levanta DuplicateBatchError."""
+        first = cmd_schedule(
+            "sim_camp", at="6 de Ventania de 304, 09:00", kind="scene_due",
+            entity="cena_unica", payload=["beat=Única"],
+        )
+        seq_after_first = self.store.last_seq("sim_camp")
+        second = cmd_schedule(
+            "sim_camp", at="6 de Ventania de 304, 09:00", kind="scene_due",
+            entity="cena_unica", payload=["beat=Única"],
+        )
+        self.assertEqual(first["status"], "scheduled")
+        self.assertEqual(second["status"], "already_scheduled")
+        self.assertEqual(second["work_id"], first["work_id"])
+        self.assertEqual(self.store.last_seq("sim_camp"), seq_after_first)
+        scheduled = self._world_events("world.scheduled")
+        self.assertEqual(len(scheduled), 1)
+
+    def test_queue_order_matches_priority_final(self) -> None:
+        """Regressão: queue.json ordena por priority_final, igual à seleção."""
+        cmd_schedule(
+            "sim_camp", at="5 de Ventania de 304, 09:00", kind="scene_due",
+            entity="cena_prioritaria", payload=["beat=Prioritária"], priority=90,
+        )
+        self._advance(1440, trigger="time", budget=1)
+        queue = self._queue()
+        finals = [row["priority_final"] for row in queue["deferred"]]
+        self.assertEqual(finals, sorted(finals, reverse=True))
+        self.assertNotIn(
+            "scene_due",
+            {row["kind"] for row in queue["deferred"]},
+            "a cena de maior prioridade deve ter sido selecionada",
+        )
+
+    def test_unknown_month_with_declared_calendar_raises(self) -> None:
+        """Regressão: mês fora do calendário declarado não cai silenciosamente em Janeiro."""
+        from temporal.calendar import game_time_to_minutes
+
+        with self.assertRaises(ValueError):
+            game_time_to_minutes("30 de Solsticio de 304, 23:59", calendar={
+                "months": MONTHS, "days_per_month": [30] * 12,
+            })
+
     def test_queue_command_reports_state(self) -> None:
         """queue lê a fila reconstruída sem mutar o log."""
         self._advance(7 * 1440, trigger="time", budget=1)

@@ -8,6 +8,7 @@ chama LLM e não altera XP, reputação ou missão.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -32,6 +33,7 @@ from resources.world.drafts import (
 from resources.world.ids import make_tick_id
 from resources.world.queue import collect
 from resources.world.resolve import resolve_work
+from resources.world.state import apply_draft_effects, clone_state, silent_entities
 from resources.world.workqueue import deferred_items, retry_items, scheduled_items
 from temporal.calendar import game_time_to_minutes, minutes_to_game_time, validate_game_time
 
@@ -65,18 +67,6 @@ def _build_view(
         config=dict(config),
     )
     return view, index
-
-
-def _silent_entities(view: WorldView, due: Sequence[Any]) -> tuple[str, ...]:
-    known: set[str] = set()
-    for clock in view.clocks:
-        if str(clock.get("status", "ACTIVE")).upper() == "ACTIVE":
-            known.add(f"clock:{clock.get('name', '')}")
-    for npc_id, npc in view.npcs.items():
-        if isinstance(npc, Mapping) and npc.get("active_plan"):
-            known.add(f"npc:{npc.get('id', npc_id)}")
-    touched = {f"{item.entity_kind}:{item.entity_id}" for item in due}
-    return tuple(sorted(known - touched))
 
 
 def _queue_hash(camp_dir: Path) -> str:
@@ -182,17 +172,27 @@ def cmd_world_tick(
 
     outcomes: list[dict[str, Any]] = []
     max_attempts, backoff = retry_settings(config)
+    work_clocks, work_npcs, work_factions = clone_state(view.clocks, view.npcs, view.factions)
     for item in decision.selected:
         cause = str(item.payload.get("schedule_event_id") or tick_id)
+        item_view = replace(
+            view,
+            clocks=tuple(work_clocks),
+            npcs=work_npcs,
+            factions=work_factions,
+        )
         resolution = resolve_work(
             item,
-            view,
+            item_view,
             game_time=to_time,
             game_time_sort=to_sort,
             tick_id=tick_id,
             tick_event_id=tick_id,
         )
         if resolution.status == "completed":
+            apply_draft_effects(
+                work_clocks, work_npcs, work_factions, resolution.drafts
+            )
             drafts.extend(resolution.drafts)
             drafts.append(
                 work_completed_draft(
@@ -265,7 +265,7 @@ def cmd_world_tick(
         "budget_adaptive": bool(decision.adaptive),
         "selected": [item.to_dict() for item in decision.selected],
         "deferred": [item.to_dict() for item in decision.deferred],
-        "silent_entities": list(_silent_entities(view, decision.selected)),
+        "silent_entities": list(silent_entities(view, decision.selected)),
         "outcomes": outcomes,
         "dry_run": bool(dry_run),
         "events_planned": len(drafts),

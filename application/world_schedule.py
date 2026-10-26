@@ -17,6 +17,7 @@ from application.transaction import (
 )
 from contracts.ports import create_event_store
 from council import find_campaign
+from kernel.errors import DuplicateBatchError
 from resources.ledger import parse_diario_md
 from resources.world.config import normalize_simulation
 from resources.world.drafts import proposal_rejected_draft, scheduled_draft
@@ -163,6 +164,33 @@ def cmd_schedule(
     target = str(entity).strip()
     work_id = make_work_id(kind, entity_kind, target, due_sort, normalized_payload)
     due_time = minutes_to_game_time(due_sort, now_time, calendar=calendar_arg)
+
+    existing = collect(tuple(store.read(campaign_id)))
+    if work_id in existing.get("completed", set()):
+        return {
+            "status": "already_completed",
+            "work_id": work_id,
+            "kind": kind,
+            "entity_id": target,
+            "due_game_time": due_time,
+            "due_at_sort": int(due_sort),
+        }
+    if (
+        work_id in (existing.get("scheduled") or {})
+        or work_id in (existing.get("deferred") or {})
+        or work_id in (existing.get("failed") or {})
+    ):
+        return {
+            "status": "already_scheduled",
+            "work_id": work_id,
+            "kind": kind,
+            "entity_kind": entity_kind,
+            "entity_id": target,
+            "due_game_time": due_time,
+            "due_at_sort": int(due_sort),
+            "priority": int(priority),
+        }
+
     draft = scheduled_draft(
         work_id=work_id,
         kind=kind,
@@ -175,9 +203,21 @@ def cmd_schedule(
         game_time=now_time,
         game_time_sort=from_sort,
     )
-    result = record_command_mutation(
-        camp_dir, campaign_id, store, store.last_seq(campaign_id), "", [draft]
-    )
+    try:
+        result = record_command_mutation(
+            camp_dir, campaign_id, store, store.last_seq(campaign_id), "", [draft]
+        )
+    except DuplicateBatchError:
+        return {
+            "status": "already_scheduled",
+            "work_id": work_id,
+            "kind": kind,
+            "entity_kind": entity_kind,
+            "entity_id": target,
+            "due_game_time": due_time,
+            "due_at_sort": int(due_sort),
+            "priority": int(priority),
+        }
     return {
         "status": "scheduled",
         "work_id": work_id,

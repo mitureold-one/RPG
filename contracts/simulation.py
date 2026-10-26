@@ -134,13 +134,11 @@ class TickBudget:
 
     max_items: int = 8
     max_items_per_day: int = 6
-    max_depth: int = 2
     override: int | None = None
 
     def __post_init__(self) -> None:
         _require_int(self.max_items, "max_items", 1)
         _require_int(self.max_items_per_day, "max_items_per_day", 1)
-        _require_int(self.max_depth, "max_depth", 1)
         if self.override is not None:
             _require_int(self.override, "override", 1)
 

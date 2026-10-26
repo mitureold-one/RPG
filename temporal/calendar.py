@@ -394,8 +394,13 @@ def game_time_to_minutes(dt_str: str, calendar: dict | None = None, fallback_tur
         if months:
             month_idx = next(
                 (i for i, name in enumerate(months) if name.casefold() == m_name.casefold()),
-                0,
+                None,
             )
+            if month_idx is None:
+                raise ValueError(
+                    f"Mês '{m_name}' não consta no calendário da campanha. "
+                    f"Ajuste 'calendar.months' em regras.md."
+                )
             year_days = sum(days_per_month)
             prior_month_days = sum(days_per_month[:month_idx])
             total_days = (year - 1) * year_days + prior_month_days + (day - 1)

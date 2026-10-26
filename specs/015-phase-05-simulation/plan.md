@@ -175,7 +175,6 @@ simulation:
   plan_step_minutes: 2880
   max_items: 8
   max_items_per_day: 6
-  max_depth: 2
   retry_backoff_minutes: 60
   max_attempts: 3
 ```

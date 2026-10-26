@@ -53,11 +53,10 @@ Invariantes: `from_sort >= 0`, `elapsed_minutes >= 0`, `trigger` no enum, `seed`
 class TickBudget:
     max_items: int = 8
     max_items_per_day: int = 6
-    max_depth: int = 2
     override: int | None = None   # --budget N; teto duro
 ```
 
-Limite efetivo: `override`, se informado; caso contrário `max(1, min(max_items, 4 + elapsed_minutes // 1440))`. `max_items_per_day` atua como teto diário adicional e `max_depth` limita a profundidade de avaliação; nenhum dos dois eleva o teto. `override` não pode ser menor que 1.
+Limite efetivo: `override`, se informado; caso contrário `max(1, min(max_items, max_items_per_day * ceil(elapsed/1 dia), 4 + elapsed_minutes // 1440))`. `max_items_per_day` atua como teto diário adicional e nunca eleva o teto de `max_items`; `override` não pode ser menor que 1. (`max_depth` foi removido na auditoria da fase: profundidade de avaliação pertence à Fase 06.)
 
 ---
 

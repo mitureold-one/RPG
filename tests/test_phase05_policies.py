@@ -38,7 +38,7 @@ def _item(kind: str, entity: str, due: int = 0, deferrals: int = 0, payload=None
 
 class BudgetAndPriorityTests(unittest.TestCase):
     def test_budget_limit_adaptive_and_hard_cap(self) -> None:
-        budget = TickBudget(max_items=8, max_items_per_day=6, max_depth=2)
+        budget = TickBudget(max_items=8, max_items_per_day=6)
         self.assertEqual(budget.limit(0), 4)
         self.assertEqual(budget.limit(1440), 5)
         self.assertEqual(budget.limit(10080), 8)

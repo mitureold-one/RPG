@@ -15,7 +15,6 @@ DEFAULT_SIMULATION: dict[str, int] = {
     "plan_step_minutes": 2880,
     "max_items": 8,
     "max_items_per_day": 6,
-    "max_depth": 2,
     "retry_backoff_minutes": 60,
     "max_attempts": 3,
 }
@@ -26,7 +25,6 @@ _BOUNDS: dict[str, tuple[int, int]] = {
     "plan_step_minutes": (60, 525600),
     "max_items": (1, 64),
     "max_items_per_day": (1, 64),
-    "max_depth": (1, 5),
     "retry_backoff_minutes": (1, 10080),
     "max_attempts": (1, 10),
 }
@@ -57,7 +55,6 @@ def budget_from_config(config: Mapping[str, Any], override: int | None = None) -
     return TickBudget(
         max_items=normalized["max_items"],
         max_items_per_day=normalized["max_items_per_day"],
-        max_depth=normalized["max_depth"],
         override=override,
     )
 

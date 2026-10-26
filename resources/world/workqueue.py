@@ -8,8 +8,13 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from contracts.simulation import WorkItem
+from contracts.simulation import BASE_PRIORITY, WorkItem
 from resources.world.config import retry_settings
+
+
+def _final_priority(kind: str, priority: int, deferrals: int) -> int:
+    base = max(int(priority), BASE_PRIORITY.get(kind, int(priority)))
+    return min(100, base + min(int(deferrals), 5))
 
 
 def _item(
@@ -128,6 +133,9 @@ def queue_document(
             "entity_id": record["entity_id"],
             "due_at_sort": record["due_at_sort"],
             "priority": record["priority"],
+            "priority_final": _final_priority(
+                record["kind"], record["priority"], record.get("deferrals", 0)
+            ),
             "deferrals": record.get("deferrals", 0),
             "payload": dict(record.get("payload") or {}),
         }
@@ -144,6 +152,9 @@ def queue_document(
             "attempts": record["attempts"],
             "retry_at_sort": record["retry_at_sort"],
             "priority": record.get("priority", 50),
+            "priority_final": _final_priority(
+                record["kind"], record.get("priority", 50), 0
+            ),
             "payload": dict(record.get("payload") or {}),
             "permanent": record["attempts"] >= max_attempts,
         }
@@ -158,6 +169,7 @@ def queue_document(
             "due_game_time": record["due_game_time"],
             "due_at_sort": record["due_at_sort"],
             "priority": record["priority"],
+            "priority_final": _final_priority(record["kind"], record["priority"], 0),
             "payload": dict(record.get("payload") or {}),
         }
         for work_id, record in index.get("scheduled", {}).items()
@@ -166,7 +178,12 @@ def queue_document(
 
     def _order(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return sorted(
-            rows, key=lambda row: (-int(row["priority"]), int(row["due_at_sort"]), row["work_id"])
+            rows,
+            key=lambda row: (
+                -int(row["priority_final"]),
+                int(row["due_at_sort"]),
+                row["work_id"],
+            ),
         )
 
     ordered_scheduled = _order(scheduled)

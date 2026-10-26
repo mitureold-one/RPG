@@ -46,7 +46,6 @@ Invariantes: `priority_final = min(100, max(priority, BASE_PRIORITY[kind]) + min
 class TickBudget:
     max_items: int = 8
     max_items_per_day: int = 6
-    max_depth: int = 2
     override: int | None = None   # --budget; teto duro
 
     def limit(self, elapsed_minutes: int) -> int: ...

@@ -62,7 +62,8 @@ O G4 é o dono exclusivo das decisões que a arquitetura deixou abertas em [`ARC
 
 ### G4-D06 — Orçamento adaptativo, com teto duro
 
-- Limites: `max_items` (padrão 8), `max_items_per_day` (padrão 6) e `max_depth` (profundidade de avaliação, padrão 2), configuráveis em `simulation:`.
+- Limites: `max_items` (padrão 8) e `max_items_per_day` (padrão 6), configuráveis em `simulation:`.
+- **Emenda (auditoria da Fase 05):** `max_depth` foi removido do orçamento. Não existe avaliação profunda versus rasa nesta fase — o único eixo de custo é a quantidade de itens. Profundidade de avaliação, se necessária, pertence ao diretor (Fase 06 / G5) e não a um parâmetro de tick.
 - Limite adaptativo do ciclo: `limit = min(max_items, 4 + floor(elapsed_minutes / 1440))`; saltos de 7 dias podem executar até 8 itens.
 - `--budget N` explícito é teto duro e vence a fórmula.
 - O que não couber é **adiado** com motivo `budget_exhausted`, nunca descartado nem resumido como "concluído".

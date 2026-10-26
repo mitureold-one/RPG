@@ -1096,6 +1096,31 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+## EX-0043 — 2026-10-26 — Remediação dos achados da auditoria interrompida da Fase 05
+
+- **Autor:** implementador RPGPRO.
+- **Tipo:** correção + teste + emenda de gate (G4-D06).
+- **Status:** **concluído**; **re-auditoria independente pendente**.
+- **Corrige:** achados recuperados das sondas da auditoria independente que falhou antes do parecer (`.tmp/probe_qa5_*`); registro em [`specs/015-phase-05-simulation/qa-review.md`](specs/015-phase-05-simulation/qa-review.md).
+- **Escopo:** `resources/world/{state,workqueue,queue,drafts}.py`, `application/{world_tick,world_schedule}.py`, `interfaces/cli/world_cli.py`, `contracts/simulation.py`, `temporal/calendar.py`, `tests/test_phase05_world_tick.py`, `tests/test_phase05_policies.py`, docs da spec 015.
+- **O que foi feito:**
+  - **P0 — regressão de estado no mesmo ciclo:** novo `resources/world/state.py` aplica os efeitos de cada resolução antes da próxima (`clone_state` + `apply_draft_effects`); `world_tick` resolve contra uma visão atualizada por item. Relógio `Beta` deixa de terminar em `4/10` e passa a saturar em `10/10 BREACHED`; planos não regridem.
+  - **P1 — agendamento duplicado:** `cmd_schedule` devolve `already_scheduled`/`already_completed` sem novo evento e protege contra `DuplicateBatchError`; CLI trata os estados.
+  - **P2 — ordem da fila:** `queue.json` grava e ordena por `priority_final`, alinhado à seleção.
+  - **P2 — `max_depth` inerte:** removido de `TickBudget`, config e docs; **emenda G4-D06** registra que profundidade de avaliação pertence à Fase 06.
+  - **P2 — mês fora do calendário:** `game_time_to_minutes` passa a levantar `ValueError` em vez de cair silenciosamente em Janeiro/Ventania.
+  - **Testes de regressão:** estado monotônico com débito + trabalho novo, agendamento duplicado idempotente, ordem `priority_final` na fila e mês inválido.
+- **Evidência:**
+  - `python -m unittest tests.test_phase05_world_tick tests.test_phase05_policies tests.test_architecture_boundaries` -> **40 testes OK**.
+  - Suíte completa: `python -m unittest discover -s tests -p "test_*.py"` -> **282 testes OK** (0 falhas, 0 erros).
+  - Sondas da auditoria reexecutadas: estado monotônico (`Beta 10/10 BREACHED`, planos `[completed, completed, pending]`), `duplicate_schedule.status = already_completed` com mesmo `work_id` e `last_seq` inalterado, ordem da fila igual à seleção.
+- **Relações:** `EX-0041`, `EX-0042`; [`qa-review.md`](specs/015-phase-05-simulation/qa-review.md); [`g4-decision-record.md`](specs/015-phase-05-simulation/g4-decision-record.md) (emenda G4-D06).
+- **Pendências:**
+  - re-auditoria independente da Fase 05 (agente novo) para confirmar os cinco fechamentos e emitir veredito;
+  - homologação final (`EX-0044`) somente após o parecer.
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.

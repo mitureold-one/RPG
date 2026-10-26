@@ -62,6 +62,10 @@ def run_schedule(args) -> int:
         print(f"\nAgendamento rejeitado — Campanha '{args.campaign}':")
         for reason in res.get("reasons", []):
             print(f"  * {reason}")
+    elif res.get("status") in ("already_scheduled", "already_completed"):
+        print(f"\nAgendamento já existente — Campanha '{args.campaign}':")
+        print(f"  Trabalho: {res['work_id']} ({res['kind']} em '{res['entity_id']}')")
+        print(f"  Quando: {res['due_game_time']} | Estado: {res['status']}")
     else:
         print(f"\nAgendamento registrado — Campanha '{args.campaign}':")
         print(f"  Trabalho: {res['work_id']} ({res['kind']} em '{res['entity_id']}')")
