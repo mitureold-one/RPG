@@ -531,6 +531,29 @@ O projeto já tem documentos com papéis diferentes. O risco de contradição ap
 
 ---
 
+## EX-0021 — 2026-10-26 — Correção de P1-C (`--vital` / `--rep`), teto `< 300` em `journal.py`/`correction.py` e aprovação final
+
+- **Autor:** Implementação (`speckit-implement` — remediação de `EX-0020`).
+- **Tipo:** correção + teste.
+- **Status:** concluído (P1-C, P2-3, P2-4 e P2-5 integralmente fechados; 211 testes).
+- **Commit:** `33eedef`.
+- **Corrige:** EX-0019, EX-0020.
+- **Escopo:** Fase 02/R1 — compensação de recursos vitais e reputação em `CorrectionService`/`cmd_correct` e limite estrito de `< 300` linhas para `journal.py`, `correction.py` e `catalog.py`.
+- **O que foi feito:**
+  - `application/showrunner.py`: `--vital` distingue delta assinalado (`+N`/`-N` → `delta`) de valor absoluto (`N` → `new_value`).
+  - `application/correction.py` e `application/projectors/sheet.py`: cálculo de compensação de vitais (com `normalize_vital_key`, deltas relativos e valores absolutos) e de reputação (`new_score = clamp_reputation(score_atual + delta)`) sobre o estado atual projetado do stream de eventos.
+  - `application/projectors/journal.py` (264 linhas), `application/correction.py` (289 linhas) e `contracts/catalog.py` (134 linhas): compactados abaixo de 300 linhas e adicionados (junto com `sheet.py` e `npc.py`) a `strict_300_targets` em `tests/test_architecture_boundaries.py`.
+  - `tests/test_causal_correction.py`: adicionado `test_vital_and_reputation_compensation_applies_relative_delta_and_absolute_values_p1_c`.
+- **Como:** execução de `unittest` completo e `test_architecture_boundaries`.
+- **Evidência:**
+  - `python -m unittest discover -s tests -p "test_*.py"` → **211 testes, OK** (31.8 s).
+  - `python -m unittest tests.test_architecture_boundaries` → **7 testes, OK**.
+  - `--vital hp:+2` com HP 20 → `22/25`; `--vital mana:+3` com CE 25 → `28/30`; `--vital hp:18` → `18/25`; `--rep FTest:-1` com score 1 → `0`.
+- **Relações:** [`qa-review.md`](specs/010-phase-02-causal-history/qa-review.md); EX-0019, EX-0020.
+- **Pendências:** nenhuma.
+
+---
+
 ## 5. Como registrar uma nova execução
 
 1. **Antes:** confira a fase e os gates no [`ROADMAP.md`](ROADMAP.md). Se o gate da fase estiver aberto, registre no máximo protótipo/experimento, com status `não verificado`.
