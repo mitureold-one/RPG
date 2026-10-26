@@ -7,7 +7,7 @@
 **Data Model:** [`data-model.md`](data-model.md)  
 **Contracts:** [`contracts/store_and_projection_contracts.md`](contracts/store_and_projection_contracts.md)  
 **Quickstart:** [`quickstart.md`](quickstart.md)  
-**Status:** Ready for Implementation  
+**Status:** Completed — 50/50 tarefas; 211 testes; QA final aprovado em 26/10/2026.
 
 ---
 

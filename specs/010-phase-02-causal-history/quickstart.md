@@ -1,7 +1,7 @@
 # Quickstart & Verification Guide: 010 — Fase 02: História Causal & Refatoração R1
 
 **Feature:** `phase-02-causal-history`  
-**Status:** Ready for Verification  
+**Status:** Verified — 211 testes; C1–C4 e 11 cenários validados; QA final aprovado em 26/10/2026.
 **Created:** 2026-10-24  
 **Context:** Guia executável passo a passo para validação dos 11 cenários de aceite e dos quatro critérios complementares C1–C4 do R1/Fase 02.
 
@@ -9,12 +9,12 @@
 
 ## 1. Pré-Requisitos e Baseline
 
-Antes de iniciar qualquer validação de código ou migração do R1, certifique-se de que a suíte completa de 203 testes está totalmente verde:
+Antes de iniciar qualquer validação de código ou migração do R1, certifique-se de que a suíte completa de 211 testes está totalmente verde:
 
 ```bash
 python -m unittest discover -s tests -p "test_*.py"
 ```
-*Critério de Aceite:* 203 testes executados com status `OK`.
+*Critério de Aceite:* 211 testes executados com status `OK`.
 
 ---
 

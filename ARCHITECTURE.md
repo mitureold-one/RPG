@@ -1,6 +1,6 @@
 # RPGPRO — Arquitetura-Alvo e Kernel de Extensão
 
-**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5 e 02 (R0, R0.5 e R1) concluídas (211 testes verdes).
+**Status:** baseline arquitetural aprovado para orientar a Fase 02 em diante; não é uma especificação de feature. Fases 01, 01.5 e 02 (R0, R0.5 e R1) concluídas e aprovadas (211 testes verdes; Fase 02 aprovada em 26/10/2026).
 **Dono:** este documento é a fonte canônica da árvore de módulos, das portas de extensão e das regras de dependência.
 **Relação com os demais documentos:** [`ROADMAP.md`](ROADMAP.md) governa fases e gates; [`rpgpro-diretrizes-agentes.md`](rpgpro-diretrizes-agentes.md) governa comportamento; [`DECISOES_ARQUITETURA.md`](DECISOES_ARQUITETURA.md) guarda o racional histórico; [`EXECUCAO.md`](EXECUCAO.md) registra o que foi feito.
 
@@ -638,7 +638,7 @@ Mesmo padrão: contrato + implementação + registro + config + teste de contrat
 |---|---|---|---|
 | **R0** | Antes da Fase 02 (Concluído) | criar `contracts/` (envelope, portas, config), `kernel/` (errors, ids, registry, runtime, schema), `bootstrap.py` e suíte de contrato com fakes; extrair CLI, persistência, `temporal/` e campanha de `lazy_turn.py`/`helpers.py`; nenhum evento emitido | 156 testes verdes; `lazy_turn.py` com 54 linhas; Markdown idêntico; contratos exercitados com fakes; nenhum plugin |
 | **R0.5** | Antes da Fase 02 (Concluído) | arquivar campanhas em `archive/campaigns/`, criar fixtures em `tests/fixtures/`, atualizar testes, limpar `campaigns/` com `.gitkeep` | suíte verde sem campanhas reais; `init-campaign` funciona com verificação all-or-nothing |
-| **R1** | Fase 02 | `ssot.py` → `resources/`; `EventStore` JSONL + índice; `Projector`s; `EventType`s e upcasters | evento ida-e-volta; rebuild de projeção; implementações aprovadas na suíte de contrato; nenhum arquivo > 300 |
+| **R1** | Fase 02 (Concluído) | `ssot.py` → `resources/`; `EventStore` JSONL + índice; `Projector`s; `EventType`s e upcasters | evento ida-e-volta; rebuild de projeção; implementações aprovadas na suíte de contrato; nenhum arquivo > 300 |
 | **R2** | Fases 03/04 | `narrator.py` → `resources/npcs/`; `factions.py` → `resources/factions/`; `quests.py` → `resources/quests/`; `context/` | módulos < 300; sem ciclos; `BehaviorPolicy`/`FactionPolicy`/`ContextProvider` testados |
 | **R3** | Fases 05/06 | `reviewer.py` → `review/`; `world/` com `SimulationPolicy`, `BudgetPolicy`, `DirectorPolicy`, `StagnationPolicy` | lints independentes; diretor determinístico; orçamento testado |
 | **R4** | Fase 07 | `memory/`, `knowledge/` | proveniência rastreável; resumos reconstruíveis |
@@ -705,8 +705,8 @@ Os gates continuam definidos no [`ROADMAP.md`](ROADMAP.md). A arquitetura não o
 1. R0 concluído (contratos, kernel, bootstrap e extração modular).
 2. R0.5 concluído (arquivamento de campanhas, fixtures isoladas e campaigns/ limpo com .gitkeep).
 3. Auditoria de QA da Fundação/R0/R0.5 concluída e itens P1/P2 resolvidos.
-4. Spec 010 ratificada com ajustes (G1/G2); próxima etapa: `plan.md`/`tasks.md` com os critérios C1–C4.
-5. Executar **R1 + Fase 02** após o plano.
-6. Seguir para R2–R4 conforme as fases.
+4. Specs 010/011 concluídas: G1/G2 ratificados, C1–C4 e P2 aprovados.
+5. **R1 + Fase 02 concluídos e aprovados** em 26/10/2026 (211 testes; `EX-0021`).
+6. Próximo: ratificar **G3** e abrir a spec 012 (Fase 03/Agentes); R2–R4 acompanham as fases seguintes.
 
-Com G1/G2 ratificados, a Fase 02 pode ser planejada e implementada; não deve ser declarada concluída sem os critérios complementares C1–C4 da [`spec 010`](specs/010-phase-02-causal-history/spec.md) §4.1.
+Com G1/G2 ratificados e C1–C4 aprovados, a Fase 02/R1 está concluída; a Fase 03 depende do G3.

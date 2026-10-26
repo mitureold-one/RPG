@@ -1,7 +1,7 @@
 # Feature Specification: 011 — Fechamento dos 5 Achados P2 do QA da Fase 02/R1
 
 **Feature Name**: `close-phase02-qa-p2`  
-**Status**: Ready for Planning  
+**Status**: Completed — remediação P2 concluída; Fase 02/R1 aprovada em 26/10/2026 (211 testes; `EX-0021`).
 **Created**: 2026-10-24  
 **Target Backlog Phase**: Fase 02 / R1 (Congelamento Definitivo do Baseline Causal e Aprovação Total de QA)  
 **Base Analisada**: [`specs/010-phase-02-causal-history/qa-review.md`](../010-phase-02-causal-history/qa-review.md), [`specs/010-phase-02-causal-history/spec.md`](../010-phase-02-causal-history/spec.md), [`EXECUCAO.md`](../../EXECUCAO.md) (`EX-0017` e `EX-0018`), [`ARCHITECTURE.md`](../../ARCHITECTURE.md), [`ROADMAP.md`](../../ROADMAP.md).

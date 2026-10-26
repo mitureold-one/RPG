@@ -1,7 +1,7 @@
 # Implementation Plan: 011 — Fechamento dos 5 Achados P2 do QA da Fase 02/R1
 
 **Feature**: `close-phase02-qa-p2`  
-**Status**: Ready for Tasks / Implementation  
+**Status**: Completed — implementado e aprovado em 26/10/2026 (211 testes; `EX-0021`).
 **Created**: 2026-10-26  
 **Target**: Fechamento definitivo da Fase 02 / R1 e aprovação sem ressalvas do QA  
 **Base Analisada**:

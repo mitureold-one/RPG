@@ -1,7 +1,7 @@
 # Gate Specification: 010 — Fase 02: História Causal (G1/G2)
 
 **Feature Name:** `phase-02-causal-history`
-**Status:** Ready for Planning — G1/G2 ratificados com ajustes em 23/10/2026
+**Status:** Approved — Fase 02/R1 concluída e aprovada em 26/10/2026 (G1/G2 ratificados; C1–C4; 211 testes; QA final em [`qa-review.md`](qa-review.md) e [`EX-0021`](../../EXECUCAO.md)).
 **Ratificação:** [`checklists/g1-g2-ratification.md`](checklists/g1-g2-ratification.md)
 **Created:** 2026-10-23
 **Target:** Fase 02 do [`ROADMAP.md`](../../ROADMAP.md) e etapa R1 da refatoração
@@ -569,11 +569,12 @@ Ratificação de 23/10/2026: **Q2, Q4, Q7, Q9 e Q10** integrais; **Q1, Q3, Q5, Q
 ## 8. Processo de ratificação (concluído)
 
 1. A ratificação foi concluída em 23/10/2026; o registro vinculante está no [`checklists/g1-g2-ratification.md`](checklists/g1-g2-ratification.md).
-2. G1 e G2 estão fechados com ajustes; este documento passa a **Ready for Planning**.
+2. G1 e G2 estão fechados com ajustes; naquela etapa, este documento passou a **Ready for Planning** (histórico; status atual: **Approved**).
 3. O próximo passo é escrever `plan.md` e `tasks.md` com os quatro critérios complementares C1–C4.
 4. O R1 só começa depois do plano; a Fase 02 não pode ser declarada concluída sem C1–C4.
 5. Uma rejeição futura exige nova decisão do dono e atualização do checklist; não se implementa por cima de uma decisão revertida.
 6. O registro da ratificação entra em `EXECUCAO.md` como nova entrada (`EX-0013`), com link para o checklist.
+7. Em 26/10/2026, após C1–C4, a remediação da spec 011 e 211 testes verdes, a Fase 02/R1 foi **aprovada**; ver [`qa-review.md`](qa-review.md) e [`EX-0021`](../../EXECUCAO.md).
 
 ---
 
